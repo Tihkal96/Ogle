@@ -14,7 +14,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 For a local repository build, the executable is `dist/Ogle-win32-x64/Ogle.exe`; `Launch-Ogle.ps1` launches that build.
 
-Install and sign in to Codex on that PC. Sign in to ChatGPT separately inside Ogle. Accounts, notes, settings and chat sessions are local to each PC and are not included in releases or this repository. Windows startup is enabled by default for the packaged app and can be turned off in Settings.
+To use Codex features, install and sign in to Codex on that PC. Sign in to ChatGPT separately inside Ogle. Accounts, notes, settings and chat sessions are local to each PC and are not included in releases or this repository. Windows startup is enabled by default for the packaged app and can be turned off in Settings.
 
 ### Development
 
@@ -25,7 +25,7 @@ npm ci
 npm start
 ```
 
-Build the Windows application with `npm run package`, then launch `dist/Ogle-win32-x64/Ogle.exe` or `./Launch-Ogle.ps1`. Codex must be installed and signed in. Ogle discovers `codex.exe` through PATH, the local Codex installation, Microsoft Store package, and standard npm native package locations. If your installation is elsewhere, set `PETDOCK_CODEX_PATH` to the full executable path and restart Ogle. A missing installation now shows setup guidance instead of a raw ENOENT error.
+Build the Windows application with `npm run package`, then launch `dist/Ogle-win32-x64/Ogle.exe` or `./Launch-Ogle.ps1`. Codex features require Codex to be installed and signed in. Ogle discovers `codex.exe` through PATH, the local Codex installation, Microsoft Store package, and standard npm native package locations. If your installation is elsewhere, set `PETDOCK_CODEX_PATH` to the full executable path and restart Ogle. A missing installation now shows setup guidance instead of a raw ENOENT error.
 
 ### Compatibility with earlier PetDock versions
 
@@ -34,6 +34,12 @@ Ogle is the new project and application name. Existing user data remains under `
 ## Contributing
 
 Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch in your fork, and open a pull request. **@Tihkal96 reviews and merges contributions; contributors do not push directly to the upstream repository.** See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and checks. [CODEOWNERS](.github/CODEOWNERS) assigns review ownership; it does not by itself enforce repository permissions or branch protection.
+
+## Version 0.5.3
+
+Technical failures are kept under **Settings → Debug → Open debug log**. The session log includes timestamps and repeat counts, with Copy, Clear and Close controls. Background Codex connection/refresh failures do not display error banners; failed actions show short readable messages. Logs are bounded to 200 entries, stay in memory, and are not uploaded automatically.
+
+Run `node tests/debug-runtime.cjs` to verify quiet background failures, readable notifications, log controls and redaction.
 
 ## Version 0.5.2
 
