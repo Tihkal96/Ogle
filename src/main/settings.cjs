@@ -1,10 +1,17 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'codex', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 10000, petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
+const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'codex', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 10000, petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
 function validatePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
   const clean = {};
+  for(const key of ['shortcutVisibility','shortcutPanel']) if(Object.hasOwn(patch,key)) {
+    const value=patch[key];
+    if(typeof value!=='string' || value.length>80 || (value && !/^(?:(?:Control|Ctrl|Alt|Shift|Super|CommandOrControl)\+)+(?:[A-Z0-9]|Space|F(?:[1-9]|1[0-9]|2[0-4])|Home|End|Insert|Delete|PageUp|PageDown|Up|Down|Left|Right)$/i.test(value)))throw new Error('Use a shortcut such as Control+Alt+O, or leave it empty.');
+    clean[key]=value;
+  }
+  if(Object.hasOwn(patch,'statsPosition')){if(!['left','right','top'].includes(patch.statsPosition))throw new Error('Invalid stats position');clean.statsPosition=patch.statsPosition;}
+
   if(Object.hasOwn(patch,'petClickAction')){if(!['codex','animation','expand','reveal','toggle','chatgpt','none'].includes(patch.petClickAction))throw new Error('Invalid pet click action');clean.petClickAction=patch.petClickAction;}
   if(Object.hasOwn(patch,'compactChatTarget')) {
     if(!['codex','chatgpt'].includes(patch.compactChatTarget))throw new Error('Invalid compact chat target');
@@ -43,7 +50,7 @@ function validatePatch(patch) {
     if (!Array.isArray(patch.toolbarOrder) || patch.toolbarOrder.some(x => typeof x !== 'string') || patch.toolbarOrder.length > 100) throw new Error('Invalid toolbar order');
     clean.toolbarOrder = [...new Set(patch.toolbarOrder)];
   }
-  for (const key of ['autoStart','alwaysOnTop','autoExpand','showTime','showDate','sidebarVisible']) if (Object.hasOwn(patch,key)) {
+  for (const key of ['statsClicks','statsKeys','statsCpu','statsRam','autoStart','alwaysOnTop','autoExpand','showTime','showDate','sidebarVisible']) if (Object.hasOwn(patch,key)) {
     if (typeof patch[key] !== 'boolean') throw new Error(`Invalid ${key}`);
     clean[key] = patch[key];
   }

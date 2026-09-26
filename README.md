@@ -8,7 +8,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.9](https://github.com/Tihkal96/Ogle/releases/download/v0.5.9/Ogle-0.5.9-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.10](https://github.com/Tihkal96/Ogle/releases/download/v0.5.10/Ogle-0.5.10-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -173,3 +173,13 @@ Actual UAC consent and elevated privileges are not exercised by automated tests.
 Custom toolbar ordering, additional widgets, and full language-server/compiler diagnostics remain future work. This is not a complete Notepad++ replacement.
 
 Integration references: [Codex App Server](https://learn.chatgpt.com/docs/app-server), [Electron security](https://www.electronjs.org/docs/latest/tutorial/security), [Windows UAC](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/how-it-works).
+
+
+## v0.5.10: compact controls, counters and keyboard shortcuts
+
+- A small white statistics block shows mouse-click and keystroke totals for the current Ogle session, plus system CPU and RAM usage. Settings → Counters & meters controls each row and places the block left, right or above the pet. Totals are not persisted. The non-elevated Windows collector counts input events only; it never reads key codes, typed text, window titles or clipboard content. Disabling both input rows stops the collector. CPU/RAM sampling runs every two seconds, with no disk index or network traffic.
+- Settings → Keyboard shortcuts records your key combination. Defaults: **Ctrl+Alt+O** shows/hides Ogle; **Ctrl+Alt+Space** expands/collapses the panel. Press Backspace in a shortcut field and Set to disable it. Conflicting shortcuts are rejected while preserving the previous binding.
+- Codex, editor, shell and Links controls use smaller buttons and clear symbols with hover labels. Links group borders now contain their nested items. Redundant root navigation, destination and pinned-count rows have been removed; additions go into the currently open group.
+- Editor **Ctrl+F** opens a readable floating Find/Replace dialog. It closes when Ogle collapses manually or automatically, and when leaving the editor.
+
+Before releasing, run `npm test`, the focused `tests/*-runtime.cjs` checks for changed features, `npm run package`, and the packaged smoke check. Keep the direct Windows ZIP link above synchronized with every version, and verify the published asset.

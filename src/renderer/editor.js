@@ -5,7 +5,7 @@ window.PetDockEditor = (() => {
   const languages = ['text','javascript','typescript','json','python','html','css','markdown','shell','powershell','c','cpp','csharp','vb','cmd','sql'];
   const byId = () => tabs.find(tab => tab.id === activeId);
   const label = (tag, text, className) => { const node = document.createElement(tag); node.textContent = text; if (className) node.className = className; return node; };
-  const button = (text, action, title) => { const node = label('button',text); node.type = 'button'; node.onclick = () => Promise.resolve().then(action).catch(report); if (title) node.title = title; return node; };
+  const button = (text, action, title) => { const node = label('button',text); node.type = 'button'; node.onclick = () => Promise.resolve().then(action).catch(report); if (title) { node.title = title; node.setAttribute('aria-label',title); } return node; };
   function infer(path) { const ext = path?.split('.').pop().toLowerCase(); return ({js:'javascript',mjs:'javascript',cjs:'javascript',ts:'typescript',tsx:'typescript',jsx:'javascript',json:'json',py:'python',html:'html',htm:'html',css:'css',md:'markdown',ps1:'powershell',sh:'shell',bat:'cmd',cmd:'cmd',c:'c',h:'c',cpp:'cpp',hpp:'cpp',cs:'csharp',vb:'vb',sql:'sql'})[ext] || 'text'; }
   async function flush() { clearTimeout(timer); await save({editorTabs:tabs.map(({id,name,path,language,text,dirty,framework})=>({id,name,path,language,text,dirty,framework})),activeEditorTab:activeId || ''}); }
   function schedule() { clearTimeout(timer); timer = setTimeout(() => flush().catch(report),400); }
@@ -73,13 +73,33 @@ window.PetDockEditor = (() => {
   function mount(container, bridge, initial, persist, onError) {
     root=container;api=bridge;settings=initial;save=persist;report=onError;currentTheme=settings.theme || 'dark';
     tabs=(Array.isArray(settings.editorTabs)?settings.editorTabs:[]).map(tab=>({...tab,language:languages.includes(tab.language)?tab.language:'text',savedText:tab.dirty ? undefined : tab.text,dirty:Boolean(tab.dirty) || (!tab.path && !!tab.text)}));
-    const controls=document.createElement('div'); controls.className='subtoolbar'; controls.append(button('＋ New',create),button('Open…',open),button('Save',()=>write(false),'Ctrl+S'),button('Save as…',()=>write(true)));
+    const controls=document.createElement('div'); controls.className='subtoolbar'; controls.append(button('＋',create,'New tab'),button('▱',open,'Open file'),button('↓',()=>write(false),'Save file (Ctrl+S)'),button('⇲',()=>write(true),'Save file as'));
     const spacer=document.createElement('span');spacer.className='spacer';controls.append(spacer);
     const language=document.createElement('select');language.className='editor-language';language.setAttribute('aria-label','Programming language');for(const value of languages)language.add(new Option(value,value));language.onchange=()=>{byId().language=language.value;select(activeId);};controls.append(language);
     const framework=document.createElement('select');framework.className='editor-framework';framework.setAttribute('aria-label','.NET framework profile');for(const [value,text] of [['modern','Modern .NET'],['3.5','.NET 3.5'],['4','.NET 4']])framework.add(new Option(text,value));framework.onchange=()=>{byId().framework=framework.value;updateStatus();schedule();};controls.append(framework);
     const strip=document.createElement('div');strip.className='editor-tabs';area=document.createElement('div');area.className='editor-surface';status=document.createElement('div');status.className='editor-status';const hints=document.createElement('div');hints.className='editor-hints';hints.hidden=true;root.append(controls,strip,area,hints,status);
     root.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();write(event.shiftKey).catch(report);}});
+    installSearchDialog();
     if(tabs.length)select(tabs.some(t=>t.id===settings.activeEditorTab)?settings.activeEditorTab:tabs[0].id);else create();
+  }
+  function installSearchDialog() {
+    // Retain CodeMirror's search commands and key bindings in a floating dialog.
+    const enhance = () => {
+      const panel = root.querySelector('.cm-search');
+      if (!panel || panel.dataset.ogleDialog) return;
+      panel.dataset.ogleDialog = 'true'; panel.setAttribute('role','dialog'); panel.setAttribute('aria-label','Find and replace');
+      panel.parentElement.classList.add('ogle-search-popout');
+      for (const [name,text,title] of [['next','↓','Next match'],['prev','↑','Previous match'],['select','All','Select all matches'],['replace','Replace','Replace match'],['replaceAll','Replace all','Replace all matches'],['close','×','Close find and replace']]) {
+        const control = panel.querySelector(`button[name="${name}"]`);
+        if (control) { control.textContent=text;control.title=title;control.setAttribute('aria-label',title); }
+      }
+    };
+    const dismiss = () => {
+      if (document.body.classList.contains('collapsed') || root.hidden) root.querySelector('.cm-search button[name="close"]')?.click();
+    };
+    new MutationObserver(enhance).observe(area,{childList:true,subtree:true});
+    new MutationObserver(dismiss).observe(document.body,{attributes:true,attributeFilter:['class']});
+    new MutationObserver(dismiss).observe(root,{attributes:true,attributeFilter:['hidden']});
   }
   function editorTheme(theme) {
     const vendors = window.PetDockVendors, light = theme === 'light', midnight = theme === 'midnight';

@@ -1,0 +1,20 @@
+/* Compact controls keep explicit accessible names and hover help. */
+#editor-panel>.subtoolbar{padding:5px 7px;gap:4px}
+#editor-panel>.subtoolbar button{min-width:28px;height:27px;padding:3px 7px;font-size:14px}
+#editor-panel>.subtoolbar select{height:27px;padding:3px 5px;font-size:11px}
+.editor-tabs{padding:2px 5px}.editor-tab button:first-child{padding:4px 7px}.editor-status{padding:4px 7px}
+/* CodeMirror's normal bottom search strip becomes a floating find dialog. */
+.editor-surface .cm-panels.ogle-search-popout{position:absolute!important;top:12px!important;bottom:auto!important;right:12px;left:12px;max-width:520px;margin-left:auto;z-index:30;border:1px solid var(--border);border-radius:5px;background:var(--surface);box-shadow:0 8px 30px #0006}
+.editor-surface .cm-search{display:grid;grid-template-columns:minmax(160px,1fr) auto auto auto;align-items:center;gap:9px;padding:37px 12px 12px!important;font:12px/1.5 system-ui,sans-serif;color:var(--text)}
+.editor-surface .cm-search::before{content:'Find and replace';position:absolute;top:10px;left:12px;font-size:12px;font-weight:600}
+.editor-surface .cm-search input.cm-textfield{width:100%;min-width:0;height:30px;box-sizing:border-box;margin:0!important;padding:5px 8px;font:12px system-ui;background:var(--inset);color:var(--text);border:1px solid var(--border);border-radius:3px}
+.editor-surface .cm-search button.cm-button{height:28px;min-width:29px;padding:3px 9px;margin:0!important;font:12px system-ui;background:var(--raised);color:var(--text);border:1px solid var(--border);border-radius:3px;text-transform:none}
+.editor-surface .cm-search button:hover{background:var(--hover)}
+.editor-surface .cm-search label{display:inline-flex;align-items:center;gap:4px;font:11px system-ui;white-space:nowrap}
+.editor-surface .cm-search input[type=checkbox]{width:14px;height:14px;margin:0}
+.editor-surface .cm-search br{display:none}
+.editor-surface .cm-search button[name=close]{position:absolute;right:7px;top:5px;width:27px;height:27px;font:20px/24px system-ui!important;color:var(--text);cursor:pointer}
+.editor-surface .cm-search label{grid-row:2}
+.editor-surface .cm-search label:first-of-type{grid-column:1}.editor-surface .cm-search label:nth-of-type(2){grid-column:2 / 4}.editor-surface .cm-search label:nth-of-type(3){grid-column:4}
+.editor-surface .cm-search input[name=replace]{grid-row:3;grid-column:1}
+.editor-surface .cm-search button[name=replace]{grid-row:3;grid-column:2 / 4}.editor-surface .cm-search button[name=replaceAll]{grid-row:3;grid-column:4}

@@ -32,16 +32,16 @@
     const location = element('div', '', 'terminal-location'), shells = element('div', '', 'terminal-shell-actions'), commands = element('div', '', 'terminal-command-actions');
     controls.append(location, shells, commands);
     const cwd = element('input', '', 'terminal-cwd'); cwd.placeholder = 'Working folder (default: home)'; cwd.setAttribute('aria-label', 'Terminal working folder'); location.append(cwd);
-    const button = (label, fn, target = commands) => { const el = element('button', label); el.type = 'button'; el.onclick = () => Promise.resolve().then(fn).catch(report); target.append(el); };
-    button('Folder…', async () => { const folder = await api.chooseFolder?.(); if (folder) cwd.value = folder; }, location);
-    button('+ PowerShell', () => create('powershell'), shells); button('+ CMD', () => create('cmd'), shells); button('+ Admin PowerShell', () => create('powershell', true), shells); button('+ Admin CMD', () => create('cmd', true), shells);
-    button('Clear screen', () => sessions.get(active)?.term.write('\x1b[2J\x1b[H'));
-    button('Clear scrollback', () => sessions.get(active)?.term.clear());
-    button('Ctrl+C', () => { if (active) return api.terminalWrite(active, '\x03'); });
-    button('Restart', async () => { const s = sessions.get(active); if (!s) return; cwd.value = s.cwd; await close(); await create(s.shell, s.admin); });
-    button('Close session', close);
+    const button = (label, fn, target = commands, title = label) => { const el = element('button', label); el.title=title; el.setAttribute('aria-label',title); el.type = 'button'; el.onclick = () => Promise.resolve().then(fn).catch(report); target.append(el); };
+    button('▱', async () => { const folder = await api.chooseFolder?.(); if (folder) cwd.value = folder; }, location, 'Choose working folder');
+    button('+ PS', () => create('powershell'), shells, 'New PowerShell'); button('+ CMD', () => create('cmd'), shells, 'New Command Prompt'); button('♢ PS', () => create('powershell', true), shells, 'New administrator PowerShell'); button('♢ CMD', () => create('cmd', true), shells, 'New administrator Command Prompt');
+    button('⌧', () => sessions.get(active)?.term.write('\x1b[2J\x1b[H'), commands, 'Clear screen');
+    button('⌫', () => sessions.get(active)?.term.clear(), commands, 'Clear scrollback');
+    button('^C', () => { if (active) return api.terminalWrite(active, '\x03'); }, commands, 'Interrupt (Ctrl+C)');
+    button('↻', async () => { const s = sessions.get(active); if (!s) return; cwd.value = s.cwd; await close(); await create(s.shell, s.admin); }, commands, 'Restart session');
+    button('×', close, commands, 'Close session');
     const status = element('p', 'Create a CMD or PowerShell session.', 'terminal-status'); status.setAttribute('role', 'status');
-    const adminHint = element('p', 'Admin terminals share one Windows approval. Release access in Settings.', 'terminal-admin-hint');
+    const adminHint = element('p', '', 'terminal-admin-hint'); adminHint.hidden=true;
     host.append(controls, element('div', '', 'terminal-tabs'), element('div', '', 'terminal-views'), status, adminHint);
     api.onEvent(event => {
       if (event.type !== 'terminal') return;
