@@ -4,6 +4,7 @@ const { spawn } = require('node:child_process');
 const net = require('node:net');
 const { randomUUID } = require('node:crypto');
 const { imageSize } = require('image-size');
+const { resolveCodexExecutable } = require('./codex-executable.cjs');
 
 const IMAGE_LIMITS = { count: 4, bytesEach: 8 * 1024 * 1024, bytesTotal: 16 * 1024 * 1024 };
 function promptInputs(text, images = []) {
@@ -124,9 +125,9 @@ class DesktopIpc extends EventEmitter {
 
 /** Newline-delimited app-server protocol. Never resolves approvals automatically. */
 class CodexBridge extends EventEmitter {
-  constructor({ executable = process.env.PETDOCK_CODEX_PATH || 'codex.exe', spawnProcess = spawn, timeoutMs = 30000, connectTimeoutMs = 12000, desktop = spawnProcess === spawn && process.platform === 'win32' ? new DesktopIpc() : null } = {}) {
+  constructor({ executable, spawnProcess = spawn, timeoutMs = 30000, connectTimeoutMs = 12000, desktop = spawnProcess === spawn && process.platform === 'win32' ? new DesktopIpc() : null } = {}) {
     super();
-    Object.assign(this, { executable, spawnProcess, timeoutMs, connectTimeoutMs });
+    Object.assign(this, { executable: executable || 'codex.exe', executableOverride: executable, spawnProcess, timeoutMs, connectTimeoutMs });
     this.pending = new Map(); this.requests = new Set(); this.resumed = new Set(); this.resuming = new Map(); this.nextId = 1;
     this.child = null; this.connected = false; this.connecting = null; this.mode = null;
     this.desktop = desktop;
@@ -140,6 +141,14 @@ class CodexBridge extends EventEmitter {
   }
   async _connect() {
     this.emit('status', { state: 'connecting', detail: 'Connecting to Codex…' });
+    if (this.spawnProcess === spawn) {
+      try {
+        this.executable = await resolveCodexExecutable({env: {...process.env, ...(this.executableOverride ? {PETDOCK_CODEX_PATH:this.executableOverride} : {})}});
+      } catch (error) {
+        this.emit('status', {state:'error',detail:error.message});
+        throw error;
+      }
+    }
     let proxyError;
     for (const mode of ['shared', 'standalone']) {
       try {

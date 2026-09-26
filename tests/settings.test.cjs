@@ -18,6 +18,7 @@ test('notes, independent drafts and pins survive reopening', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'petdock-test-'));
   const file = path.join(dir, 'settings.json');
   const store = new SettingsStore(file);
+  assert.equal(store.value.petId, 'rinne-mini');
   store.update({ note: 'my note\nsecond line', drafts: { one: 'draft 1', two: 'draft 2' }, pinnedThreads: ['two'] });
   store.update({ petId: 'lago-cartoon' });
   const reopened = new SettingsStore(file);

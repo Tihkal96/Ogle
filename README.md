@@ -1,6 +1,6 @@
 # Ogle
 
-A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, a code editor, shortcut groups and embedded terminals. Existing pet projects are preserved; the app includes copies of Rinnegan and Lago Cartoon and can use installed v2 pets.
+A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, a code editor, shortcut groups and embedded terminals. Existing pet projects are preserved; the app bundles only Rinne Mini (the default), Rinne, and Lago Realistic. Separately installed custom v2 pets remain available. Saved pet choices are preserved; missing choices fall back to Rinne Mini.
 
 ## Download and run
 
@@ -25,7 +25,7 @@ npm ci
 npm start
 ```
 
-Build the Windows application with `npm run package`, then launch `dist/Ogle-win32-x64/Ogle.exe` or `./Launch-Ogle.ps1`. Codex must be installed, signed in, and available as `codex.exe` on PATH. Set `PETDOCK_CODEX_PATH` to its full executable path if needed.
+Build the Windows application with `npm run package`, then launch `dist/Ogle-win32-x64/Ogle.exe` or `./Launch-Ogle.ps1`. Codex must be installed and signed in. Ogle discovers `codex.exe` through PATH, the local Codex installation, Microsoft Store package, and standard npm native package locations. If your installation is elsewhere, set `PETDOCK_CODEX_PATH` to the full executable path and restart Ogle. A missing installation now shows setup guidance instead of a raw ENOENT error.
 
 ### Compatibility with earlier PetDock versions
 
@@ -45,7 +45,7 @@ Editor Tab accepts an active completion instead of moving focus, and indents oth
 
 Links defaults to an Android-style icon grid. Groups and real folders open separate icon pages with navigation rather than expanding inline. Windows icons refresh for existing shortcuts, and website favicons are fetched from the site's own `/favicon.ico` when available. Details view remains available. This update migrates earlier default layouts to icons once; later view choices persist.
 
-Start with Windows is on by default for the packaged app and can be disabled in Settings. It registers one per-user login entry. On a login launch, Ogle gives Codex's own startup a grace period, checks its desktop connection/process, and opens it only if absent. Test profiles and development runs never register startup entries. The window's taskbar icon follows the selected pet's first idle frame; the executable's bundled icon uses Rinnegan's first idle frame. Windows may cache an already-pinned launcher icon separately.
+Start with Windows is on by default for the packaged app and can be disabled in Settings. It registers one per-user login entry. On a login launch, Ogle gives Codex's own startup a grace period, checks its desktop connection/process, and opens it only if absent. Test profiles and development runs never register startup entries. The window's taskbar icon follows the selected pet's first idle frame; the executable's bundled icon uses Rinne Mini's first idle frame. Windows may cache an already-pinned launcher icon separately.
 
 ### Version 0.4 foundation
 
@@ -91,6 +91,7 @@ Settings, notes, pins, drafts, editor tabs and shortcuts live in `settings.json`
 - `src/main/main.cjs`, `window-layout.cjs`: windows, geometry, trusted IPC and lifecycle.
 - `src/main/startup.cjs`, `pet-icon.cjs`: per-user startup, duplicate-launch checks and pet taskbar icons.
 - `src/main/codex-bridge.cjs`: app-server transport, desktop coordination, history and turns.
+- `src/main/codex-executable.cjs`: executable discovery for Windows installations without a CLI PATH entry.
 - `src/main/settings.cjs`: validated atomic settings persistence.
 - `src/main/chatgpt-panel.cjs`, `chatgpt-activity.cjs`: isolated embedded ChatGPT view, controls and best-effort activity signals.
 - `src/main/files.cjs`: editor files, conflict prompts, shortcuts and icons.

@@ -41,12 +41,24 @@ async function workerCheck(executable, env) {
   const executable = path.join(root, 'dist/Ogle-win32-x64/Ogle.exe');
   const profile=path.join(out,`package-profile-${Date.now()}`);fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({autoExpand:false}));
   const env = { ...process.env, PETDOCK_DATA_DIR: profile }; delete env.ELECTRON_RUN_AS_NODE;
+  // Exercise a fresh PC profile without a Codex CLI PATH entry or custom pets.
+  for(const key of Object.keys(env))if(key.toLowerCase()==='path')delete env[key];
+  env.Path=[path.join(process.env.SystemRoot,'System32'),process.env.SystemRoot,path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0')].join(';');
+  delete env.PETDOCK_CODEX_PATH;
+  env.PETDOCK_PETS_DIR=path.join(profile,'custom-pets');
   const app = await electron.launch({ executablePath: executable, args: [], env });
   const report = {};
   try {
     const page = await app.firstWindow();
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.waitForFunction(() => document.querySelector('#status-dot').classList.contains('ready'), null, { timeout: 60000 });
+    const boot=await page.evaluate(()=>window.dock.boot());
+    assert.equal(boot.settings.petId,'rinne-mini');
+    assert.deepEqual(boot.pets.map(p=>p.id).sort(),['lago-realistic','rinne','rinne-mini']);
+    await page.waitForFunction(()=>petImage.complete && petImage.naturalWidth>0 && petImage.src.includes('rinne-mini'));
+    report.codexDiscoveredWithoutPath=true;
+    report.defaultPet='rinne-mini';
+    report.bundledPets=boot.pets.map(p=>p.id);
     assert.equal(await page.locator('[data-shell],#minimize,#close').count(),0);
     await page.locator('[data-panel="shortcuts"]').evaluate(el=>el.click());
     await page.locator('#shortcuts-panel').getByRole('button',{name:'＋ Add',exact:true}).click();

@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinnegan', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
+const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
 function validatePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
   const clean = {};
