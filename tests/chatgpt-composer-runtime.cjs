@@ -15,6 +15,10 @@ if(mode==='delayed'){editor.remove();const login=document.createElement('button'
 if(mode==='alternate'){editor.id='new-composer-editor';editor.setAttribute('role','textbox');editor.className='ProseMirror';}
 if(mode==='signedout'){editor.remove();const login=document.createElement('button');login.dataset.testid='login-button';login.textContent='Log in';document.body.append(login);}
 if(mode==='guest'){const login=document.createElement('button');login.dataset.testid='login-button';login.textContent='Log in';document.body.append(login);}
+if(mode==='localized'){send.removeAttribute('data-testid');send.id='composer-submit-button';send.type='submit';send.setAttribute('aria-label','Pošalji upit');document.querySelector('form').addEventListener('submit',event=>event.preventDefault());}
+if(mode==='submitfallback'){send.removeAttribute('data-testid');send.type='submit';send.setAttribute('aria-label','Pošalji');document.querySelector('form').addEventListener('submit',event=>event.preventDefault());}
+if(mode==='croatianlive'){editor.removeAttribute('id');editor.setAttribute('role','textbox');editor.setAttribute('aria-label','Pitajte ChatGPT');send.removeAttribute('data-testid');send.type='button';send.setAttribute('aria-label','Pošalji');for(const label of ['Dodaj datoteke i drugo','Odaberite ChatGPT model']){const other=document.createElement('button');other.type='button';other.setAttribute('aria-label',label);other.onclick=()=>window.wrongButtonClicked=true;document.querySelector('form').append(other);}}
+if(mode==='disabled'){editor.addEventListener('input',()=>send.disabled=true);const other=document.createElement('form');other.innerHTML='<button type="submit">Unrelated form</button>';other.onsubmit=event=>{event.preventDefault();window.wrongFormClicked=true;};document.body.prepend(other);}
 </script></body></html>`;
 
 if (process.versions.electron) {
@@ -22,7 +26,7 @@ if (process.versions.electron) {
   global.fixtureSend = require('../src/main/chatgpt-composer.cjs').sendChatGPT;
   app.whenReady().then(async () => {
     const isolated = session.fromPartition(`composer-fixture-${Date.now()}`);
-    await isolated.protocol.handle('https', request => new Response(new URL(request.url).hostname === 'chatgpt.com' ? html : '', { headers: { 'content-type': 'text/html' } }));
+    await isolated.protocol.handle('https', request => new Response(new URL(request.url).hostname === 'chatgpt.com' ? html : '', { headers: { 'content-type': 'text/html; charset=utf-8' } }));
     const win = new BrowserWindow({ width: 600, height: 400, show: false, webPreferences: { session: isolated, sandbox: true, contextIsolation: true, nodeIntegration: false } });
     await win.loadURL('https://chatgpt.com/c/text');
   });
@@ -52,6 +56,21 @@ if (process.versions.electron) {
       assert.equal((await page.evaluate(()=>window.sent)).length,0);
       await page.goto('https://chatgpt.com/c/guest');
       assert.deepEqual(await send({text:'Use the available guest composer'}),{sent:true});
+      await page.goto('https://chatgpt.com/c/localized');
+      assert.deepEqual(await send({text:'Send through the localized button'}),{sent:true});
+      await page.goto('https://chatgpt.com/c/submitfallback');
+      assert.deepEqual(await send({text:'Send through the composer submit control'}),{sent:true});
+      await page.goto('https://chatgpt.com/c/croatianlive');
+      assert.deepEqual(await send({text:'Croatian composer without IDs or test IDs'}),{sent:true});
+      assert.equal(await page.evaluate(()=>Boolean(window.wrongButtonClicked)),false);
+      assert.equal((await page.evaluate(()=>window.sent)).length,1);
+      await page.goto('https://chatgpt.com/c/disabled');
+      const disabledStarted=Date.now();
+      assert.match((await send({text:'Preserve this in the website composer'})).error,/1 send control\(s\), 1 disabled/);
+      assert.ok(Date.now()-disabledStarted<7000,'Disabled control fails promptly instead of waiting 20 seconds');
+      assert.equal((await page.evaluate(()=>window.sent)).length,0);
+      assert.equal(await page.evaluate(()=>Boolean(window.wrongFormClicked)),false);
+      assert.equal(await page.locator('#prompt-textarea').innerText(),'Preserve this in the website composer');
       await page.goto('https://chatgpt.com/c/files');
       assert.deepEqual(await send({ text: 'Read this', attachments: [{ type: 'file', name: 'notes.txt', url: 'data:text/plain;base64,aGVsbG8=' }] }), { sent: true });
       assert.deepEqual((await page.evaluate(() => window.sent))[0].files, [{ name: 'notes.txt', content: 'hello' }]);
@@ -67,6 +86,9 @@ if (process.versions.electron) {
       await page.goto('https://chatgpt.com/c/draft');
       assert.match((await send({ text: 'Do not overwrite' })).error, /unsent draft/);
       assert.equal(await page.locator('#prompt-textarea').innerText(), 'Existing draft');
+      await page.evaluate(()=>document.querySelector('[data-testid="send-button"]').disabled=false);
+      assert.deepEqual(await send({text:'Existing draft'}),{sent:true});
+      assert.deepEqual(await page.evaluate(()=>window.sent),[{text:'Existing draft',files:[]}]);
       await page.goto('https://chatgpt.com/c/busy');
       assert.match((await send({ text: 'Wait' })).error, /still replying/);
       await page.goto('https://chatgpt.com/c/uncertain');
@@ -74,13 +96,10 @@ if (process.versions.electron) {
       assert.equal((await page.evaluate(() => window.sent)).length, 1);
       await page.goto('https://other.example/');
       assert.match((await send({ text: 'Wrong host' })).error, /finish signing in/);
-      const result = { delayedHydration: true, alternateAccessibleComposer: true, signedOutDiagnostic: true, guestComposerAccepted: true, textAndMultiline: true, documentTransfer: true, imagePasteTransfer: true, imageAltFilename: true, historyAttachmentsIgnored: true, homeNewChat: true, existingConversationPreserved: true, draftPreserved: true, busyRefused: true, uncertainSendClickedOnce: true, wrongOriginRefused: true, liveAccountUsed: false };
+      const result = { localizedSubmitButton: true, delayedHydration: true, alternateAccessibleComposer: true, signedOutDiagnostic: true, guestComposerAccepted: true, textAndMultiline: true, documentTransfer: true, imagePasteTransfer: true, imageAltFilename: true, historyAttachmentsIgnored: true, homeNewChat: true, existingConversationPreserved: true, draftPreserved: true, busyRefused: true, uncertainSendClickedOnce: true, wrongOriginRefused: true, liveAccountUsed: false };
       fs.mkdirSync(path.join(root, 'artifacts'), { recursive: true });
       fs.writeFileSync(path.join(root, 'artifacts/chatgpt-composer-runtime.json'), JSON.stringify(result, null, 2));
       console.log(JSON.stringify(result));
     } finally { await app.close(); }
   })().catch(error => { console.error(error); process.exitCode = 1; });
 }
-
-
-

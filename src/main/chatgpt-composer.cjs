@@ -61,15 +61,31 @@ async function composeInPage(payload) {
   }
   if (busy()) fail('ChatGPT is still replying. Wait for it to finish before sending.');
   const textOf = () => 'value' in editor ? editor.value : editor.innerText;
+  const normalizeText = value => value.replace(/\r\n/g, '\n').trim();
   // Historical messages can contain the same attachment components. Only the
   // composer owns pending files; history must not prevent a new message.
-  const composer = editor.closest('form') || editor.closest('[data-testid="composer"]') || editor.parentElement?.parentElement;
+  let composer = editor.closest('form,[data-testid="composer"],[data-type="unified-composer"],#composer-background');
+  if (!composer) {
+    for (let container = editor.parentElement; container && container !== document.body; container = container.parentElement) {
+      if (container.querySelector('#composer-submit-button,[data-testid="send-button"]')) { composer = container; break; }
+    }
+  }
+  composer ||= editor.parentElement?.parentElement;
   if (!composer) fail('ChatGPT changed its message box. Enter the prompt in the ChatGPT tab.');
   const attachmentNodes = () => [...composer.querySelectorAll('[data-testid*="attachment"],[data-testid*="file-thumbnail"],button[aria-label^="Remove file"],button[aria-label^="Remove attachment"]')].filter(visible);
-  if (textOf().trim() || attachmentNodes().length) fail('ChatGPT already has an unsent draft or attachment. Send or clear it in the ChatGPT tab first.');
+  // A failed readiness check leaves the bar's exact text in the website. An
+  // explicit retry may send that same text without appending or overwriting it.
+  const reuseTextDraft = !payload.files.length && !attachmentNodes().length && normalizeText(payload.text) !== '' && normalizeText(textOf()) === normalizeText(payload.text);
+  if (!reuseTextDraft && (textOf().trim() || attachmentNodes().length)) fail('ChatGPT already has an unsent draft or attachment. Send or clear it in the ChatGPT tab first.');
   const originalURL = location.href;
   const samePage = () => { if (location.href !== originalURL || !editor.isConnected) fail('ChatGPT changed pages. Check the ChatGPT tab before sending again.'); };
-  const sendButton = () => first('[data-testid="send-button"],button[aria-label="Send prompt"],button[aria-label="Send message"],button[aria-label="Send"]');
+  const sendCandidates = () => [...composer.querySelectorAll('#composer-submit-button,[data-testid="send-button"],button[aria-label="Send prompt"],button[aria-label="Send message"],button[aria-label="Send"],button[aria-label="Pošalji"],button[aria-label="Pošalji upit"],button[type="submit"]')].filter(node => {
+    if (!visible(node) || node.tagName !== 'BUTTON') return false;
+    // Submit is a language-independent fallback scoped to this composer only.
+    // Never use a voice, attachment, or stop control as the send action.
+    return !/(?:stop|voice|dictat|attach|upload|record|microphone)/i.test(`${node.id} ${node.getAttribute('data-testid') || ''} ${node.getAttribute('aria-label') || ''}`);
+  });
+  const enabled = button => !button.disabled && button.getAttribute('aria-disabled') !== 'true';
   editor.focus();
   if (payload.files.length) {
     const transfer = new DataTransfer();
@@ -96,8 +112,8 @@ async function composeInPage(payload) {
     if (!accepted) fail('ChatGPT did not confirm the attachments. Review the ChatGPT tab and attach/send there; nothing was sent automatically.');
   }
   samePage();
-  if (textOf().trim()) fail('The ChatGPT message box changed while preparing attachments. Review its draft before sending.');
-  if (payload.text) {
+  if (reuseTextDraft ? normalizeText(textOf()) !== normalizeText(payload.text) : textOf().trim()) fail('The ChatGPT message box changed while preparing attachments. Review its draft before sending.');
+  if (payload.text && !reuseTextDraft) {
     if ('value' in editor) {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
       if (!setter) fail('ChatGPT changed its message box. Enter the prompt in the ChatGPT tab.');
@@ -111,15 +127,20 @@ async function composeInPage(payload) {
     if (textOf().replace(/\r\n/g, '\n').trim() !== payload.text.replace(/\r\n/g, '\n').trim()) fail('ChatGPT did not accept the entire prompt. Review its message box before sending.');
   }
   let button;
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < 15; attempt++) {
     samePage();
     if (busy()) fail('ChatGPT started replying. Review the tab before sending.');
-    button = sendButton();
-    if (button && !button.disabled && button.getAttribute('aria-disabled') !== 'true') break;
+    button = sendCandidates().find(enabled);
+    if (button) break;
     button = null;
     await pause(200);
   }
-  if (!button) fail('ChatGPT is not ready to send. The prompt is in its message box; review attachments or website errors there.');
+  if (!button) {
+    const candidates = sendCandidates();
+    const detail = candidates.length ? `${candidates.length} send control(s), ${candidates.filter(node => !enabled(node)).length} disabled` : 'no supported send control found';
+    fail(`ChatGPT is not ready to send (${detail}). The prompt is in its message box; review attachments or website errors there.`);
+  }
+  if (normalizeText(textOf()) !== normalizeText(payload.text)) fail('The ChatGPT draft changed before sending. Review its message box; nothing was sent automatically.');
   button.click(); // Exactly one click. Never retry an uncertain send.
   for (let attempt = 0; attempt < 40; attempt++) {
     await pause(100);
