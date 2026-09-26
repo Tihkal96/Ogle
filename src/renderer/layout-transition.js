@@ -19,7 +19,8 @@ window.DockLayoutTransition = (() => {
     document.body.dataset.layoutTransition = 'true';
     queue = queue.catch(() => {}).then(async () => {
       if (id !== sequence) return;
-      await window.dock.windowTransition('begin',mode,matchMedia('(prefers-reduced-motion: reduce)').matches);
+      const preparation=await window.dock.windowTransition('begin',mode,matchMedia('(prefers-reduced-motion: reduce)').matches);
+      if(preparation?.unchanged){if(id===sequence){render();await resize();}return;}
       document.body.style.opacity='0';
       if (id !== sequence) return;
       await paint();

@@ -1,4 +1,5 @@
 'use strict';
+require('./check-release-link.cjs');
 const path = require('node:path');
 const {spawnSync}=require('node:child_process');
 // Keep regex anchors out of cmd.exe: an unquoted ^ is consumed by the shell,

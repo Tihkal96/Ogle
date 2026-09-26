@@ -7,3 +7,5 @@
 - Keep the complete Windows build in dist/ tracked through Git LFS, including unpacked native dependencies. Never commit artifacts/, local profiles, credentials or development node_modules/.
 - Run checks appropriate to the change; packaged changes require the packaged application smoke check.
 - Give parallel writing agents separate file ownership and coordinate shared interfaces.
+
+- On every release, update the README direct Windows ZIP link (label, tag and filename) to the new package version and verify the published asset. Packaging runs scripts/check-release-link.cjs to reject stale links.
