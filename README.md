@@ -35,6 +35,12 @@ Ogle is the new project and application name. Existing user data remains under `
 
 Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch in your fork, and open a pull request. **@Tihkal96 reviews and merges contributions; contributors do not push directly to the upstream repository.** See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and checks. [CODEOWNERS](.github/CODEOWNERS) assigns review ownership; it does not by itself enforce repository permissions or branch protection.
 
+## Version 0.5.5
+
+ChatGPT’s Copy buttons can write to the clipboard from its visible, focused main page. Clipboard reads and access from other origins, hidden views, and subframes remain blocked. Pinned links stay on the toolbar in both horizontal and full-panel modes, with compact spacing for all five pins. The reported image-search placeholders loaded normally after reopening the conversation; no image proxy or security bypass was added.
+
+`node tests/chatgpt-clipboard-runtime.cjs` checks the real clipboard API with isolated pages and restores the clipboard afterward. `node tests/pinned-links-runtime.cjs` checks both toolbar sizes and pinned-link navigation.
+
 ## Version 0.5.4
 
 Window transitions now hide the native Windows surface during size changes, after smoothly moving the existing pet anchor when screen edges require it. Pin protects only the full panel; manual and automatic full collapse show the toolbar before the ball, with the same configured delay for each idle stage. Stationary pointer events caused by redraw no longer restart that delay or reopen the ball.
