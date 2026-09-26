@@ -8,6 +8,14 @@ A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, a cod
 
 The complete Windows x64 build is tracked in `dist/` using Git LFS. Install Git with Git LFS, then clone this repository and run `git lfs pull` from its directory. Open `dist/PetDock-win32-x64/PetDock.exe`; keep the whole build folder together. Node.js is only required for development, not to run the packaged app.
 
+```powershell
+git lfs install
+git clone https://github.com/Tihkal96/PetDock.git
+cd PetDock
+git lfs pull
+.\Launch-PetDock.ps1
+```
+
 Install and sign in to Codex on that PC. Sign in to ChatGPT separately inside PetDock. Accounts, notes, settings and chat sessions are local to each PC and are not included in this repository. Windows startup is enabled by default and can be turned off in Settings.
 
 ### Development
