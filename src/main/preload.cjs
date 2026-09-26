@@ -2,6 +2,7 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const invoke = (name, ...args) => ipcRenderer.invoke(`dock:${name}`, ...args);
 contextBridge.exposeInMainWorld('dock', Object.freeze({
+  activityStats: () => invoke('activityStats'),
   boot: () => invoke('boot'),
   listThreads: filters => invoke('listThreads', filters),
   readThread: id => invoke('readThread', id),

@@ -1,10 +1,12 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, screen, Notification, shell, Menu, net, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Notification, shell, Menu, net, nativeImage, globalShortcut } = require('electron');
 if (process.argv.includes('--persistent-terminal-worker')) { require('./persistent-admin-worker.cjs').runPersistentWorker(); return; }
 if (process.argv.includes('--terminal-worker')) { require('./terminal-worker.cjs').runWorker(); return; }
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { DockShortcuts } = require('./global-shortcuts.cjs');
+const { createActivityStats } = require('./activity-stats.cjs');
 const { SettingsStore } = require('./settings.cjs');
 const { CodexBridge } = require('./codex-bridge.cjs');
 const { ChatGPTPanel } = require('./chatgpt-panel.cjs');
@@ -24,7 +26,7 @@ app.setName('Ogle');
 app.setAppUserModelId('PetDock.Desktop');
 app.setPath('userData', process.env.PETDOCK_DATA_DIR ? path.resolve(process.env.PETDOCK_DATA_DIR) : path.join(app.getPath('appData'), 'PetDock'));
 if (!app.requestSingleInstanceLock()) {app.quit();return;}
-let win, bridge, chatgpt, store, files, terminals, petLibrary, petDragState, pointerTimer, connection = { state: 'connecting', detail: 'Connecting to Codex…' }, connectionPromise;
+let activityStats, shortcuts, win, bridge, chatgpt, store, files, terminals, petLibrary, petDragState, pointerTimer, connection = { state: 'connecting', detail: 'Connecting to Codex…' }, connectionPromise;
 const root = path.resolve(__dirname, '../..');
 const indexPath = path.join(root, 'src/renderer/index.html');
 const indexUrl = pathToFileURL(indexPath).href;
@@ -66,6 +68,14 @@ app.whenReady().then(async () => {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== indexUrl) event.preventDefault(); });
   chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}) });
+  shortcuts=new DockShortcuts(globalShortcut,{
+    shortcutVisibility:()=>{if(win.isVisible()&&!win.isMinimized()){chatgpt.hide();win.hide();}else{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'dock-shown'});}},
+    shortcutPanel:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-panel',expanded:!expanded});}
+  });
+  try{shortcuts.configure(store.value);}catch(error){send({type:'startup-error',message:error.message});}
+  activityStats=createActivityStats({onUpdate:data=>send({type:'activity-stats',...data}),onError:error=>send({type:'startup-error',message:error.message})});
+  activityStats.configure(store.value);
+  register('activityStats',()=>activityStats.snapshot());
   files = new DockFiles(win);
   petLibrary = new PetLibrary(path.join(root,'assets/pets'),{fetcher:(...args)=>net.fetch(...args)});
   await updatePetIcon();
@@ -112,7 +122,7 @@ app.whenReady().then(async () => {
   register('sendTurn', async (id, text, images=[]) => { await connected(); if(typeof text!=='string'||text.length>200000)throw new Error('Invalid prompt');return bridge.sendTurn(string(id, 'task ID'),text,images); });
   register('interrupt', (id, turnId) => bridge.interrupt(string(id, 'task ID'), string(turnId, 'turn ID')));
   register('respond', (id, result) => bridge.respond(id, result));
-  register('saveSettings', async patch => { const result=store.update(patch);if(Object.hasOwn(patch,'petScale'))resize();if(Object.hasOwn(patch,'alwaysOnTop'))win.setAlwaysOnTop(result.alwaysOnTop);if(Object.hasOwn(patch,'autoStart'))configureStartup(app,result.autoStart);if(Object.hasOwn(patch,'petId'))await updatePetIcon();return result; });
+  register('saveSettings', async patch => { const previous=store.value,changedShortcuts=['shortcutVisibility','shortcutPanel'].some(key=>Object.hasOwn(patch,key));if(changedShortcuts)shortcuts.configure({...previous,...patch});let result;try{result=store.update(patch);}catch(error){if(changedShortcuts)shortcuts.configure(previous);throw error;}activityStats.configure(result);if(Object.hasOwn(patch,'petScale'))resize();if(Object.hasOwn(patch,'alwaysOnTop'))win.setAlwaysOnTop(result.alwaysOnTop);if(Object.hasOwn(patch,'autoStart'))configureStartup(app,result.autoStart);if(Object.hasOwn(patch,'petId'))await updatePetIcon();return result; });
   register('chooseFolder', async () => {
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: 'Choose a Codex project folder' });
     return result.canceled ? null : result.filePaths[0];
@@ -200,7 +210,7 @@ app.whenReady().then(async () => {
 let quitReady=false;
 app.on('before-quit', event => {
   if(quitReady)return;
-  event.preventDefault();clearInterval(pointerTimer);chatgpt?.close();bridge?.close();terminals?.dispose();
+  event.preventDefault();shortcuts?.dispose();activityStats?.dispose();clearInterval(pointerTimer);chatgpt?.close();bridge?.close();terminals?.dispose();
   let timeout;
   Promise.race([fileSearch.dispose(),new Promise(resolve=>{timeout=setTimeout(resolve,5000);})]).catch(()=>{}).finally(()=>{clearTimeout(timeout);quitReady=true;app.quit();});
 });

@@ -35,13 +35,11 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     let items = Array.isArray(settings.shortcuts) ? settings.shortcuts.map(item => ({ ...item })) : [];
     let mode = settings.shortcutsView === 'details' ? 'details' : 'icons';
     let dragging = null, currentGroup = null, folderNavigation = [], pinNotice = '';
-    const pinStatus=document.createElement('p');pinStatus.className='links-pin-status';pinStatus.setAttribute('role','status');
+    const pinStatus=document.createElement('p');pinStatus.className='links-pin-status';pinStatus.setAttribute('role','status');pinStatus.hidden=true;
     const iconCache = new Map(), refreshedIcons = new Set();
     const expanded = new Set(), cache = new Map();
-    const toolbar = document.createElement('div'); toolbar.className = 'subtoolbar';
-    const title = document.createElement('strong'); title.textContent = 'Links'; toolbar.append(title);
+    const toolbar = document.createElement('div'); toolbar.className = 'subtoolbar links-toolbar';
     const spacer = document.createElement('span'); spacer.className = 'spacer'; toolbar.append(spacer);
-    const destination = document.createElement('select'); destination.setAttribute('aria-label', 'Add links to'); toolbar.append(destination);
     const form = document.createElement('form'); form.className = 'links-form'; form.hidden = true;
     const removal = document.createElement('dialog'); removal.className = 'links-remove-dialog';
     removal.setAttribute('aria-label', 'Confirm removal');
@@ -74,7 +72,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     const content = document.createElement('div'); content.className = 'links-content';
     const navigation = document.createElement('nav'); navigation.className = 'links-navigation'; navigation.setAttribute('aria-label', 'Link folder navigation');
     const invoke = fn => Promise.resolve().then(fn).catch(report);
-    function button(label, handler, title) { const el = document.createElement('button'); el.type = 'button'; el.textContent = label; if (title) el.title = title; el.onclick = () => invoke(handler); return el; }
+    function button(label, handler, title) { const el = document.createElement('button'); el.type = 'button'; el.textContent = label; if (title) { el.title = title; el.setAttribute('aria-label', title); } el.onclick = () => invoke(handler); return el; }
     async function persist() { await save({ shortcuts: items, shortcutsView: mode }); }
     async function commit(next) { pinNotice=''; items = next; if (currentGroup && !items.some(item => item.id === currentGroup && item.kind === 'group')) currentGroup = null; await persist(); render(); refreshIcons().catch(report); }
     async function refreshIcons(paths = items.map(item => item.path).filter(Boolean)) {
@@ -90,7 +88,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     }
     async function togglePin(entry) {
       if(!entry.pinned && items.filter(item=>item.pinned).length>=7) {
-        pinNotice='You can pin up to 7 links. Unpin one to add another.';pinStatus.textContent=pinNotice;return;
+        pinNotice='You can pin up to 7 links. Unpin one to add another.';pinStatus.textContent=pinNotice;pinStatus.hidden=false;return;
       }
       await commit(items.map(item=>item.id===entry.id?{...item,pinned:!item.pinned}:item));
     }
@@ -113,7 +111,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
         pin.append(iconFor(entry));tray.append(pin);
       }
       tray.hidden=!tray.childElementCount;
-      pinStatus.textContent=pinNotice || `${items.filter(item=>item.pinned).length} of 7 toolbar pins`;
+      pinStatus.textContent=pinNotice;pinStatus.hidden=!pinNotice;
     }
     function openGroup(id) { currentGroup = id; folderNavigation = []; form.hidden = true; render(); }
     async function openFolder(entry) {
@@ -129,7 +127,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     function field(label, value = '') { const wrapper = document.createElement('label'); wrapper.textContent = label; const input = document.createElement('input'); input.value = value; input.setAttribute('aria-label', label); wrapper.append(input); form.append(wrapper); return input; }
     function startForm() { discardEdit(); form.hidden = false; }
     function finishForm(handler, label = 'Save') { const submit = button(label, handler); submit.dataset.submit = 'true'; form.append(submit, button('Cancel', discardEdit)); form.onsubmit = e => { e.preventDefault(); invoke(handler); }; }
-    async function imported(payload, parentId = destination.value || null) {
+    async function imported(payload, parentId = currentGroup || null) {
       const result = await api.importShortcuts(payload);
       if (!Array.isArray(result)) throw new Error('Could not import these links.');
       await commit([...items, ...result.map(entry => ({ ...entry, id: entry.id || crypto.randomUUID(), parentId }))]);
@@ -140,13 +138,13 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       form.append(button('Choose file or folder…', async () => {
         const result = await api.chooseShortcut(); if (!result) return;
         const values = Array.isArray(result) ? result : [result];
-        await commit([...items, ...values.map(entry => ({ ...entry, id: entry.id || crypto.randomUUID(), parentId: destination.value || null }))]);
+        await commit([...items, ...values.map(entry => ({ ...entry, id: entry.id || crypto.randomUUID(), parentId: currentGroup || null }))]);
         form.hidden = true;
       }));
       const url = field('Path or URL'); url.placeholder = 'C:\\Projects or https://example.com';
       finishForm(async () => { if (!url.value.trim()) return; const value = url.value.trim(); await imported(/^https?:\/\//i.test(value) ? { paths: [], urls: [value] } : { paths: [value], urls: [] }); form.hidden = true; }, 'Add link'); url.focus();
     }
-    function groupForm() { startForm(); const name = field('Group name'); finishForm(async () => { if (!name.value.trim()) return; await commit([...items, { id: crypto.randomUUID(), name: name.value.trim(), path: null, parentId: destination.value || null, kind: 'group' }]); form.hidden = true; }, 'Create group'); name.focus(); }
+    function groupForm() { startForm(); const name = field('Group name'); finishForm(async () => { if (!name.value.trim()) return; await commit([...items, { id: crypto.randomUUID(), name: name.value.trim(), path: null, parentId: currentGroup || null, kind: 'group' }]); form.hidden = true; }, 'Create group'); name.focus(); }
     function editForm(entry) {
       startForm(); const name = field(entry.kind === 'group' ? 'Group name' : 'Display name', entry.alias || entry.name);
       const target = entry.kind === 'group' ? null : field('Target path or URL', entry.path || '');
@@ -173,9 +171,9 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
         await commit(items.map(item => item.id === entry.id ? next : item)); form.hidden = true;
       }); name.focus();
     }
-    toolbar.append(button('＋ Add', addForm), button('＋ Group', groupForm));
+    toolbar.append(button('＋', addForm, 'Add link'), button('▦＋', groupForm, 'Add group'));
     toolbar.append(button('↻', async () => { refreshedIcons.clear(); await refreshIcons([...items.map(item => item.path).filter(Boolean), ...[...cache.values()].flat().map(item => item.path)]); }, 'Refresh shortcut icons'));
-    const view = button(mode === 'icons' ? 'Details' : 'Icons', async () => { mode = mode === 'icons' ? 'details' : 'icons'; folderNavigation = []; await persist(); render(); }); view.setAttribute('aria-label', 'Toggle link view'); toolbar.append(view);
+    const view = button(mode === 'icons' ? '☰' : '▦', async () => { mode = mode === 'icons' ? 'details' : 'icons'; folderNavigation = []; await persist(); render(); }); view.setAttribute('aria-label', 'Toggle link view'); toolbar.append(view);
     function dropTarget(element, parentId, beforeId) {
       element.addEventListener('dragover', event => { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = dragging ? 'move' : 'copy'; element.classList.add('drop-over'); });
       element.addEventListener('dragleave', () => element.classList.remove('drop-over'));
@@ -226,12 +224,12 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     function row(entry, ancestry = new Set(), filesystemEntry = false) {
       if (ancestry.has(entry.id)) return document.createElement('span');
       const branch = new Set(ancestry); branch.add(entry.id);
-      const wrapper = document.createElement('div'); wrapper.className = 'links-entry'; wrapper.dataset.id = entry.id;
+      const wrapper = document.createElement('div'); wrapper.className = 'links-entry' + (entry.kind === 'group' ? ' links-group' : ''); wrapper.dataset.id = entry.id;
       const line = document.createElement('div'); line.className = 'links-row'; line.draggable = !filesystemEntry;
       line.addEventListener('dragstart', event => { dragging = entry.id; event.dataTransfer.setData('application/x-petdock-link', entry.id); event.dataTransfer.effectAllowed = 'move'; });
       line.addEventListener('dragend', () => { dragging = null; document.querySelectorAll('.drop-over').forEach(el => el.classList.remove('drop-over')); });
       if (!filesystemEntry) dropTarget(line, entry.kind === 'group' ? entry.id : entry.parentId || null, entry.kind === 'group' ? null : entry.id);
-      const open = button('', () => entry.kind === 'group' ? (mode === 'icons' ? openGroup(entry.id) : editForm(entry)) : entry.kind === 'folder' && mode === 'icons' ? openFolder(entry) : api.openShortcut(entry.path), entry.path || 'Open group'); open.className = 'links-open';
+      const open = button('', () => entry.kind === 'group' ? openGroup(entry.id) : entry.kind === 'folder' && mode === 'icons' ? openFolder(entry) : api.openShortcut(entry.path), entry.path || 'Open group'); open.className = 'links-open';
       const icon = iconFor(entry);
       const label = document.createElement('span'); label.className = 'links-label'; const name = document.createElement('strong'); name.textContent = entry.alias || entry.name; const target = document.createElement('small'); target.textContent = entry.path || 'Group'; label.append(name, target); open.append(icon, label); line.append(open);
       if (entry.kind === 'folder' && mode === 'details') line.append(button(expanded.has(entry.path) ? '▾' : '▸', () => browse(entry), 'Browse folder'));
@@ -255,27 +253,25 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     }
     function render() {
       renderPins();
-      const selected = mode === 'icons' ? currentGroup || '' : destination.value; destination.replaceChildren(new Option('Top level', ''));
-      for (const item of items.filter(item => item.kind === 'group')) destination.add(new Option(item.alias || item.name, item.id)); destination.value = selected;
-      navigation.replaceChildren(); navigation.hidden = mode !== 'icons';
-      if (mode === 'icons') {
-        if (currentGroup || folderNavigation.length) navigation.append(button('← Back', goBack));
-        navigation.append(button('All links', () => openGroup(null)));
+      navigation.replaceChildren(); navigation.hidden = !currentGroup && !folderNavigation.length;
+      if (!navigation.hidden) {
+        if (currentGroup || folderNavigation.length) navigation.append(button('←', goBack, 'Back to parent group'));
+        navigation.append(button('⌂', () => openGroup(null), 'Back to all links'));
         const ancestry = [], seen = new Set(); let group = items.find(item => item.id === currentGroup);
         while (group && !seen.has(group.id)) { ancestry.unshift(group); seen.add(group.id); group = items.find(item => item.id === group.parentId); }
         for (const ancestor of ancestry) navigation.append(button(ancestor.alias || ancestor.name, () => openGroup(ancestor.id)));
         for (const [index, folder] of folderNavigation.entries()) navigation.append(button(folder.name, () => { folderNavigation = folderNavigation.slice(0, index + 1); render(); }, folder.path));
-        if (folderNavigation.length) navigation.append(button('Open in Explorer ↗', () => api.openShortcut(folderNavigation.at(-1).path)));
+        if (folderNavigation.length) navigation.append(button('↗', () => api.openShortcut(folderNavigation.at(-1).path), 'Open folder in Explorer'));
       }
-      content.className = `links-content links-${mode}`; view.textContent = mode === 'icons' ? 'Details' : 'Icons'; content.replaceChildren();
+      content.className = `links-content links-${mode}`; view.textContent = mode === 'icons' ? '☰' : '▦'; view.title = mode === 'icons' ? 'Show details' : 'Show icons'; content.replaceChildren();
       let visible;
       if (mode === 'icons' && folderNavigation.length) visible = (cache.get(folderNavigation.at(-1).path) || []).map(child => ({ ...child, id: child.path, kind: child.isDirectory ? 'folder' : 'file' }));
-      else visible = items.filter(item => mode === 'icons' && currentGroup ? item.parentId === currentGroup : !item.parentId || !items.some(parent => parent.id === item.parentId && parent.kind === 'group'));
+      else visible = items.filter(item => currentGroup ? item.parentId === currentGroup : !item.parentId || !items.some(parent => parent.id === item.parentId && parent.kind === 'group'));
       for (const entry of visible) content.append(row(entry, new Set(), mode === 'icons' && folderNavigation.length > 0));
       if (!visible.length) { const empty = document.createElement('p'); empty.className = 'links-empty'; empty.textContent = folderNavigation.length ? 'This folder is empty.' : currentGroup ? 'This group is empty.' : 'No links yet.'; content.append(empty); }
     }
-    dropTarget(content, () => mode === 'icons' ? currentGroup : null);
-    root.addEventListener('keydown', event => { if (event.key === 'Escape' && mode === 'icons' && (currentGroup || folderNavigation.length) && !event.target.matches('input,select,textarea')) { event.preventDefault(); goBack(); } });
+    dropTarget(content, () => currentGroup);
+    root.addEventListener('keydown', event => { if (event.key === 'Escape' && (currentGroup || folderNavigation.length) && !event.target.matches('input,select,textarea')) { event.preventDefault(); goBack(); } });
     root.append(toolbar);window.OgleLinksTools?.mount(root,api,report);root.append(pinStatus, form, navigation, content, removal); render(); refreshIcons().catch(report);
   }
   return { mount, discardEdit: () => discardCurrentEdit() };

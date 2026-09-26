@@ -61,13 +61,13 @@ async function workerCheck(executable, env) {
     report.bundledPets=boot.pets.map(p=>p.id);
     assert.equal(await page.locator('[data-shell],#minimize,#close').count(),0);
     await page.locator('[data-panel="shortcuts"]').evaluate(el=>el.click());
-    await page.locator('#shortcuts-panel').getByRole('button',{name:'＋ Add',exact:true}).click();
+    await page.locator('#shortcuts-panel').getByRole('button',{name:'Add link',exact:true}).click();
     assert.equal(await page.getByLabel('Path or URL',{exact:true}).isVisible(),true);
     assert.equal(await page.getByRole('button',{name:'Choose file or folder…',exact:true}).isVisible(),true);
     report.unifiedLinksAdd=true;
     await page.locator('[data-panel="terminal"]').evaluate(el => el.click());
     await page.evaluate(() => { window.testTerminalOutput = ''; window.dock.onEvent(event => { if (event.type === 'terminal' && event.event === 'data') window.testTerminalOutput += event.data; }); });
-    await page.locator('#terminal-panel').getByRole('button',{name:'+ PowerShell',exact:true}).click();
+    await page.locator('#terminal-panel').getByRole('button',{name:'New PowerShell',exact:true}).click();
     await page.locator('.terminal-tabs button').first().waitFor();
     await page.locator('.terminal-session:not([hidden]) .xterm-helper-textarea').focus();
     await page.keyboard.type("Write-Output ('PETDOCK_PACKAGE_' + (6*7))");
@@ -76,7 +76,7 @@ async function workerCheck(executable, env) {
     await page.screenshot({ path: path.join(out, 'package-terminal.png') });
     report.powerShellPanelButton = true;
     await page.locator('#terminal-panel').getByRole('button', {name:'Close session',exact:true}).click();
-    await page.locator('#terminal-panel').getByRole('button',{name:'+ CMD',exact:true}).click();
+    await page.locator('#terminal-panel').getByRole('button',{name:'New Command Prompt',exact:true}).click();
     await page.locator('.terminal-tabs button').first().waitFor();
     report.cmdPanelButton = true;
     await page.locator('#collapse').evaluate(el => el.click());

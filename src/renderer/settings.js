@@ -27,6 +27,17 @@ window.PetDockSettings = (() => {
     const delay=el('input');delay.type='number';delay.dataset.setting='autoCollapseDelay';delay.min='1';delay.max='120';delay.step='1';delay.value=String((settings.autoCollapseDelay ?? 10000)/1000);
     delay.onchange=async()=>{try{const seconds=Number(delay.value);if(!Number.isInteger(seconds)||seconds<1||seconds>120)throw new Error('Choose an auto-collapse delay from 1 to 120 seconds.');await save({autoCollapseDelay:seconds*1000});apply();}catch(err){delay.value=String((settings.autoCollapseDelay ?? 10000)/1000);report(err);}};
     delayRow.append(delay);behavior.append(delayRow);
+    const stats=section('Counters & meters','Session totals only. Typed text is never recorded. CPU and RAM show system usage.');
+    check(stats,'Mouse clicks','statsClicks',true);check(stats,'Keystrokes','statsKeys',true);check(stats,'CPU usage','statsCpu',true);check(stats,'RAM usage','statsRam',true);
+    select(stats,'Block position','statsPosition',[['left','Left of pet'],['right','Right of pet'],['top','Above pet']], 'right');
+    const hotkeys=section('Keyboard shortcuts','Use these anywhere in Windows. Leave empty to disable.');
+    for(const [key,label,fallback] of [['shortcutVisibility','Show / hide Ogle','Control+Alt+O'],['shortcutPanel','Expand / collapse','Control+Alt+Space']]){
+      const row=el('label',null,'settings-row');row.append(el('span',label));const input=el('input');input.dataset.setting=key;input.value=settings[key] ?? fallback;input.placeholder=fallback;input.setAttribute('aria-label',label+' shortcut');
+      const status=el('span',null,'settings-hint');status.setAttribute('role','status');
+      input.onkeydown=event=>{if(event.key==='Tab')return;event.preventDefault();if(event.key==='Backspace'||event.key==='Delete'){input.value='';return;}if(['Control','Alt','Shift','Meta'].includes(event.key))return;const parts=[];if(event.ctrlKey)parts.push('Control');if(event.altKey)parts.push('Alt');if(event.shiftKey)parts.push('Shift');if(event.metaKey)parts.push('Super');if(!parts.length)return;parts.push(event.code==='Space'?'Space':event.key.length===1?event.key.toUpperCase():event.key.replace('Arrow',''));input.value=parts.join('+');};
+      const applyButton=button('Set',async()=>{const previous=settings[key] ?? fallback;try{await save({[key]:input.value.trim()});status.textContent='Saved';}catch(err){settings[key]=previous;input.value=previous;status.textContent='Unavailable — choose another shortcut';throw err;}});
+      row.append(input,applyButton);hotkeys.append(row,status);
+    }
     const startup=section('Windows startup','Start Ogle when you sign in to Windows. Ogle starts Codex only when it is not already running.');check(startup,'Start with Windows','autoStart',true);
     const admin=section('Administrator terminals','Approve the protected helper once to use Admin shells across Ogle restarts. Requires an administrator Windows account. Removing or replacing the helper needs Windows approval again.');
     const adminStatus=el('p','Checking administrator access…','settings-hint'),adminActions=el('div',null,'settings-actions');
