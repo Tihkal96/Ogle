@@ -8,7 +8,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.8](https://github.com/Tihkal96/Ogle/releases/download/v0.5.8/Ogle-0.5.8-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.9](https://github.com/Tihkal96/Ogle/releases/download/v0.5.9/Ogle-0.5.9-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -39,7 +39,17 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 
 Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release.
 
-## Version 0.5.8
+## Version 0.5.9
+
+The compact chat destination menu now excludes both choices from Windows' drag region, fixing the unclickable Codex option. Settings → Pet → Click action offers opening Codex, playing a random animation, showing the full panel or bar, toggling the panel, opening ChatGPT, or doing nothing. Dragging still moves the pet.
+
+Run, Windows tools and search share one compact row at the top of Links. Choosing a Windows tool opens it immediately. File search starts 300 ms after typing pauses. Everything and ES are now bundled, with licenses and provenance in `vendor/everything`; users do not install anything. A private non-admin process builds its index only on first search and closes with Ogle. Search covers Desktop, Documents, Downloads, Pictures, Music and Videos (including redirected known folders), not entire drives or file contents. Initial indexing costs depend on folder size; subsequent file changes are monitored with background IO priority. Results are capped at 100 and initial database loading is reported before querying. Existing Everything installations are left alone.
+
+In the packaged app, the first **Admin** shell (or Settings → Administrator terminals → Enable administrator access) asks Windows once to install a protected helper under Program Files. Its fixed scheduled task starts on demand and works across Ogle restarts and Windows sign-ins. The main dock and ChatGPT stay unelevated. This requires an administrator Windows account; entering another account's credentials from a standard account is not supported. Closing administrator shells leaves permission installed. **Remove administrator access** removes the task/helper and asks Windows again; replacing the protected helper after an update also requires consent. The persistent helper protocol is versioned; maintainers must require removal/reinstallation when an incompatible or security-sensitive helper update is shipped. UAC policies are never disabled.
+
+Automated checks cover protected installer script parsing, authenticated/encrypted IPC, tampering/replay rejection and broker restarts. Real UAC installation and highest-privilege scheduled-task execution require desktop consent and were not exercised by automated tests.
+
+## Version 0.5.8 (superseded search setup)
 
 Links supports seven toolbar pins. The drop-target box is removed; drop directly into the Links area or a group. Its Run box opens programs, folders, URLs and commands with arguments (quote executable paths containing spaces). The Windows tools menu includes Registry Editor, DCOM/Component Services, Control Panel, Remote Desktop, management consoles and IIS; unavailable Windows components are disabled. Normal Windows permissions and UAC still apply.
 
@@ -105,7 +115,7 @@ Paste PNG, JPEG or WebP images into the Codex composer to see removable previews
 - Notes autosave. The code editor has persistent tabs, language selection, highlighting, line numbers, folding, search/replace, UTF-8 open/save, overwrite conflict prompts and JSON syntax checks. Ctrl+S saves; Ctrl+Shift+S saves as. Dirty tabs survive restart; closing them requires an explicit discard action.
 - Editor modes include C, C++, C#, Visual Basic, CMD, SQL and PowerShell, alongside JavaScript, TypeScript, HTML, CSS, Python, JSON and Markdown. C#/VB profiles for .NET 3.5, .NET 4 and modern code provide basic compatibility hints. These are not compiler validation or a complete language server.
 - Links has one Add action for URLs, files, folders and applications. Drop files/folders from Explorer or links from a browser. Create nested virtual groups, drag items into them, move/reorder items, rename groups, edit aliases/targets, and choose icons or details. Removing a group preserves its children at the parent level. Groups and folders open navigable icon pages.
-- Shell contains PowerShell/CMD tabs, working-folder selection, clear screen/scrollback, Ctrl+C, restart and close. Administrator shells share one authenticated elevated helper for the dock's lifetime. Close a shell and open another without repeating UAC; Release admin access closes the elevated sessions and helper. Restarting Ogle requires fresh consent. The main dock and browser remain unelevated.
+- Shell contains PowerShell/CMD tabs, working-folder selection, clear screen/scrollback, Ctrl+C, restart and close. Packaged administrator shells use the protected, persistent helper described above, installed with one Windows approval. Settings can close active shells or remove durable access. Development and isolated test profiles retain the session-only helper. The main dock and browser remain unelevated.
 - Settings includes account sign-in/out, pet selection and scale, pet installation, themes, time/date visibility and formats, and dock behavior.
 
 ## Codex connection

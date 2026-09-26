@@ -40,6 +40,9 @@ contextBridge.exposeInMainWorld('dock', Object.freeze({
   terminalResize: (id, cols, rows) => invoke('terminalResize', id, cols, rows),
   terminalClose: id => invoke('terminalClose', id),
   terminalReleaseAdmin: () => invoke('terminalReleaseAdmin'),
+  terminalAdminStatus: () => invoke('terminalAdminStatus'),
+  terminalEnableAdmin: () => invoke('terminalEnableAdmin'),
+  terminalDisableAdmin: () => invoke('terminalDisableAdmin'),
   windowAction: action => invoke('windowAction', action),
   windowTransition: (phase,mode,reducedMotion) => invoke('windowTransition',phase,mode,reducedMotion),
   onEvent: callback => {

@@ -174,11 +174,11 @@ $('pet').addEventListener('pointermove', event => {
 });
 $('pet').addEventListener('pointerup', event => {
   if (!petPress) return;
-  petPress=null; const wasDragged=draggedPet; api.petDrag('end').then(result=>{if(!wasDragged && !result?.moved) return api.openCodex(state.selected?.id);}).catch(error);
+  petPress=null; const wasDragged=draggedPet; api.petDrag('end').then(result=>{if(!wasDragged && !result?.moved) return runPetClickAction();}).catch(error);
   if ($('pet').hasPointerCapture(event.pointerId)) $('pet').releasePointerCapture(event.pointerId);
 });
 $('pet').addEventListener('pointercancel',()=>{petPress=null;draggedPet=true;api.petDrag('end').catch(error);});
-$('pet').onclick = event => { if(event.detail===0 && !draggedPet) attempt(() => api.openCodex(state.selected?.id)); };
+$('pet').onclick = event => { if(event.detail===0 && !draggedPet) attempt(runPetClickAction); };
 $('pet').oncontextmenu = event => { event.preventDefault(); attempt(() => api.petMenu()); };
 $('pet').onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); draggedPet=false; $('pet').click(); } };
 $('pet').addEventListener('mouseenter',()=>{state.petHovered=true;updateComposer();});
@@ -309,7 +309,8 @@ const idleAnimation=new window.OgleIdleAnimation();
 let lastFrame=-1,lastGeneration=-1;
 function animate(time) {
   if(state.reactionUntil && time>=state.reactionUntil && ['review','failed'].includes(state.petState))updatePetState();
-  const flourish=idleAnimation.tick(time,state.petState,animations);
+  if(state.clickAnimation && (time>=state.clickAnimation.until || ['waiting','failed'].includes(state.petState)))state.clickAnimation=null;
+  const flourish=state.clickAnimation || idleAnimation.tick(time,state.petState,animations);
   const visualState=flourish?.name || state.petState;
   canvas.dataset.state=visualState;
   const [row,count,duration]=animations[visualState] || animations.idle;
@@ -349,6 +350,8 @@ function applySettings() {
   for(const input of document.querySelectorAll('#settings-panel [data-setting]')) { const value=state.settings[input.dataset.setting];if(value!==undefined){if(input.type==='checkbox')input.checked=Boolean(value);else input.value=input.dataset.setting==='autoCollapseDelay'?value/1000:value;} }
   const chosen=pets.find(p=>p.id===state.settings.petId) || pets[0]; if(chosen && petImage.src!==chosen.spriteUrl) petImage.src=chosen.spriteUrl;
   clock();
+  const clickLabels={codex:'Open Codex',animation:'Play random animation',expand:'Open full panel',reveal:'Show horizontal bar',toggle:'Toggle full panel',chatgpt:'Open ChatGPT panel',none:'Drag to move'};
+  $('pet').title=clickLabels[state.settings.petClickAction] || clickLabels.codex;$('pet').setAttribute('aria-label',$('pet').title);
   syncComposerContext();updateComposer();
   const nextDelay=autoCollapseDelay(),delayChanged=state.lastAutoCollapseDelay!==undefined && state.lastAutoCollapseDelay!==nextDelay;state.lastAutoCollapseDelay=nextDelay;
   const autoChanged=state.lastAutoExpand!==state.settings.autoExpand;state.lastAutoExpand=state.settings.autoExpand;

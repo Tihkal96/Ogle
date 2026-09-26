@@ -1,1 +1,2 @@
 dist/** filter=lfs diff=lfs merge=lfs -text
+vendor/everything/*.exe filter=lfs diff=lfs merge=lfs -text

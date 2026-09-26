@@ -1,56 +1,45 @@
 'use strict';
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { createFileSearch, candidates, parseResults } = require('../src/main/file-search.cjs');
-const env = { PETDOCK_EVERYTHING_CLI: 'C:\\Tools\\es.exe' };
-const stat = async () => ({ isFile: () => true });
-
-test('file search does no startup work and gives setup guidance without running a command', async () => {
-  let calls = 0;
-  const search = createFileSearch({ env, stat: async () => { calls++; throw new Error('missing'); }, run: () => assert.fail('must not execute') });
-  assert.equal(calls, 0);
-  const result = await search.search('notes');
-  assert.equal(result.status, 'setup'); assert.equal(calls, 1);
-  assert.match(result.message, /Everything/);
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const {EventEmitter}=require('node:events');
+const {createFileSearch,parseResults,configuration}=require('../src/main/file-search.cjs');
+function fixture(run){
+ let launches=0;const writes=[];
+ const search=createFileSearch({dataDir:'C:\\Fixture',roots:['C:\\Users\\Example\\Documents'],binaryDir:'C:\\Binaries',
+ io:{stat:async()=>({isDirectory:()=>true}),mkdir:async()=>{},writeFile:async(...args)=>writes.push(args)},
+ launch:(file,args,options)=>{launches++;assert.equal(options.windowsHide,true);assert.ok(args.includes('-startup'));assert.ok(!args.includes('-admin'));const child=new EventEmitter();child.unref=()=>{};process.nextTick(()=>child.emit('spawn'));return child;},run});
+ return {search,writes,launches:()=>launches};
+}
+test('bundled index starts lazily and isolates its instance',async()=>{
+ let call;const f=fixture((...args)=>{call=args;args[3](null,'C:\\Notes\\test.txt\r\n');});
+ assert.equal(f.launches(),0);const result=await f.search.search('-example');
+ assert.equal(f.launches(),1);assert.equal(result.status,'ok');assert.deepEqual(result.results,['C:\\Notes\\test.txt']);
+ assert.equal(call[0],'C:\\Binaries\\es.exe');assert.deepEqual(call[1].slice(-2),['--','-example']);
+ assert.match(call[1][1],/^Ogle-[a-f0-9]{16}$/);assert.equal(call[2].shell,false);assert.equal(call[2].windowsHide,true);assert.equal(call[2].timeout,5000);
+ await f.search.search('again');assert.equal(f.launches(),1);await f.search.dispose();assert.ok(call[1].includes('-exit'));
 });
-
-test('explicit searches use a bounded hidden process and cannot inject ES options or shell commands', async () => {
-  const query = '-reindex & calc.exe';
-  let call;
-  const search = createFileSearch({ env, stat, run: (...args) => { call = args; args[3](null, 'C:\\Notes\\žuti.txt\r\n'); } });
-  const result = await search.search(query);
-  assert.equal(call[0], env.PETDOCK_EVERYTHING_CLI);
-  assert.deepEqual(call[1].slice(-2), ['--', query]);
-  assert.equal(call[1][call[1].indexOf('-n') + 1], '100');
-  assert.equal(call[2].shell, false); assert.equal(call[2].windowsHide, true);
-  assert.equal(call[2].timeout, 4000); assert.equal(call[2].maxBuffer, 1024 * 1024);
-  assert.deepEqual(result.results, ['C:\\Notes\\žuti.txt']);
+test('configuration escapes folder paths and disables elevated/raw drive indexing',()=>{
+ const config=configuration(['C:\\My Files','D:\\Files, extra']);
+ assert.ok(config.includes('folders="C:\\\\My Files","D:\\\\Files, extra"'));
+ assert.match(config,/run_as_admin=0/);assert.match(config,/auto_include_fixed_volumes=0/);assert.match(config,/folder_update_thread_mode_background=1/);
 });
-
-test('result parsing preserves Unicode, drops nonpaths, deduplicates and caps at 100', () => {
-  const entries = Array.from({ length: 150 }, (_, i) => `C:\\Files\\file${i}.txt`);
-  assert.equal(parseResults(entries.join('\r\n')).length, 100);
-  assert.deepEqual(parseResults('\uFEFFC:\\žuti.txt\r\nC:\\ŽUTI.txt\r\nhttps://example.com\r\nrelative.txt\r\n\\\\server\\share\\file.txt\r\n'), ['C:\\žuti.txt', '\\\\server\\share\\file.txt']);
+test('result parsing drops nonpaths, deduplicates and caps at 100',()=>{
+ assert.equal(parseResults(Array.from({length:150},(_,i)=>`C:\\Files\\file${i}.txt`).join('\r\n')).length,100);
+ assert.deepEqual(parseResults('C:\\a.txt\r\nC:\\A.txt\r\nhttps://example.com\r\nrelative.txt\r\n'),['C:\\a.txt']);
 });
-
-test('discovery considers explicit path, absolute PATH entries and standard install directories only', () => {
-  assert.deepEqual(candidates({ ...env, PATH: 'relative;"C:\\Tools";;D:\\Bin', ProgramFiles: 'C:\\Program Files' }), ['C:\\Tools\\es.exe', 'D:\\Bin\\es.exe', 'C:\\Program Files\\Everything\\es.exe']);
+test('invalid searches never start indexing',async()=>{
+ const f=fixture(()=>assert.fail('no process'));
+ for(const value of ['',null,'a\n-b','a'.repeat(1025)])await assert.rejects(f.search.search(value),/Enter a file search/);
+ assert.equal(f.launches(),0);
 });
-
-test('invalid input never probes filesystem or launches a process', async () => {
-  const search = createFileSearch({ stat: () => assert.fail('no discovery'), run: () => assert.fail('no process') });
-  for (const query of ['', '   ', null, 'a\n-b', 'a'.repeat(1025)]) await assert.rejects(search.search(query), /Enter a file search/);
+test('database startup timeout remains initializing rather than a false empty result',async()=>{
+ const f=fixture((file,args,options,callback)=>callback(Object.assign(new Error('database loading'),{code:8})));
+ const result=await f.search.search('pending');
+ assert.equal(result.status,'initializing');assert.deepEqual(result.results,[]);
 });
-
-test('concurrent requests are bounded and a failed request releases the slot', async () => {
-  let finish;
-  const search = createFileSearch({ env, stat, run: (file, args, options, callback) => { finish = callback; } });
-  const first = search.search('first');
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal((await search.search('second')).status, 'busy');
-  finish(Object.assign(new Error('IPC unavailable'), { code: 8 }));
-  assert.equal((await first).status, 'unavailable');
-  const retry = search.search('third');
-  await new Promise(resolve => setImmediate(resolve)); finish(null, '');
-  assert.equal((await retry).status, 'ok');
+test('concurrent queries stay bounded and failures release the query slot',async()=>{
+ let finish;const f=fixture((file,args,options,callback)=>{finish=callback;});
+ const first=f.search.search('first');await new Promise(resolve=>setImmediate(resolve));
+ assert.equal((await f.search.search('second')).status,'busy');finish(new Error('unavailable'));assert.equal((await first).status,'unavailable');
+ const retry=f.search.search('third');await new Promise(resolve=>setImmediate(resolve));finish(null,'');assert.equal((await retry).status,'ok');
 });

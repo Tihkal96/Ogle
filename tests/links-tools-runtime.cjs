@@ -11,10 +11,11 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
 
  await app.evaluate(({ipcMain})=>{
   global.linkCalls=[];
-  for(const name of ['runCommand','openWindowsTool','searchFiles','openShortcut']){ipcMain.removeHandler('dock:'+name);ipcMain.handle('dock:'+name,(_e,value)=>{global.linkCalls.push({name,value});if(name==='searchFiles')return value==='missing'?{status:'setup',message:'Install Everything and ES.'}:{status:'ok',results:['C:\\fixture.txt']};return {launched:true};});}
+  for(const name of ['runCommand','openWindowsTool','searchFiles','openShortcut']){ipcMain.removeHandler('dock:'+name);ipcMain.handle('dock:'+name,(_e,value)=>{global.linkCalls.push({name,value});if(name==='searchFiles')return value==='missing'?{status:'unavailable'}:{status:'ok',results:['C:\\fixture.txt']};return {launched:true};});}
  });
  await page.evaluate(()=>switchPanel('shortcuts'));
  assert.equal(await page.locator('.links-root-drop').count(),0);
+ const boxes=await page.locator('.links-tools-controls').evaluate(el=>[...el.children].map(n=>n.getBoundingClientRect().top));assert.ok(Math.max(...boxes)-Math.min(...boxes)<2,'Run, tools and search share one row');
  await page.waitForFunction(()=>$('windows-tool').options.length>20);
  assert.ok((await page.locator('#windows-tool').innerText()).includes('Remote Desktop (mstsc)'));
  await page.locator('#links-run').fill('notepad.exe "C:\\a b.txt"');
@@ -22,23 +23,25 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  await page.locator('#links-run').evaluate(el=>el.form.requestSubmit());
  await page.waitForFunction(()=>$('links-run').value==='');
  await page.locator('#windows-tool').selectOption('control-panel');
- await page.locator('.links-tools').getByRole('button',{name:'Open',exact:true}).evaluate(el=>el.click());
- await page.locator('#links-file-search').fill('report');
- await page.locator('#links-file-search').evaluate(el=>el.form.requestSubmit());
+
+ await page.locator('#links-file-search').fill('r');await page.locator('#links-file-search').fill('re');await page.locator('#links-file-search').fill('report');
+ assert.equal((await app.evaluate(()=>global.linkCalls)).filter(c=>c.name==='searchFiles').length,0,'Typing is debounced');
+
  await page.locator('.links-search-results button').waitFor({state:'visible'});
  await page.locator('.links-search-results button').evaluate(el=>el.click());
  const calls=await app.evaluate(()=>global.linkCalls);
  assert.deepEqual(calls.map(c=>c.name),['runCommand','openWindowsTool','searchFiles','openShortcut']);
  assert.equal(calls[0].value,'notepad.exe "C:\\a b.txt"');assert.equal(calls[1].value,'control-panel');
- await page.locator('#links-file-search').fill('missing');await page.locator('#links-file-search').evaluate(el=>el.form.requestSubmit());
- await page.locator('.links-search-results').getByText('Everything setup ↗').waitFor({state:'visible'});
- await page.locator('.links-tools').getByRole('button',{name:'Clear',exact:true}).evaluate(el=>el.click());
+ await page.locator('#links-file-search').fill('missing');
+ await page.waitForFunction(()=>document.querySelector('.links-tool-status').textContent==='Search is preparing.');
+ await page.locator('.links-tools').getByRole('button',{name:'Clear search',exact:true}).evaluate(el=>el.click());
  assert.equal(await page.locator('.links-search-results').isHidden(),true);
  await page.evaluate(()=>{state.petHovered=false;state.reactionUntil=0;state.pendingReaction=null;state.running.set('working-fixture','turn');updatePetState();idleAnimation.tick(performance.now(),state.petState,animations);idleAnimation.since=performance.now()-60001;});
  await page.waitForFunction(()=>!!idleAnimation.active);
  assert.equal(await page.evaluate(()=>state.petState),'running');
  await page.waitForFunction(()=>!idleAnimation.active && $('pet').dataset.state==='running');
  assert.ok(await page.evaluate(()=>performance.now()-idleAnimation.since<1000));
+ await page.screenshot({path:path.join(root,'artifacts/links-compact-controls.png')});
  console.log('Run, Windows tools, on-demand search/setup, drop-box removal and working flourish passed');
  }finally{await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

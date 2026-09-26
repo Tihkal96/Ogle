@@ -1,6 +1,8 @@
 'use strict';
 const fs = require('node:fs');
 const { ElevatedBroker } = require('./elevated-broker.cjs');
+const { PersistentAdmin } = require('./persistent-admin.cjs');
+const { PersistentAdminBroker } = require('./persistent-admin-broker.cjs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 function options(input = {}) {
@@ -21,7 +23,7 @@ function startPty(config) {
   return pty.spawn(executable, config.shell === 'cmd' ? ['/Q'] : ['-NoLogo'], { name: 'xterm-256color', cwd: config.cwd, cols: config.cols, rows: config.rows, env });
 }
 class TerminalManager {
-  constructor({ onEvent = () => {}, executable = process.execPath, workerArgs = [] } = {}) { Object.assign(this, { onEvent, executable, workerArgs }); this.sessions = new Map(); }
+  constructor({ onEvent = () => {}, executable = process.execPath, workerArgs = [], packaged = false } = {}) { Object.assign(this, { onEvent, executable, workerArgs }); this.sessions = new Map(); this.installation = new PersistentAdmin({ executable, packaged }); }
   async create(input) {
     const config = options(input), id = crypto.randomUUID();
     const session = { id, ...config }; this.sessions.set(id, session);
@@ -37,7 +39,7 @@ class TerminalManager {
   }
   _emit(id, event, extra = {}) { this.onEvent({ type: 'terminal', id, event, ...extra }); }
   _elevate(session) {
-    if (!this.broker) this.broker = new ElevatedBroker({ executable: this.executable, workerArgs: this.workerArgs, onEvent: event => {
+    if (!this.broker) this.broker = new (this.installation.packaged ? PersistentAdminBroker : ElevatedBroker)({ installation: this.installation, executable: this.executable, workerArgs: this.workerArgs, onEvent: event => {
       if (event.event === 'broker-closed') {
         for (const s of [...this.sessions.values()]) if (s.admin) { this.sessions.delete(s.id); this._emit(s.id, 'exit', { exitCode: null }); }
       } else if (event.id) {
@@ -48,6 +50,9 @@ class TerminalManager {
     return this.broker.create(session.id, { shell: session.shell, cwd: session.cwd, cols: session.cols, rows: session.rows });
   }
   releaseAdmin() { for (const session of [...this.sessions.values()]) if (session.admin) { this.close(session.id); this._emit(session.id,'exit',{exitCode:null}); } this.broker?.dispose(); this.broker = null; }
+  adminStatus() { return this.installation.status(); }
+  enableAdmin() { return this.installation.enable(); }
+  async disableAdmin() { this.releaseAdmin(); return this.installation.disable(); }
   write(id, data) { const session = this.sessions.get(id); if (!session) throw new Error('Terminal is closed.'); if (typeof data !== 'string' || data.length > 1024 * 1024) throw new Error('Invalid terminal input.'); if (session.pty) session.pty.write(data); else this.broker.send({ event: 'write', id, data }); }
   resize(id, cols, rows) { const session = this.sessions.get(id); if (!session) return; cols = size(cols, 80); rows = size(rows, 24); if (session.pty) session.pty.resize(cols, rows); else this.broker.send({ event: 'resize', id, cols, rows }); }
   close(id) { const session = this.sessions.get(id); if (!session) return; this.sessions.delete(id); session.pty?.kill(); if (session.admin) { try { this.broker?.send({ event: 'close', id }); } catch {} } }
