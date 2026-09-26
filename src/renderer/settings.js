@@ -8,7 +8,7 @@ window.PetDockSettings = (() => {
     function select(section,label,key,options,fallback) {const row=el('label',null,'settings-row');row.append(el('span',label));const input=el('select');input.dataset.setting=key;for(const [value,text] of options)input.add(new Option(text,value));input.value=settings[key] ?? fallback;input.onchange=async()=>{try{await save({[key]:input.value});apply();}catch(err){report(err);}};row.append(input);section.append(row);return input;}
     function check(section,label,key,fallback) {const row=el('label',null,'settings-row');row.append(el('span',label));const input=el('input');input.type='checkbox';input.dataset.setting=key;input.checked=settings[key] ?? fallback;input.onchange=async()=>{try{await save({[key]:input.checked});apply();}catch(err){report(err);}};row.append(input);section.append(row);}
     root.append(el('h1','Settings'));
-    const account=section('Accounts','Sign in through the official browser flow. Passwords are never entered into PetDock settings.');
+    const account=section('Accounts','Sign in through the official browser flow. Passwords are never entered into Ogle settings.');
     const accountStatus=el('p','Checking Codex account…','account-status');account.append(accountStatus);
     async function refreshAccount(){try{const result=await api.codexAccount();const value=result?.account ?? result;accountStatus.textContent=value?.email?`Codex: ${value.email}${value.planType?' · '+value.planType:''}`:value?.type?`Codex: ${value.type}`:'Codex: not signed in';}catch(err){accountStatus.textContent=`Account status unavailable: ${err.message}`;}}
     const accountActions=el('div',null,'settings-actions');accountActions.append(button('Sign in to Codex',async()=>{const result=await api.codexLogin();accountStatus.textContent=result?.message || 'Complete sign-in in your browser, then refresh account status.';}),button('Refresh account',refreshAccount),button('Sign out of Codex',async()=>{await api.codexLogout();await refreshAccount();}));account.append(accountActions);
@@ -21,8 +21,8 @@ window.PetDockSettings = (() => {
     const appearance=section('Appearance');select(appearance,'Theme','theme',[['dark','Graphite'],['light','Paper'],['midnight','Midnight']], 'dark');
     const clock=section('Clock & date');check(clock,'Show time','showTime',true);select(clock,'Time format','timeFormat',[['24h','24-hour'],['12h','12-hour']], '24h');check(clock,'Show date','showDate',false);select(clock,'Date format','dateFormat',[['locale','System format'],['iso','YYYY-MM-DD']], 'locale');
     const behavior=section('Dock behavior','Hover to reveal the compact toolbar. Choose a tool to open its panel. Pin keeps the toolbar visible while Auto is enabled.');check(behavior,'Reveal toolbar on hover','autoExpand',true);check(behavior,'Show Codex task list','sidebarVisible',true);
-    const startup=section('Windows startup','Start PetDock when you sign in to Windows. PetDock starts Codex only when it is not already running.');check(startup,'Start with Windows','autoStart',true);
-    const admin=section('Administrator terminals','Admin shells reuse one Windows approval until PetDock exits or you release access. Releasing closes every administrator shell.');
+    const startup=section('Windows startup','Start Ogle when you sign in to Windows. Ogle starts Codex only when it is not already running.');check(startup,'Start with Windows','autoStart',true);
+    const admin=section('Administrator terminals','Admin shells reuse one Windows approval until Ogle exits or you release access. Releasing closes every administrator shell.');
     const adminStatus=el('p',null,'settings-hint'),adminActions=el('div',null,'settings-actions');
     adminActions.append(button('Release admin access',async()=>{await api.terminalReleaseAdmin();adminStatus.textContent='Administrator shells closed and access released. The next Admin shell will ask Windows again.';}));admin.append(adminActions,adminStatus);
   }

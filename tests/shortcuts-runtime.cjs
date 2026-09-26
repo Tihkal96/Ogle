@@ -45,7 +45,7 @@ const assert = require('node:assert/strict');
     await page.waitForTimeout(350);
     assert.ok(stored().shortcuts.some(x=>x.kind==='file'&&x.path.endsWith('README.md')),'Native file drop resolves through preload and persists');
     await page.screenshot({path:path.join(root,'artifacts/shortcuts-ui.png')});
-    const capture=await app.evaluate(async({BrowserWindow,desktopCapturer})=>{const win=BrowserWindow.getAllWindows().find(w=>w.getTitle()==='PetDock');const sources=await desktopCapturer.getSources({types:['window'],thumbnailSize:{width:1520,height:1640}});return sources.find(s=>s.id===win.getMediaSourceId()).thumbnail.toPNG().toString('base64');});
+    const capture=await app.evaluate(async({BrowserWindow,desktopCapturer})=>{const win=BrowserWindow.getAllWindows().find(w=>w.getTitle()==='Ogle');const sources=await desktopCapturer.getSources({types:['window'],thumbnailSize:{width:1520,height:1640}});return sources.find(s=>s.id===win.getMediaSourceId()).thumbnail.toPNG().toString('base64');});
     fs.writeFileSync(path.join(root,'artifacts/shortcuts-native.png'),Buffer.from(capture,'base64'));
     console.log(JSON.stringify({nestedDrop:true,cycleRejected:true,rootMove:true,aliasPersisted:true,viewPersisted:true,urlDrop:true,nativeFileDrop:true,groupDeletionPreservesChildren:true,profile},null,2));
   }finally{await app.close();}

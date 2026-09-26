@@ -101,7 +101,7 @@ class ChatGPTPanel {
 
   async show(action = 'show') {
     if(action==='logout') {
-      const choice=await dialog.showMessageBox(this.parent,{type:'question',message:'Sign out of ChatGPT in PetDock?',detail:'This clears only the dock’s ChatGPT browser session.',buttons:['Cancel','Sign out'],defaultId:0,cancelId:0});
+      const choice=await dialog.showMessageBox(this.parent,{type:'question',message:'Sign out of ChatGPT in Ogle?',detail:'This clears only the dock’s ChatGPT browser session.',buttons:['Cancel','Sign out'],defaultId:0,cancelId:0});
       if(choice.response!==1)return {cancelled:true};
       const wasVisible=this.visible;
       for(const child of this.children)if(!child.isDestroyed())child.destroy();

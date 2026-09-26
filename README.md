@@ -1,26 +1,39 @@
-# PetDock
+# Ogle
 
 A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, a code editor, shortcut groups and embedded terminals. Existing pet projects are preserved; the app includes copies of Rinnegan and Lago Cartoon and can use installed v2 pets.
 
-## Run
+## Download and run
 
-### Get it on another Windows PC
+Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
-The complete Windows x64 build is tracked in `dist/` using Git LFS. Install Git with Git LFS, then clone this repository and run `git lfs pull` from its directory. Open `dist/PetDock-win32-x64/PetDock.exe`; keep the whole build folder together. Node.js is only required for development, not to run the packaged app.
+### Windows release — no source checkout needed
 
-```powershell
-git lfs install
-git clone https://github.com/Tihkal96/PetDock.git
-cd PetDock
-git lfs pull
-.\Launch-PetDock.ps1
-```
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release. The automatically generated **Source code** archives are not the runnable application.
+2. Extract the entire build archive. Keep its executable, resources and supporting files together.
+3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
-Install and sign in to Codex on that PC. Sign in to ChatGPT separately inside PetDock. Accounts, notes, settings and chat sessions are local to each PC and are not included in this repository. Windows startup is enabled by default and can be turned off in Settings.
+For a local repository build, the executable is `dist/Ogle-win32-x64/Ogle.exe`; `Launch-Ogle.ps1` launches that build.
+
+Install and sign in to Codex on that PC. Sign in to ChatGPT separately inside Ogle. Accounts, notes, settings and chat sessions are local to each PC and are not included in releases or this repository. Windows startup is enabled by default for the packaged app and can be turned off in Settings.
 
 ### Development
 
-Open `dist/PetDock-win32-x64/PetDock.exe`, or use `Launch-PetDock.ps1`. Development: `npm ci`, then `npm start`. Codex must be installed, signed in, and available as `codex.exe` on PATH. Set `PETDOCK_CODEX_PATH` to its full executable path if needed.
+```powershell
+git clone https://github.com/Tihkal96/Ogle.git
+cd Ogle
+npm ci
+npm start
+```
+
+Build the Windows application with `npm run package`, then launch `dist/Ogle-win32-x64/Ogle.exe` or `./Launch-Ogle.ps1`. Codex must be installed, signed in, and available as `codex.exe` on PATH. Set `PETDOCK_CODEX_PATH` to its full executable path if needed.
+
+### Compatibility with earlier PetDock versions
+
+Ogle is the new project and application name. Existing user data remains under `%APPDATA%/PetDock`, including settings, notes and the `persist:petdock-chatgpt` browser partition, so the rename does not create a fresh profile. Environment variables retain their `PETDOCK_*` names for compatibility; use the names documented below rather than substituting `OGLE_*`.
+
+## Contributing
+
+Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch in your fork, and open a pull request. **@Tihkal96 reviews and merges contributions; contributors do not push directly to the upstream repository.** See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and checks. [CODEOWNERS](.github/CODEOWNERS) assigns review ownership; it does not by itself enforce repository permissions or branch protection.
 
 ## Version 0.5
 
@@ -32,7 +45,7 @@ Editor Tab accepts an active completion instead of moving focus, and indents oth
 
 Links defaults to an Android-style icon grid. Groups and real folders open separate icon pages with navigation rather than expanding inline. Windows icons refresh for existing shortcuts, and website favicons are fetched from the site's own `/favicon.ico` when available. Details view remains available. This update migrates earlier default layouts to icons once; later view choices persist.
 
-Start with Windows is on by default for the packaged app and can be disabled in Settings. It registers one per-user login entry. On a login launch, PetDock gives Codex's own startup a grace period, checks its desktop connection/process, and opens it only if absent. Test profiles and development runs never register startup entries. The window's taskbar icon follows the selected pet's first idle frame; the executable's bundled icon uses Rinnegan's first idle frame. Windows may cache an already-pinned launcher icon separately.
+Start with Windows is on by default for the packaged app and can be disabled in Settings. It registers one per-user login entry. On a login launch, Ogle gives Codex's own startup a grace period, checks its desktop connection/process, and opens it only if absent. Test profiles and development runs never register startup entries. The window's taskbar icon follows the selected pet's first idle frame; the executable's bundled icon uses Rinnegan's first idle frame. Windows may cache an already-pinned launcher icon separately.
 
 ### Version 0.4 foundation
 
@@ -51,8 +64,8 @@ Paste PNG, JPEG or WebP images into the Codex composer to see removable previews
 - Classic ChatGPT stays in a tab in the dock with New Chat, Back, Reload, Latest and Open in Browser. Its own sidebar provides past chats. Existing login storage is preserved.
 - Notes autosave. The code editor has persistent tabs, language selection, highlighting, line numbers, folding, search/replace, UTF-8 open/save, overwrite conflict prompts and JSON syntax checks. Ctrl+S saves; Ctrl+Shift+S saves as. Dirty tabs survive restart; closing them requires an explicit discard action.
 - Editor modes include C, C++, C#, Visual Basic, CMD, SQL and PowerShell, alongside JavaScript, TypeScript, HTML, CSS, Python, JSON and Markdown. C#/VB profiles for .NET 3.5, .NET 4 and modern code provide basic compatibility hints. These are not compiler validation or a complete language server.
-- Links has one Add action for URLs, files, folders and applications. Drop files/folders from Explorer or links from a browser. Create nested virtual groups, drag items into them, move/reorder items, rename groups, edit aliases/targets, and choose icons or details. Removing a group preserves its children at the parent level. Folder trees can be expanded.
-- Shell contains PowerShell/CMD tabs, working-folder selection, clear screen/scrollback, Ctrl+C, restart and close. Administrator shells share one authenticated elevated helper for the dock's lifetime. Close a shell and open another without repeating UAC; Release admin access closes the elevated sessions and helper. Restarting PetDock requires fresh consent. The main dock and browser remain unelevated.
+- Links has one Add action for URLs, files, folders and applications. Drop files/folders from Explorer or links from a browser. Create nested virtual groups, drag items into them, move/reorder items, rename groups, edit aliases/targets, and choose icons or details. Removing a group preserves its children at the parent level. Groups and folders open navigable icon pages.
+- Shell contains PowerShell/CMD tabs, working-folder selection, clear screen/scrollback, Ctrl+C, restart and close. Administrator shells share one authenticated elevated helper for the dock's lifetime. Close a shell and open another without repeating UAC; Release admin access closes the elevated sessions and helper. Restarting Ogle requires fresh consent. The main dock and browser remain unelevated.
 - Settings includes account sign-in/out, pet selection and scale, pet installation, themes, time/date visibility and formats, and dock behavior.
 
 ## Codex connection

@@ -18,7 +18,7 @@ const fs = require('node:fs');
       const win = BrowserWindow.getAllWindows().find(w => w.getTitle().includes('ChatGPT'));
       const remote = webContents.getAllWebContents().find(w => w.getURL().startsWith('https://'));
       const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 1280, height: 1520 } });
-      const source = sources.find(s => s.name === 'ChatGPT · PetDock');
+      const source = sources.find(s => s.name === 'ChatGPT · Ogle');
       return { native: source?.thumbnail.toPNG().toString('base64'), win: win && (await win.capturePage()).toPNG().toString('base64'), remote: remote && (await remote.capturePage()).toPNG().toString('base64') };
     });
     for (const [key, data] of Object.entries(shots)) if (data) fs.writeFileSync(path.join(root, `artifacts/chatgpt-debug-${key}.png`), Buffer.from(data, 'base64'));

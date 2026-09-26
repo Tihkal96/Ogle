@@ -14,9 +14,10 @@ const { dockBounds } = require('./window-layout.cjs');
 const {configureStartup,ensureCodex}=require('./startup.cjs');
 const {idleIcon}=require('./pet-icon.cjs');
 
-app.setName('PetDock');
+app.setName('Ogle');
+// Preserve existing profiles, browser sign-ins and the single Windows startup entry.
 app.setAppUserModelId('PetDock.Desktop');
-if (process.env.PETDOCK_DATA_DIR) app.setPath('userData', path.resolve(process.env.PETDOCK_DATA_DIR));
+app.setPath('userData', process.env.PETDOCK_DATA_DIR ? path.resolve(process.env.PETDOCK_DATA_DIR) : path.join(app.getPath('appData'), 'PetDock'));
 if (!app.requestSingleInstanceLock()) {app.quit();return;}
 let win, bridge, chatgpt, store, files, terminals, petLibrary, petDragState, pointerTimer, connection = { state: 'connecting', detail: 'Connecting to Codex…' }, connectionPromise;
 const root = path.resolve(__dirname, '../..');
@@ -55,7 +56,7 @@ app.whenReady().then(async () => {
   configureStartup(app,store.value.autoStart);
   if(process.argv.includes('--autostart')&&!process.env.PETDOCK_DATA_DIR)ensureCodex({open:url=>shell.openExternal(url)}).catch(error=>send({type:'startup-error',message:error.message}));
   const area = screen.getPrimaryDisplay().workArea;
-  win = new BrowserWindow({ title: 'PetDock', width: Math.min(600, area.width), height: Math.min(200, area.height), x: area.x + Math.max(0, area.width - 620), y: area.y + Math.max(0, area.height - 220), transparent: true, frame: false, resizable: false, backgroundColor: '#00000000', alwaysOnTop: store.value.alwaysOnTop, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  win = new BrowserWindow({ title: 'Ogle', width: Math.min(600, area.width), height: Math.min(200, area.height), x: area.x + Math.max(0, area.width - 620), y: area.y + Math.max(0, area.height - 220), transparent: true, frame: false, resizable: false, backgroundColor: '#00000000', alwaysOnTop: store.value.alwaysOnTop, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== indexUrl) event.preventDefault(); });
   chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}) });
@@ -83,7 +84,7 @@ app.whenReady().then(async () => {
     }
     if ((event.method === 'turn/completed' || desktopFinished) && !win.isFocused() && Notification.isSupported()) {
       const failed = (event.params?.turn || event.params?.thread?.turns?.at(-1))?.status === 'failed';
-      new Notification({ title: failed ? 'PetDock · task failed' : 'PetDock · task finished', body: 'Open your dock to view the response.' }).show();
+      new Notification({ title: failed ? 'Ogle · task failed' : 'Ogle · task finished', body: 'Open your dock to view the response.' }).show();
     }
   });
   bridge.on('request', event => send({ type: 'request', ...event }));
@@ -131,7 +132,7 @@ app.whenReady().then(async () => {
     {label:'Always on top',type:'checkbox',checked:win.isAlwaysOnTop(),click:item=>{win.setAlwaysOnTop(item.checked);store.update({alwaysOnTop:item.checked});send({type:'settings',settings:store.value});}},
     {type:'separator'},
     {label:'Minimize',click:()=>win.minimize()},
-    {label:'Quit PetDock',click:()=>send({type:'request-close'})}
+    {label:'Quit Ogle',click:()=>send({type:'request-close'})}
   ]).popup({window:win}));
   register('listPets',()=>pets());
   register('petIcon',data=>{

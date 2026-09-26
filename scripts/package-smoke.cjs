@@ -38,7 +38,7 @@ async function workerCheck(executable, env) {
 }
 (async () => {
   const root = path.resolve(__dirname, '..'), out = path.join(root, 'artifacts');
-  const executable = path.join(root, 'dist/PetDock-win32-x64/PetDock.exe');
+  const executable = path.join(root, 'dist/Ogle-win32-x64/Ogle.exe');
   const profile=path.join(out,`package-profile-${Date.now()}`);fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({autoExpand:false}));
   const env = { ...process.env, PETDOCK_DATA_DIR: profile }; delete env.ELECTRON_RUN_AS_NODE;
   const app = await electron.launch({ executablePath: executable, args: [], env });

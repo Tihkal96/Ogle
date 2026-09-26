@@ -10,7 +10,7 @@ const {spawnSync}=require('node:child_process');
   const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
   const iconBuild=spawnSync(require('electron'),[path.join(root,'scripts/build-icon.cjs')],{env,windowsHide:true,stdio:'inherit'});
   if(iconBuild.status!==0)throw new Error('Application icon build failed');
-  const outputs = await packager({ dir: root, name: 'PetDock', platform: 'win32', arch: 'x64', out: path.join(root,'dist'), overwrite: true,
+  const outputs = await packager({ dir: root, name: 'Ogle', platform: 'win32', arch: 'x64', out: path.join(root,'dist'), overwrite: true,
     icon:path.join(root,'assets/petdock.ico'),
     ignore: [/^\/(?:dist|tests|artifacts|scripts)(?:\/|$)/] });
   for (const output of outputs) {

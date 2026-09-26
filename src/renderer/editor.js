@@ -22,7 +22,7 @@ window.PetDockEditor = (() => {
   function updateStatus(message) {
     const tab = byId(); if (!tab) return;
     status.replaceChildren();
-    const location = label('span',message || (tab.path || 'Scratch tab · automatically kept in PetDock')); location.title = tab.path || ''; status.append(location);
+    const location = label('span',message || (tab.path || 'Scratch tab · automatically kept in Ogle')); location.title = tab.path || ''; status.append(location);
     let detail = `${tab.text.split('\n').length} lines · ${tab.dirty ? 'Unsaved file changes' : 'Saved'}`;
     let issue = false;
     if (tab.language === 'json' && tab.text.trim()) { try { JSON.parse(tab.text); detail = 'JSON valid'; } catch (err) { detail = err.message; issue = true; } }

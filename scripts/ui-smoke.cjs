@@ -60,7 +60,7 @@ const assert = require('node:assert/strict');
     if (panel) {
       const screenshot = await app.evaluate(async ({ desktopCapturer }) => {
         const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 900, height: 1100 } });
-        return sources.find(source => source.name === 'ChatGPT · PetDock')?.thumbnail.toPNG().toString('base64') || null;
+        return sources.find(source => source.name === 'ChatGPT · Ogle')?.thumbnail.toPNG().toString('base64') || null;
       });
       if (screenshot) fs.writeFileSync(path.join(out, 'chatgpt.png'), Buffer.from(screenshot, 'base64'));
     }

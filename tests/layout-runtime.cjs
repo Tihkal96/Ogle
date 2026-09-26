@@ -33,7 +33,7 @@ const assert = require('node:assert/strict');
     })));
     const capture = async name => {
       const data = await app.evaluate(async ({ BrowserWindow, desktopCapturer }) => {
-        const win = BrowserWindow.getAllWindows().find(w => w.getTitle() === 'PetDock');
+        const win = BrowserWindow.getAllWindows().find(w => w.getTitle() === 'Ogle');
         const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 1520, height: 1640 } });
         const source = sources.find(s => s.id === win.getMediaSourceId());
         return source?.thumbnail.toPNG().toString('base64');

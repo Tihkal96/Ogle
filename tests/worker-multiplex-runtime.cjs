@@ -9,7 +9,7 @@ const { spawn } = require('node:child_process');
 
 async function run() {
   if (process.platform !== 'win32') throw new Error('This runtime test requires Windows ConPTY.');
-  const executable = process.argv[2] || path.resolve(__dirname, '../dist/PetDock-win32-x64/PetDock.exe');
+  const executable = process.argv[2] || path.resolve(__dirname, '../dist/Ogle-win32-x64/Ogle.exe');
   // Optional app root runs the same entry point under development Electron.
   const workerArgs = process.argv[3] ? [path.resolve(process.argv[3])] : [];
   assert.ok(fs.existsSync(executable), `Packaged executable missing: ${executable}`);
