@@ -5,6 +5,10 @@ const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne
 function validatePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
   const clean = {};
+  if(Object.hasOwn(patch,'compactChatTarget')) {
+    if(!['codex','chatgpt'].includes(patch.compactChatTarget))throw new Error('Invalid compact chat target');
+    clean.compactChatTarget=patch.compactChatTarget;
+  }
   if(Object.hasOwn(patch,'linksLayoutVersion')) {if(patch.linksLayoutVersion!==2)throw new Error('Invalid links layout version');clean.linksLayoutVersion=2;}
   for (const key of ['note', 'petId', 'lastThreadId', 'projectPath', 'activeEditorTab', 'shortcutsView', 'timeFormat', 'dateFormat', 'theme']) {
     if (Object.hasOwn(patch, key)) {

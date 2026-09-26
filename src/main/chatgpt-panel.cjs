@@ -5,10 +5,11 @@ const { ChatGPTActivity } = require('./chatgpt-activity.cjs');
 const HOME = 'https://chatgpt.com/';
 
 class ChatGPTPanel {
-  constructor({ parent, onStatus, onActivity } = {}) {
+  constructor({ parent, onStatus, onActivity, onInteraction } = {}) {
     this.parent = parent;
     this.onStatus = onStatus;
     this.onActivity = onActivity;
+    this.onInteraction = onInteraction;
     this.activity = null;
     this.view = null;
     this.children = new Set();
@@ -60,6 +61,21 @@ class ChatGPTPanel {
       webSecurity: true, partition: 'persist:petdock-chatgpt'
     } });
     const contents = this.view.webContents;
+    // Native child-view input never bubbles into the dock renderer. Send only
+    // an activity signal, never keys, text, pointer coordinates or page content.
+    let lastMouseMove = 0;
+    const interact = () => {
+      if (this.visible && this.view?.getVisible()) this.onInteraction?.();
+    };
+    contents.on('before-input-event', interact);
+    contents.on('before-mouse-event', (_event, input) => {
+      if (input.type === 'mouseMove') {
+        const now = Date.now();
+        if (now - lastMouseMove < 100) return;
+        lastMouseMove = now;
+      }
+      interact();
+    });
     this.activity?.dispose();
     this.activity = new ChatGPTActivity(contents, this.onActivity);
     // Keep the original partition so the existing login stays intact.

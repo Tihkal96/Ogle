@@ -6,6 +6,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { SettingsStore, validatePatch } = require('../src/main/settings.cjs');
 
+test('compact chat target accepts only explicit Codex or ChatGPT choices',()=>{
+  assert.deepEqual(validatePatch({compactChatTarget:'codex'}),{compactChatTarget:'codex'});
+  assert.deepEqual(validatePatch({compactChatTarget:'chatgpt'}),{compactChatTarget:'chatgpt'});
+  assert.throws(()=>validatePatch({compactChatTarget:'other'}),/compact chat target/);
+});
+
 test('up to five shortcut pins persist and excess pins are rejected atomically',()=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ogle-pins-')),file=path.join(dir,'settings.json');
   try {

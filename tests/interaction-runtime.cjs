@@ -7,7 +7,7 @@ const path=require('node:path');
 (async()=>{
   const root=path.resolve(__dirname,'..'),output=path.join(root,'artifacts');
   const profile=path.join(output,`interaction-profile-${Date.now()}`);
-  fs.mkdirSync(profile,{recursive:true});
+  fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({compactChatTarget:'codex'}));
   const env={...process.env,PETDOCK_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
   const app=await electron.launch({args:[root],env});
   const errors=[],checks={};
