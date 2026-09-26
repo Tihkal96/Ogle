@@ -7,6 +7,7 @@
   }
   function applyTheme(theme) {currentTheme=theme;for(const s of sessions.values()){s.term.options.theme=terminalTheme(theme);s.term.refresh(0,s.term.rows-1);}}
   const element = (tag, text, className) => { const el = document.createElement(tag); if (text) el.textContent = text; if (className) el.className = className; return el; };
+  function report(error) { window.OgleDiagnostics.record(error,'Terminal');host.querySelector('.terminal-status').textContent='Terminal action failed. Details are in Settings → Debug.'; }
   function resize() { const session = sessions.get(active); if (session && host.getBoundingClientRect().width > 0 && host.getBoundingClientRect().height > 0) { try { session.fit.fit(); api.terminalResize(session.id, session.term.cols, session.term.rows).catch(() => {}); } catch {} } }
   function select(id) { active = id; for (const session of sessions.values()) { session.view.hidden = session.id !== id; session.tab.classList.toggle('active', session.id === id); } requestAnimationFrame(() => { resize(); sessions.get(id)?.term.focus(); }); }
   async function create(shell, admin = false) {
@@ -18,11 +19,11 @@
       const fit = new window.PetDockVendors.FitAddon(); term.loadAddon(fit);
       const view = element('div', '', 'terminal-session'); host.querySelector('.terminal-views').append(view); term.open(view);
       const tab = element('button', `${admin ? 'ADMIN · ' : ''}${shell === 'cmd' ? 'CMD' : 'PowerShell'}`); tab.type = 'button'; tab.onclick = () => select(config.id); host.querySelector('.terminal-tabs').append(tab);
-      term.onData(data => api.terminalWrite(config.id, data).catch(error => { status.textContent = error.message; }));
+      term.onData(data => api.terminalWrite(config.id, data).catch(report));
       sessions.set(config.id, { ...config, term, fit, view, tab });
       if (pending.has(config.id)) { term.write(pending.get(config.id)); pending.delete(config.id); }
       select(config.id); status.textContent = admin ? 'Administrator session' : 'Terminal ready';
-    } catch (error) { status.textContent = error.message; }
+    } catch (error) { report(error); }
   }
   function mount(container, suppliedApi) {
     host = container; api = suppliedApi;
@@ -31,7 +32,7 @@
     const location = element('div', '', 'terminal-location'), shells = element('div', '', 'terminal-shell-actions'), commands = element('div', '', 'terminal-command-actions');
     controls.append(location, shells, commands);
     const cwd = element('input', '', 'terminal-cwd'); cwd.placeholder = 'Working folder (default: home)'; cwd.setAttribute('aria-label', 'Terminal working folder'); location.append(cwd);
-    const button = (label, fn, target = commands) => { const el = element('button', label); el.type = 'button'; el.onclick = () => Promise.resolve().then(fn).catch(error => { host.querySelector('.terminal-status').textContent = error.message; }); target.append(el); };
+    const button = (label, fn, target = commands) => { const el = element('button', label); el.type = 'button'; el.onclick = () => Promise.resolve().then(fn).catch(report); target.append(el); };
     button('Folder…', async () => { const folder = await api.chooseFolder?.(); if (folder) cwd.value = folder; }, location);
     button('+ PowerShell', () => create('powershell'), shells); button('+ CMD', () => create('cmd'), shells); button('+ Admin PowerShell', () => create('powershell', true), shells); button('+ Admin CMD', () => create('cmd', true), shells);
     button('Clear screen', () => sessions.get(active)?.term.write('\x1b[2J\x1b[H'));
@@ -53,7 +54,7 @@
       }
       if (event.event === 'data') s.term.write(event.data);
       else if (event.event === 'exit') { s.term.write('\r\n[Session ended]\r\n'); s.tab.textContent += ' · ended'; }
-      else if (event.event === 'error') status.textContent = event.data;
+      else if (event.event === 'error') report(event.data);
     });
     new ResizeObserver(() => resize()).observe(host);
   }
