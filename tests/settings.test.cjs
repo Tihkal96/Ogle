@@ -12,15 +12,15 @@ test('compact chat target accepts only explicit Codex or ChatGPT choices',()=>{
   assert.throws(()=>validatePatch({compactChatTarget:'other'}),/compact chat target/);
 });
 
-test('up to five shortcut pins persist and excess pins are rejected atomically',()=>{
+test('up to seven shortcut pins persist and excess pins are rejected atomically',()=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ogle-pins-')),file=path.join(dir,'settings.json');
   try {
     const store=new SettingsStore(file);
-    const shortcuts=Array.from({length:5},(_,i)=>({id:String(i),name:`Link ${i}`,path:`https://example.com/${i}`,kind:'url',pinned:true}));
+    const shortcuts=Array.from({length:7},(_,i)=>({id:String(i),name:`Link ${i}`,path:`https://example.com/${i}`,kind:'url',pinned:true}));
     store.update({shortcuts});
-    assert.equal(new SettingsStore(file).value.shortcuts.filter(item=>item.pinned).length,5);
-    assert.throws(()=>store.update({shortcuts:[...shortcuts,{id:'six',kind:'group',name:'Six',pinned:true}]}),/five links/);
-    assert.equal(new SettingsStore(file).value.shortcuts.length,5);
+    assert.equal(new SettingsStore(file).value.shortcuts.filter(item=>item.pinned).length,7);
+    assert.throws(()=>store.update({shortcuts:[...shortcuts,{id:'eight',kind:'group',name:'Eight',pinned:true}]}),/seven links/);
+    assert.equal(new SettingsStore(file).value.shortcuts.length,7);
     assert.throws(()=>validatePatch({shortcuts:[{id:'x',pinned:'true'}]}),/shortcut pin/);
   }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

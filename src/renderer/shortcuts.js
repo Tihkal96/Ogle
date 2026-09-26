@@ -73,7 +73,6 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     }, true);
     const content = document.createElement('div'); content.className = 'links-content';
     const navigation = document.createElement('nav'); navigation.className = 'links-navigation'; navigation.setAttribute('aria-label', 'Link folder navigation');
-    const rootDrop = document.createElement('div'); rootDrop.className = 'links-root-drop'; rootDrop.textContent = 'Top level · drop files, folders, URLs or links here'; rootDrop.tabIndex = 0;
     const invoke = fn => Promise.resolve().then(fn).catch(report);
     function button(label, handler, title) { const el = document.createElement('button'); el.type = 'button'; el.textContent = label; if (title) el.title = title; el.onclick = () => invoke(handler); return el; }
     async function persist() { await save({ shortcuts: items, shortcutsView: mode }); }
@@ -90,8 +89,8 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       if (changed) { items = items.map(item => iconCache.has(item.path) ? { ...item, icon: iconCache.get(item.path) } : item); await persist(); render(); }
     }
     async function togglePin(entry) {
-      if(!entry.pinned && items.filter(item=>item.pinned).length>=5) {
-        pinNotice='You can pin up to 5 links. Unpin one to add another.';pinStatus.textContent=pinNotice;return;
+      if(!entry.pinned && items.filter(item=>item.pinned).length>=7) {
+        pinNotice='You can pin up to 7 links. Unpin one to add another.';pinStatus.textContent=pinNotice;return;
       }
       await commit(items.map(item=>item.id===entry.id?{...item,pinned:!item.pinned}:item));
     }
@@ -107,14 +106,14 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     function renderPins() {
       const tray=document.getElementById('pinned-links');if(!tray)return;
       tray.replaceChildren();
-      for(const entry of items.filter(item=>item.pinned).slice(0,5)) {
+      for(const entry of items.filter(item=>item.pinned).slice(0,7)) {
         const name=entry.alias || entry.name;
         const pin=button('',()=>openPinned(entry),`${name}${entry.path?' — '+entry.path:''}`);
         pin.className='pinned-link';pin.dataset.linkId=entry.id;pin.setAttribute('aria-label',`Open ${name}`);
         pin.append(iconFor(entry));tray.append(pin);
       }
       tray.hidden=!tray.childElementCount;
-      pinStatus.textContent=pinNotice || `${items.filter(item=>item.pinned).length} of 5 toolbar pins`;
+      pinStatus.textContent=pinNotice || `${items.filter(item=>item.pinned).length} of 7 toolbar pins`;
     }
     function openGroup(id) { currentGroup = id; folderNavigation = []; form.hidden = true; render(); }
     async function openFolder(entry) {
@@ -196,7 +195,6 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
         invoke(async () => { const resolved = await paths; if (resolved.length || urls.length) await imported({ paths: resolved, urls }, resolvedParent); });
       });
     }
-    dropTarget(rootDrop, () => mode === 'icons' ? currentGroup : null);
     async function browse(entry) {
       if (expanded.has(entry.path)) expanded.delete(entry.path);
       else { cache.set(entry.path, await api.readDirectory(entry.path)); expanded.add(entry.path); }
@@ -235,7 +233,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       if (!filesystemEntry) dropTarget(line, entry.kind === 'group' ? entry.id : entry.parentId || null, entry.kind === 'group' ? null : entry.id);
       const open = button('', () => entry.kind === 'group' ? (mode === 'icons' ? openGroup(entry.id) : editForm(entry)) : entry.kind === 'folder' && mode === 'icons' ? openFolder(entry) : api.openShortcut(entry.path), entry.path || 'Open group'); open.className = 'links-open';
       const icon = iconFor(entry);
-      const label = document.createElement('span'); label.className = 'links-label'; const name = document.createElement('strong'); name.textContent = entry.alias || entry.name; const target = document.createElement('small'); target.textContent = entry.path || 'Group · drop links here'; label.append(name, target); open.append(icon, label); line.append(open);
+      const label = document.createElement('span'); label.className = 'links-label'; const name = document.createElement('strong'); name.textContent = entry.alias || entry.name; const target = document.createElement('small'); target.textContent = entry.path || 'Group'; label.append(name, target); open.append(icon, label); line.append(open);
       if (entry.kind === 'folder' && mode === 'details') line.append(button(expanded.has(entry.path) ? '▾' : '▸', () => browse(entry), 'Browse folder'));
       if (!filesystemEntry) {
         const actions = document.createElement('span'); actions.className = 'links-entry-actions';
@@ -247,7 +245,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       if (entry.kind === 'group' && mode === 'details') {
         const children = document.createElement('div'); children.className = 'links-children'; dropTarget(children, entry.id);
         for (const child of items.filter(item => item.parentId === entry.id)) children.append(row(child, branch));
-        if (!children.childElementCount) { const empty = document.createElement('small'); empty.textContent = 'Drop links into this group'; children.append(empty); }
+        if (!children.childElementCount) { const empty = document.createElement('small'); empty.textContent = 'Empty group'; children.append(empty); }
         wrapper.append(children);
       }
       if (entry.kind === 'folder' && mode === 'details' && expanded.has(entry.path)) {
@@ -270,16 +268,15 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
         if (folderNavigation.length) navigation.append(button('Open in Explorer ↗', () => api.openShortcut(folderNavigation.at(-1).path)));
       }
       content.className = `links-content links-${mode}`; view.textContent = mode === 'icons' ? 'Details' : 'Icons'; content.replaceChildren();
-      if (mode !== 'icons' || !folderNavigation.length) { rootDrop.textContent = currentGroup && mode === 'icons' ? 'Drop apps, files or links into this group' : 'Drop apps, files, folders or website links here'; content.append(rootDrop); }
       let visible;
       if (mode === 'icons' && folderNavigation.length) visible = (cache.get(folderNavigation.at(-1).path) || []).map(child => ({ ...child, id: child.path, kind: child.isDirectory ? 'folder' : 'file' }));
       else visible = items.filter(item => mode === 'icons' && currentGroup ? item.parentId === currentGroup : !item.parentId || !items.some(parent => parent.id === item.parentId && parent.kind === 'group'));
       for (const entry of visible) content.append(row(entry, new Set(), mode === 'icons' && folderNavigation.length > 0));
-      if (!visible.length) { const empty = document.createElement('p'); empty.className = 'links-empty'; empty.textContent = folderNavigation.length ? 'This folder is empty.' : currentGroup ? 'This group is empty. Add or drop links here.' : 'Drop apps, files, folders or website links here. Groups keep related links together.'; content.append(empty); }
+      if (!visible.length) { const empty = document.createElement('p'); empty.className = 'links-empty'; empty.textContent = folderNavigation.length ? 'This folder is empty.' : currentGroup ? 'This group is empty.' : 'No links yet.'; content.append(empty); }
     }
     dropTarget(content, () => mode === 'icons' ? currentGroup : null);
     root.addEventListener('keydown', event => { if (event.key === 'Escape' && mode === 'icons' && (currentGroup || folderNavigation.length) && !event.target.matches('input,select,textarea')) { event.preventDefault(); goBack(); } });
-    root.append(toolbar, pinStatus, form, navigation, content, removal); render(); refreshIcons().catch(report);
+    root.append(toolbar);window.OgleLinksTools?.mount(root,api,report);root.append(pinStatus, form, navigation, content, removal); render(); refreshIcons().catch(report);
   }
   return { mount, discardEdit: () => discardCurrentEdit() };
 })();
