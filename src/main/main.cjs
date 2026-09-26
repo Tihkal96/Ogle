@@ -12,6 +12,7 @@ const { DockFiles } = require('./files.cjs');
 const { TerminalManager } = require('./terminal-manager.cjs');
 const { PetLibrary } = require('./pet-library.cjs');
 const { dockBounds } = require('./window-layout.cjs');
+const { WindowTransition } = require('./window-transition.cjs');
 const {configureStartup,ensureCodex}=require('./startup.cjs');
 const {idleIcon}=require('./pet-icon.cjs');
 
@@ -174,6 +175,12 @@ app.whenReady().then(async () => {
     else if (['collapse','expand','idle','reveal','quick','picker'].includes(action)) resize(action);
     else throw new Error('Unknown window action');
     return { expanded,mode:layoutMode,bounds:win.getBounds() };
+  });
+  const transition=new WindowTransition(win,bounds=>screen.getDisplayMatching(bounds).workArea,()=>store.value.petScale || 1);
+  register('windowTransition',(phase,mode,reducedMotion)=>{
+    if(phase==='begin')return transition.begin(mode,Boolean(reducedMotion));
+    if(phase==='finish')return transition.finish();
+    throw new Error('Unknown window transition phase');
   });
   await win.loadFile(indexPath);
   resize();

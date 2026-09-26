@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('dock', Object.freeze({
   terminalClose: id => invoke('terminalClose', id),
   terminalReleaseAdmin: () => invoke('terminalReleaseAdmin'),
   windowAction: action => invoke('windowAction', action),
+  windowTransition: (phase,mode,reducedMotion) => invoke('windowTransition',phase,mode,reducedMotion),
   onEvent: callback => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('dock:event', listener);

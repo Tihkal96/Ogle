@@ -121,7 +121,7 @@ for (const button of document.querySelectorAll('[data-chatgpt-action]')) button.
 window.addEventListener('resize', () => { chatgptLayout(); window.PetDockTerminal?.resize(); });
 let petPress = null, draggedPet = false;
 $('pet').addEventListener('pointerdown', event => {
-  if (event.button !== 0) return;
+  if (event.button !== 0 || window.DockLayoutTransition.busy) return;
   petPress = {x:event.screenX,y:event.screenY}; draggedPet = false;
   $('pet').setPointerCapture(event.pointerId);
   api.petDrag('start').catch(error);
@@ -149,8 +149,10 @@ async function flushLocal() {
 }
 $('sidebar-toggle').onclick=()=>{save({sidebarVisible:state.settings.sidebarVisible===false});applySettings();};
 function setMode(mode) {
-  clearTimeout(hoverTimer);clearTimeout(quickIdleTimer);
-  state.mode=mode;state.collapsed=mode!=='expand';if(mode!=='idle')state.suppressHoverReveal=false;
+  clearTimeout(hoverTimer);clearTimeout(panelIdleTimer);clearTimeout(quickIdleTimer);
+  const previousMode=state.mode;
+  state.mode=mode;state.collapsed=mode!=='expand';
+  if(mode==='idle' && previousMode!=='idle')state.suppressHoverReveal=true;
   syncComposerContext();updateComposer();
   api.chatgptLayout({visible:false,bounds:{x:0,y:0,width:1,height:1}}).catch(error);
   return window.DockLayoutTransition.run(() => {
@@ -164,7 +166,7 @@ function setMode(mode) {
   $('composer').hidden=!(mode==='quick' || (mode==='expand' && state.activePanel==='chats'));
   $('collapse').textContent='⌖';$('collapse').title=state.collapsed?'Open panel':'Hide panel';$('collapse').setAttribute('aria-label',$('collapse').title);$('collapse').setAttribute('aria-expanded',String(!state.collapsed));
   if(mode==='picker')renderCompactThreads();
-  }, () => api.windowAction(mode)).then(() => {
+  }, () => api.windowAction(mode), mode).then(() => {
     if(state.mode===mode) {if(mode==='quick')resetQuickIdle();else resetPanelIdle();chatgptLayout();}
   }).catch(error);
 }
@@ -181,12 +183,12 @@ $('panel-pin').onclick=()=>{
   $('panel-pin').setAttribute('aria-pressed',String(state.panelPinned));$('panel-pin').title=state.panelPinned?'Unpin expanded panel':'Keep expanded panel open';
   resetPanelIdle();
 };
-let hoverTimer,quickIdleTimer;
+let hoverTimer,panelIdleTimer,quickIdleTimer,lastPointerPosition;
 function autoCollapseDelay() { const value=Number(state.settings.autoCollapseDelay);return Number.isFinite(value)&&value>=1000&&value<=120000?value:10000; }
 function resetPanelIdle() {
-  clearTimeout(hoverTimer);
+  clearTimeout(panelIdleTimer);
   if(state.settings.autoExpand===false || window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.panelPinned && state.mode==='expand'))return;
-  hoverTimer=setTimeout(()=>{
+  panelIdleTimer=setTimeout(()=>{
     if(window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.panelPinned && state.mode==='expand'))return;
     if(document.querySelector('dialog[open]') || state.chatgptSending || document.querySelector('.approval') || window.PetDockAttachments?.isBusy()){resetPanelIdle();return;}
     state.suppressHoverReveal=true;
@@ -203,7 +205,15 @@ function resetQuickIdle() {
   },autoCollapseDelay());
 }
 for(const event of ['pointermove','pointerdown','keydown','input','paste','wheel'])document.addEventListener(event,activity=>{
-  if(activity.type==='pointermove' && state.suppressHoverReveal){state.suppressHoverReveal=false;if(activity.target.closest?.('#bar-orb'))pointerInside(true);}
+  if(activity.type==='pointermove'){
+    const position={x:activity.screenX,y:activity.screenY};
+    const moved=lastPointerPosition && (position.x!==lastPointerPosition.x || position.y!==lastPointerPosition.y);
+    lastPointerPosition=position;
+    // Native resize/move can synthesize pointer events beneath a stationary cursor.
+    // Only desktop-coordinate movement outside a transition counts as activity.
+    if(!moved || window.DockLayoutTransition.busy)return;
+    if(state.suppressHoverReveal){state.suppressHoverReveal=false;if(activity.target.closest?.('#bar-orb'))pointerInside(true);}
+  }
   resetQuickIdle();
   if(['expand','reveal'].includes(state.mode))resetPanelIdle();
 },{passive:true});
@@ -211,7 +221,8 @@ function pointerInside(inside) {
   state.pointerInside=inside;clearTimeout(hoverTimer);
   if(state.settings.autoExpand===false || window.DockLayoutTransition.busy)return;
   if(inside && state.mode==='idle') {if(!petPress && !state.suppressHoverReveal)hoverTimer=setTimeout(()=>{if(!petPress && state.mode==='idle')setMode('reveal');},120);return;}
-  resetPanelIdle();
+  // Boundary events are often caused by the dock resizing, not by activity.
+  // They must neither cancel nor extend the independent collapse deadline.
 }
 $('bar-orb').addEventListener('mouseenter',()=>pointerInside(true));
 $('bar-orb').addEventListener('mouseleave',()=>{if(state.mode==='idle')clearTimeout(hoverTimer);});
@@ -287,7 +298,7 @@ function applySettings() {
   $('panel-pin').hidden=state.settings.autoExpand===false;
   $('always-top').classList.toggle('active',state.settings.alwaysOnTop!==false);$('always-top').setAttribute('aria-pressed',String(state.settings.alwaysOnTop!==false));
   window.PetDockEditor?.applyTheme?.(state.settings.theme || 'dark');window.PetDockTerminal?.applyTheme?.(state.settings.theme || 'dark');
-  if (state.settings.autoExpand === false) {state.panelPinned=false;$('panel-pin').classList.remove('active');$('panel-pin').setAttribute('aria-pressed','false');clearTimeout(hoverTimer);}
+  if (state.settings.autoExpand === false) {state.panelPinned=false;$('panel-pin').classList.remove('active');$('panel-pin').setAttribute('aria-pressed','false');clearTimeout(hoverTimer);clearTimeout(panelIdleTimer);}
   document.querySelector('.sidebar').hidden=state.settings.sidebarVisible === false;
   for(const input of document.querySelectorAll('#settings-panel [data-setting]')) { const value=state.settings[input.dataset.setting];if(value!==undefined){if(input.type==='checkbox')input.checked=Boolean(value);else input.value=input.dataset.setting==='autoCollapseDelay'?value/1000:value;} }
   const chosen=pets.find(p=>p.id===state.settings.petId) || pets[0]; if(chosen && petImage.src!==chosen.spriteUrl) petImage.src=chosen.spriteUrl;

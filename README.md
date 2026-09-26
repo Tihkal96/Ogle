@@ -35,6 +35,10 @@ Ogle is the new project and application name. Existing user data remains under `
 
 Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch in your fork, and open a pull request. **@Tihkal96 reviews and merges contributions; contributors do not push directly to the upstream repository.** See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and checks. [CODEOWNERS](.github/CODEOWNERS) assigns review ownership; it does not by itself enforce repository permissions or branch protection.
 
+## Version 0.5.4
+
+Window transitions now hide the native Windows surface during size changes, after smoothly moving the existing pet anchor when screen edges require it. Pin protects only the full panel; manual and automatic full collapse show the toolbar before the ball, with the same configured delay for each idle stage. Stationary pointer events caused by redraw no longer restart that delay or reopen the ball.
+
 ## Version 0.5.3
 
 Technical failures are kept under **Settings → Debug → Open debug log**. The session log includes timestamps and repeat counts, with Copy, Clear and Close controls. Background Codex connection/refresh failures do not display error banners; failed actions show short readable messages. Logs are bounded to 200 entries, stay in memory, and are not uploaded automatically.
