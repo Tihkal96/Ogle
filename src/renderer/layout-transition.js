@@ -13,13 +13,14 @@ window.DockLayoutTransition = (() => {
     body.style.opacity = String(to);
     animation.cancel();
   }
-  function run(render, resize) {
+  function run(render, resize, mode) {
     const id = ++sequence;
     busy = true;
     document.body.dataset.layoutTransition = 'true';
     queue = queue.catch(() => {}).then(async () => {
       if (id !== sequence) return;
-      await fade(Number(getComputedStyle(document.body).opacity), 0, 65);
+      await window.dock.windowTransition('begin',mode,matchMedia('(prefers-reduced-motion: reduce)').matches);
+      document.body.style.opacity='0';
       if (id !== sequence) return;
       await paint();
       render();
@@ -31,8 +32,10 @@ window.DockLayoutTransition = (() => {
       }
       await paint();
       if (id !== sequence) return;
+      await window.dock.windowTransition('finish');
       await fade(0, 1, 90);
-    }).finally(() => {
+    }).finally(async () => {
+      try { await window.dock.windowTransition('finish'); } catch {}
       if (id === sequence) {
         document.body.style.opacity = '1';
         delete document.body.dataset.layoutTransition;

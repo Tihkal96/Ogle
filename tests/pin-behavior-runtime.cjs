@@ -16,6 +16,10 @@ const path=require('node:path');
     const settled=()=>page.waitForFunction(()=>!window.DockLayoutTransition.busy);
     const click=async selector=>{await page.locator(selector).evaluate(el=>el.click());await settled();};
     const mode=()=>page.evaluate(()=>state.mode);
+    await settled();
+    await page.locator('#bar-orb').dispatchEvent('mouseenter');
+    await page.locator('#bar-orb').dispatchEvent('pointermove',{screenX:400,screenY:400});
+    await page.waitForFunction(()=>state.mode==='reveal',null,{timeout:1500});await settled();
     await click('#settings-button');
     await page.locator('[data-setting="autoCollapseDelay"]').fill('1');
     await page.locator('[data-setting="autoCollapseDelay"]').press('Tab');
@@ -27,13 +31,33 @@ const path=require('node:path');
     assert.equal(await page.locator('#collapse').textContent(),'⌖');
     await page.locator('#dock').dispatchEvent('mouseleave');
     await page.waitForTimeout(1350);assert.equal(await mode(),'expand','Pin protects fully expanded panel');
+    await page.locator('.toolbar').dispatchEvent('pointermove',{screenX:400,screenY:400});
     await click('#collapse');assert.equal(await mode(),'reveal','Explicit collapse keeps horizontal bar first');
+    // Window resizing can deliver pointer moves at the same desktop position.
+    // These are not user activity and must not keep the bar open indefinitely.
+    for(let sample=0;sample<4;sample++){
+      await page.locator('.toolbar').dispatchEvent('pointermove',{screenX:400,screenY:400});
+      await page.locator('.toolbar').dispatchEvent('mouseleave');
+      await page.locator('.toolbar').dispatchEvent('mouseenter');
+      await page.waitForTimeout(300);
+    }
+    assert.equal(await mode(),'idle','Stationary pointer notifications must not rearm the horizontal deadline');
+    await settled();
+    await page.locator('#bar-orb').dispatchEvent('mouseenter');
+    await page.locator('#bar-orb').dispatchEvent('pointermove',{screenX:400,screenY:400});
+    await page.waitForTimeout(350);
+    assert.equal(await mode(),'idle','A stationary pointer must not reopen the folded ball');
+    await click('#settings-button');await click('#collapse');
     await page.waitForTimeout(400);assert.equal(await mode(),'reveal');
     await page.waitForFunction(()=>state.mode==='idle',null,{timeout:1800});await settled();
     assert.equal(await page.locator('#panel-pin').getAttribute('aria-pressed'),'true','Collapse preserves pin preference');
     await page.locator('#bar-orb').dispatchEvent('mouseenter');
-    await page.locator('#bar-orb').dispatchEvent('pointermove');
+    await page.locator('#bar-orb').dispatchEvent('pointermove',{screenX:410,screenY:400});
     await page.waitForFunction(()=>state.mode==='reveal');await settled();
+    await page.waitForTimeout(600);
+    await page.locator('.toolbar').dispatchEvent('pointermove',{screenX:420,screenY:400});
+    await page.waitForTimeout(600);
+    assert.equal(await mode(),'reveal','Real cursor movement restarts the full inactivity delay');
     await page.locator('.toolbar').dispatchEvent('mouseleave');
     await page.waitForFunction(()=>state.mode==='idle',null,{timeout:2000});await settled();
     await click('#settings-button');
@@ -51,6 +75,6 @@ const path=require('node:path');
     await page.waitForTimeout(400);assert.equal(await mode(),'reveal','Horizontal stage gets its own full delay');
     await page.waitForFunction(()=>state.mode==='idle',null,{timeout:2000});await settled();
     assert.deepEqual(errors,[]);
-    console.log(JSON.stringify({pinnedFullPanelHeld:true,explicitCollapseViaHorizontal:true,pinnedRevealTimesOut:true,petMenuCollapseViaHorizontal:true,iconsCorrect:true,unpinnedManualCollapseViaHorizontal:true,automaticFullCollapseViaHorizontal:true,rendererErrors:errors}));
+    console.log(JSON.stringify({pinnedFullPanelHeld:true,explicitCollapseViaHorizontal:true,pinnedRevealTimesOut:true,stationaryPointerCannotExtendOrReopen:true,realPointerActivityRestartsDeadline:true,petMenuCollapseViaHorizontal:true,iconsCorrect:true,unpinnedManualCollapseViaHorizontal:true,automaticFullCollapseViaHorizontal:true,rendererErrors:errors}));
   }finally{await app.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
