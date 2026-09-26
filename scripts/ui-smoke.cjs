@@ -1,0 +1,72 @@
+'use strict';
+const { _electron: electron } = require('playwright');
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+(async () => {
+  const targetThreadId = process.env.PETDOCK_SMOKE_THREAD_ID?.trim();
+  assert.ok(targetThreadId, 'Set PETDOCK_SMOKE_THREAD_ID to an explicitly authorized, idle smoke-test task before running this test.');
+  const root = path.resolve(__dirname, '..');
+  const out = path.join(root, 'artifacts');
+  fs.mkdirSync(out, { recursive: true });
+  const profile = path.join(out, `smoke-profile-${Date.now()}`);
+  fs.mkdirSync(profile, { recursive: true });
+  fs.writeFileSync(path.join(profile, 'settings.json'), JSON.stringify({ lastThreadId: targetThreadId, autoExpand: false }));
+  const env = { ...process.env, PETDOCK_DATA_DIR: profile };
+  delete env.ELECTRON_RUN_AS_NODE;
+  const app = await electron.launch({ args: [root], env });
+  try {
+    const page = await app.firstWindow();
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.locator('#thread-list .thread').first().waitFor({ timeout: 60000 }).catch(() => {});
+    await page.waitForFunction(() => document.querySelector('#footer-status')?.textContent !== 'Connecting to Codex', null, { timeout: 60000 });
+    const boot = await page.evaluate(() => window.dock.boot());
+    assert.ok(boot.pets.length >= 1);
+    assert.equal(boot.connection.state, 'connected');
+    assert.ok(boot.threads.data.length >= 1);
+    await page.waitForFunction(id => state.selected?.id === id && !document.querySelector('#pin-thread').disabled, targetThreadId);
+    const read = await page.evaluate(id => window.dock.readThread(id), targetThreadId);
+    assert.equal(read.thread.id, targetThreadId);
+    assert.equal(Boolean(read.runtime?.running), false, 'Smoke-test task must be idle before sending');
+    const smokeThread = { id: targetThreadId };
+    await page.locator('[data-panel="chats"]').evaluate(element => element.click());
+    await page.waitForFunction(() => document.querySelector('#activity').textContent !== 'Loading conversation…');
+    const marker = `PETDOCK_UI_OK_${Date.now()}`;
+    await page.locator('#prompt').fill(`Reply exactly ${marker}. Do not use tools or change files.`);
+    await page.locator('#send').click();
+    await page.waitForFunction(expected => [...document.querySelectorAll('.message.assistant .message-text')].some(e => e.textContent.trim() === expected), marker, { timeout: 90000 });
+    await page.waitForFunction(() => document.querySelector('#stop').hidden, null, { timeout: 30000 });
+    if ((await page.locator('#pin-thread').textContent()) !== '★') await page.locator('#pin-thread').click();
+    assert.ok((await page.evaluate(() => window.dock.boot())).settings.pinnedThreads.includes(smokeThread.id));
+    await page.locator('#prompt').fill('Unsent smoke draft');
+    await page.waitForTimeout(600);
+    assert.equal((await page.evaluate(() => window.dock.boot())).settings.drafts[smokeThread.id], 'Unsent smoke draft');
+    await page.locator('[data-panel="notes"]').click();
+    await page.locator('#note').fill('PetDock smoke note');
+    await page.waitForTimeout(900);
+    assert.equal((await page.evaluate(() => window.dock.boot())).settings.note, 'PetDock smoke note');
+    await page.locator('[data-panel="chats"]').click();
+    await page.screenshot({ path: path.join(out, 'dock.png') });
+    await page.locator('#collapse').click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(out, 'dock-compact.png') });
+    await page.locator('#collapse').click();
+    await page.locator('#chatgpt').click();
+    await page.waitForTimeout(6000);
+    const remote = await app.evaluate(({ webContents }) => webContents.getAllWebContents().filter(w => w.getURL().startsWith('https://')).map(w => ({ url: w.getURL(), title: w.getTitle(), preferences: { nodeIntegration: w.getLastWebPreferences().nodeIntegration, sandbox: w.getLastWebPreferences().sandbox, contextIsolation: w.getLastWebPreferences().contextIsolation } })));
+    const panels = app.windows();
+    const panel = panels.find(p => p !== page);
+    if (panel) {
+      const screenshot = await app.evaluate(async ({ desktopCapturer }) => {
+        const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 900, height: 1100 } });
+        return sources.find(source => source.name === 'ChatGPT · PetDock')?.thumbnail.toPNG().toString('base64') || null;
+      });
+      if (screenshot) fs.writeFileSync(path.join(out, 'chatgpt.png'), Buffer.from(screenshot, 'base64'));
+    }
+    assert.equal(errors.length, 0, errors.join('\n'));
+    const report = { at: new Date().toISOString(), connection: boot.connection, taskCount: boot.threads.data.length, readHistory: true, notesPersisted: true, pinsPersisted: true, draftPersisted: true, realUiTurn: marker, rendererErrors: errors, remote };
+    fs.writeFileSync(path.join(out, 'ui-smoke.json'), JSON.stringify(report, null, 2));
+    console.log(JSON.stringify(report, null, 2));
+  } finally { await app.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,0 +1,175 @@
+'use strict';
+const { app, BrowserWindow, ipcMain, dialog, screen, Notification, shell, Menu, net, nativeImage } = require('electron');
+if (process.argv.includes('--terminal-worker')) { require('./terminal-worker.cjs').runWorker(); return; }
+const fs = require('node:fs');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+const { SettingsStore } = require('./settings.cjs');
+const { CodexBridge } = require('./codex-bridge.cjs');
+const { ChatGPTPanel } = require('./chatgpt-panel.cjs');
+const { DockFiles } = require('./files.cjs');
+const { TerminalManager } = require('./terminal-manager.cjs');
+const { PetLibrary } = require('./pet-library.cjs');
+const { dockBounds } = require('./window-layout.cjs');
+const {configureStartup,ensureCodex}=require('./startup.cjs');
+const {idleIcon}=require('./pet-icon.cjs');
+
+app.setName('PetDock');
+app.setAppUserModelId('PetDock.Desktop');
+if (process.env.PETDOCK_DATA_DIR) app.setPath('userData', path.resolve(process.env.PETDOCK_DATA_DIR));
+if (!app.requestSingleInstanceLock()) {app.quit();return;}
+let win, bridge, chatgpt, store, files, terminals, petLibrary, petDragState, pointerTimer, connection = { state: 'connecting', detail: 'Connecting to Codex…' }, connectionPromise;
+const root = path.resolve(__dirname, '../..');
+const indexPath = path.join(root, 'src/renderer/index.html');
+const indexUrl = pathToFileURL(indexPath).href;
+let expanded = false;
+let layoutMode = 'idle';
+app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
+function send(payload) { if (win && !win.isDestroyed()) win.webContents.send('dock:event', payload); }
+function string(value, label, max = 4096) {
+  if (typeof value !== 'string' || !value.trim() || value.length > max) throw new Error(`Invalid ${label}`);
+  return value;
+}
+function register(name, handler) {
+  ipcMain.handle(`dock:${name}`, (event, ...args) => {
+    if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || event.senderFrame.url !== indexUrl) throw new Error('Untrusted request');
+    return handler(...args);
+  });
+}
+function pets() { return petLibrary.list(); }
+async function updatePetIcon(){const library=await pets();const pet=library.find(p=>p.id===store.value.petId)||library[0];const icon=idleIcon(nativeImage,pet);if(icon&&!win.isDestroyed())win.setIcon(icon);}
+function resize(mode = layoutMode) {
+  if(typeof mode==='boolean')mode=mode?'expand':'idle';
+  if(mode==='collapse')mode='idle';
+  layoutMode=mode;
+  expanded = mode==='expand';
+  const bounds = win.getBounds();
+  const area = screen.getDisplayMatching(bounds).workArea;
+  const scale = store?.value.petScale || 1;
+  if (!expanded) chatgpt?.hide();
+  win.setBounds(dockBounds(mode,bounds,area,scale));
+}
+async function connected() { await connectionPromise; if (connection.state === 'error') throw new Error(connection.detail); }
+app.whenReady().then(async () => {
+  store = new SettingsStore(path.join(app.getPath('userData'), 'settings.json'));
+  configureStartup(app,store.value.autoStart);
+  if(process.argv.includes('--autostart')&&!process.env.PETDOCK_DATA_DIR)ensureCodex({open:url=>shell.openExternal(url)}).catch(error=>send({type:'startup-error',message:error.message}));
+  const area = screen.getPrimaryDisplay().workArea;
+  win = new BrowserWindow({ title: 'PetDock', width: Math.min(600, area.width), height: Math.min(200, area.height), x: area.x + Math.max(0, area.width - 620), y: area.y + Math.max(0, area.height - 220), transparent: true, frame: false, resizable: false, backgroundColor: '#00000000', alwaysOnTop: store.value.alwaysOnTop, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (event, url) => { if (url !== indexUrl) event.preventDefault(); });
+  chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}) });
+  files = new DockFiles(win);
+  petLibrary = new PetLibrary(path.join(root,'assets/pets'),{fetcher:(...args)=>net.fetch(...args)});
+  await updatePetIcon();
+  terminals = new TerminalManager({ onEvent: send, executable: process.execPath, workerArgs: app.isPackaged ? [] : [app.getAppPath()] });
+  let lastInside;
+  pointerTimer = setInterval(() => {
+    if (!win || win.isDestroyed()) return;
+    const p = screen.getCursorScreenPoint(), b = win.getBounds();
+    const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
+    if (inside !== lastInside) { lastInside = inside; send({ type: 'pointer', inside }); }
+  }, 160);
+  bridge = new CodexBridge();
+  const desktopActivity = new Map();
+  bridge.on('status', status => { connection = status; send({ type: 'connection', ...status }); });
+  bridge.on('notification', event => {
+    send({ type: 'codex', ...event });
+    let desktopFinished = false;
+    if(event.method==='petdock/threadState' && event.params?.thread?.id) {
+      const id=event.params.thread.id,running=event.params.runtime?.running;
+      desktopFinished=desktopActivity.get(id)===true && running===false;
+      desktopActivity.set(id,running);
+    }
+    if ((event.method === 'turn/completed' || desktopFinished) && !win.isFocused() && Notification.isSupported()) {
+      const failed = (event.params?.turn || event.params?.thread?.turns?.at(-1))?.status === 'failed';
+      new Notification({ title: failed ? 'PetDock · task failed' : 'PetDock · task finished', body: 'Open your dock to view the response.' }).show();
+    }
+  });
+  bridge.on('request', event => send({ type: 'request', ...event }));
+  bridge.on('error', error => { connection = { state: 'error', detail: error.message }; send({ type: 'connection', ...connection }); });
+  connectionPromise = bridge.connect().catch(error => { connection = { state: 'error', detail: error.message }; send({ type: 'connection', ...connection }); });
+  register('boot', async () => {
+    await connectionPromise;
+    let threads = { data: [], nextCursor: null };
+    try { threads = await bridge.listThreads(); } catch (error) { connection = { ...connection, detail: error.message }; }
+    return { threads, pets: await pets(), settings: store.value, connection };
+  });
+  register('listThreads', async (filters = {}) => { await connected(); return bridge.listThreads(filters); });
+  register('readThread', async id => { await connected(); return bridge.readThread(string(id, 'task ID')); });
+  register('startThread', async cwd => {
+    await connected(); string(cwd, 'project folder');
+    if (!path.isAbsolute(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error('Choose an existing project folder');
+    return bridge.startThread(cwd);
+  });
+  register('sendTurn', async (id, text, images=[]) => { await connected(); if(typeof text!=='string'||text.length>200000)throw new Error('Invalid prompt');return bridge.sendTurn(string(id, 'task ID'),text,images); });
+  register('interrupt', (id, turnId) => bridge.interrupt(string(id, 'task ID'), string(turnId, 'turn ID')));
+  register('respond', (id, result) => bridge.respond(id, result));
+  register('saveSettings', async patch => { const result=store.update(patch);if(Object.hasOwn(patch,'petScale'))resize();if(Object.hasOwn(patch,'alwaysOnTop'))win.setAlwaysOnTop(result.alwaysOnTop);if(Object.hasOwn(patch,'autoStart'))configureStartup(app,result.autoStart);if(Object.hasOwn(patch,'petId'))await updatePetIcon();return result; });
+  register('chooseFolder', async () => {
+    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: 'Choose a Codex project folder' });
+    return result.canceled ? null : result.filePaths[0];
+  });
+  register('openChatGPT', action => chatgpt.show(action));
+  register('chatgptLayout', layout => chatgpt.layout(layout));
+  register('openCodex', id => shell.openExternal(id ? `codex://threads/${encodeURIComponent(string(id, 'task ID'))}` : 'codex://'));
+  register('petDrag', action => {
+    if(action==='start'){petDragState={pointer:screen.getCursorScreenPoint(),bounds:win.getBounds(),moved:false};return {moved:false};}
+    if(!petDragState)return {moved:false};
+    const p=screen.getCursorScreenPoint(),dx=p.x-petDragState.pointer.x,dy=p.y-petDragState.pointer.y;
+    if(action==='move' && (Math.abs(dx)>3||Math.abs(dy)>3)) {
+      petDragState.moved=true;const b=petDragState.bounds;
+      const area=screen.getDisplayNearestPoint(p).workArea;
+      win.setPosition(Math.round(Math.max(area.x,Math.min(b.x+dx,area.x+area.width-b.width))),Math.round(Math.max(area.y,Math.min(b.y+dy,area.y+area.height-b.height))));
+    }
+    const moved=petDragState.moved;if(action==='end')petDragState=null;return {moved};
+  });
+  register('petMenu',()=>Menu.buildFromTemplate([
+    {label:'Open Codex',click:()=>shell.openExternal('codex://')},
+    {label:expanded?'Collapse dock':'Expand dock',click:()=>send({type:'toggle-panel',expanded:!expanded})},
+    {label:'Settings',click:()=>send({type:'settings-open'})},
+    {label:'Always on top',type:'checkbox',checked:win.isAlwaysOnTop(),click:item=>{win.setAlwaysOnTop(item.checked);store.update({alwaysOnTop:item.checked});send({type:'settings',settings:store.value});}},
+    {type:'separator'},
+    {label:'Minimize',click:()=>win.minimize()},
+    {label:'Quit PetDock',click:()=>send({type:'request-close'})}
+  ]).popup({window:win}));
+  register('listPets',()=>pets());
+  register('petIcon',data=>{
+    if(typeof data!=='string'||data.length>180000||!data.startsWith('data:image/png;base64,'))throw new Error('Invalid pet icon');
+    const icon=nativeImage.createFromDataURL(data),size=icon.getSize();
+    if(icon.isEmpty()||size.width>256||size.height>256)throw new Error('Invalid pet icon dimensions');
+    win.setIcon(icon);return true;
+  });
+  register('installPet',input=>petLibrary.install(input));
+  register('codexAccount',()=>bridge.accountRead());
+  register('codexLogin',async()=>{const result=await bridge.login();if(result.authUrl)await shell.openExternal(result.authUrl);return result;});
+  register('codexLogout',async()=>{
+    const result=await dialog.showMessageBox(win,{type:'question',message:'Sign out of the local Codex account?',detail:'The local Codex login can also be used by your other Codex clients.',buttons:['Cancel','Sign out'],defaultId:0,cancelId:0});
+    if(result.response===1)return bridge.logout();return {cancelled:true};
+  });
+  register('editorOpen', () => files.open());
+  register('editorSave', options => files.save(options));
+  register('chooseShortcut', kind => files.chooseShortcut(kind));
+  register('importShortcuts', payload => files.importShortcuts(payload));
+  register('shortcutIcons', paths=>files.shortcutIcons(paths));
+  register('openShortcut', target => files.openShortcut(target));
+  register('readDirectory', target => files.readDirectory(target));
+  register('terminalCreate', options => terminals.create(options));
+  register('terminalWrite', (id, data) => terminals.write(id, data));
+  register('terminalResize', (id, cols, rows) => terminals.resize(id, cols, rows));
+  register('terminalClose', id => terminals.close(id));
+  register('terminalReleaseAdmin',()=>terminals.releaseAdmin());
+  register('windowAction', action => {
+    if (action === 'close') app.quit();
+    else if (action === 'minimize') win.minimize();
+    else if (action === 'pin') { const pinned = !win.isAlwaysOnTop(); win.setAlwaysOnTop(pinned); store.update({ alwaysOnTop: pinned }); return pinned; }
+    else if (['collapse','expand','idle','reveal','quick','picker'].includes(action)) resize(action);
+    else throw new Error('Unknown window action');
+    return { expanded,mode:layoutMode };
+  });
+  await win.loadFile(indexPath);
+  resize();
+  win.show();
+});
+app.on('before-quit', () => { clearInterval(pointerTimer); chatgpt?.close(); bridge?.close(); terminals?.dispose(); });
+app.on('window-all-closed', () => app.quit());
