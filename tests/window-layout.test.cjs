@@ -7,7 +7,7 @@ test('compact reveal preserves pet center and top while prompt grows below',()=>
   const reveal=dockBounds('reveal',idle,area);
   assert.equal(reveal.x+reveal.width/2,idle.x+idle.width/2);assert.equal(reveal.y,100);
   const quick=dockBounds('quick',reveal,area);
-  assert.equal(quick.y,reveal.y);assert.equal(quick.height,350);
+  assert.equal(quick.y,reveal.y);assert.equal(reveal.height,216);assert.equal(quick.height,386);
   assert.deepEqual(dockBounds('idle',quick,area),idle);
 });
 test('every layout stays on small secondary displays with scaled pets',()=>{

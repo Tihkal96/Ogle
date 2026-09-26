@@ -30,10 +30,11 @@ const ShortcutModel = {
 };
 if (typeof module !== 'undefined') module.exports = ShortcutModel;
 if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
-  function mount(root, api, settings, save, report) {
+  function mount(root, api, settings, save, report, showPanel = () => {}) {
     let items = Array.isArray(settings.shortcuts) ? settings.shortcuts.map(item => ({ ...item })) : [];
     let mode = settings.shortcutsView === 'details' ? 'details' : 'icons';
-    let dragging = null, currentGroup = null, folderNavigation = [];
+    let dragging = null, currentGroup = null, folderNavigation = [], pinNotice = '';
+    const pinStatus=document.createElement('p');pinStatus.className='links-pin-status';pinStatus.setAttribute('role','status');
     const iconCache = new Map(), refreshedIcons = new Set();
     const expanded = new Set(), cache = new Map();
     const toolbar = document.createElement('div'); toolbar.className = 'subtoolbar';
@@ -47,7 +48,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     const invoke = fn => Promise.resolve().then(fn).catch(report);
     function button(label, handler, title) { const el = document.createElement('button'); el.type = 'button'; el.textContent = label; if (title) el.title = title; el.onclick = () => invoke(handler); return el; }
     async function persist() { await save({ shortcuts: items, shortcutsView: mode }); }
-    async function commit(next) { items = next; if (currentGroup && !items.some(item => item.id === currentGroup && item.kind === 'group')) currentGroup = null; await persist(); render(); refreshIcons().catch(report); }
+    async function commit(next) { pinNotice=''; items = next; if (currentGroup && !items.some(item => item.id === currentGroup && item.kind === 'group')) currentGroup = null; await persist(); render(); refreshIcons().catch(report); }
     async function refreshIcons(paths = items.map(item => item.path).filter(Boolean)) {
       if (typeof api.shortcutIcons !== 'function') return;
       const pending = [...new Set(paths)].filter(value => !refreshedIcons.has(value));
@@ -58,6 +59,33 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
         for (const [target, icon] of Object.entries(response || {})) if (typeof icon === 'string' && /^data:image\//.test(icon)) { iconCache.set(target, icon); changed = true; }
       }
       if (changed) { items = items.map(item => iconCache.has(item.path) ? { ...item, icon: iconCache.get(item.path) } : item); await persist(); render(); }
+    }
+    async function togglePin(entry) {
+      if(!entry.pinned && items.filter(item=>item.pinned).length>=5) {
+        pinNotice='You can pin up to 5 links. Unpin one to add another.';pinStatus.textContent=pinNotice;return;
+      }
+      await commit(items.map(item=>item.id===entry.id?{...item,pinned:!item.pinned}:item));
+    }
+    async function openPinned(entry) {
+      if(entry.kind==='group' || entry.kind==='folder') {
+        showPanel();mode='icons';folderNavigation=[];
+        if(entry.kind==='group')openGroup(entry.id);
+        else {currentGroup=entry.parentId || null;await openFolder(entry);}
+        return;
+      }
+      await api.openShortcut(entry.path);
+    }
+    function renderPins() {
+      const tray=document.getElementById('pinned-links');if(!tray)return;
+      tray.replaceChildren();
+      for(const entry of items.filter(item=>item.pinned).slice(0,5)) {
+        const name=entry.alias || entry.name;
+        const pin=button('',()=>openPinned(entry),`${name}${entry.path?' — '+entry.path:''}`);
+        pin.className='pinned-link';pin.dataset.linkId=entry.id;pin.setAttribute('aria-label',`Open ${name}`);
+        pin.append(iconFor(entry));tray.append(pin);
+      }
+      tray.hidden=!tray.childElementCount;
+      pinStatus.textContent=pinNotice || `${items.filter(item=>item.pinned).length} of 5 toolbar pins`;
     }
     function openGroup(id) { currentGroup = id; folderNavigation = []; form.hidden = true; render(); }
     async function openFolder(entry) {
@@ -182,6 +210,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       if (entry.kind === 'folder' && mode === 'details') line.append(button(expanded.has(entry.path) ? '▾' : '▸', () => browse(entry), 'Browse folder'));
       if (!filesystemEntry) {
         const actions = document.createElement('span'); actions.className = 'links-entry-actions';
+        const pin=button(entry.pinned?'◆':'◇',()=>togglePin(entry),entry.pinned?'Unpin from toolbar':'Pin to toolbar');pin.className='links-pin';pin.setAttribute('aria-pressed',String(Boolean(entry.pinned)));pin.setAttribute('aria-label',`${entry.pinned?'Unpin':'Pin'} ${entry.alias || entry.name} ${entry.pinned?'from':'to'} toolbar`);actions.append(pin);
         actions.append(button('✎', () => editForm(entry), 'Rename or edit target'), button('×', () => commit(ShortcutModel.remove(items, entry.id)), entry.kind === 'group' ? 'Remove group; keep its contents in the parent group' : 'Remove link')); line.append(actions);
         line.addEventListener('contextmenu', event => { event.preventDefault(); editForm(entry); });
       }
@@ -198,6 +227,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       return wrapper;
     }
     function render() {
+      renderPins();
       const selected = mode === 'icons' ? currentGroup || '' : destination.value; destination.replaceChildren(new Option('Top level', ''));
       for (const item of items.filter(item => item.kind === 'group')) destination.add(new Option(item.alias || item.name, item.id)); destination.value = selected;
       navigation.replaceChildren(); navigation.hidden = mode !== 'icons';
@@ -220,7 +250,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     }
     dropTarget(content, () => mode === 'icons' ? currentGroup : null);
     root.addEventListener('keydown', event => { if (event.key === 'Escape' && mode === 'icons' && (currentGroup || folderNavigation.length) && !event.target.matches('input,select,textarea')) { event.preventDefault(); goBack(); } });
-    root.append(toolbar, form, navigation, content); render(); refreshIcons().catch(report);
+    root.append(toolbar, pinStatus, form, navigation, content); render(); refreshIcons().catch(report);
   }
   return { mount };
 })();

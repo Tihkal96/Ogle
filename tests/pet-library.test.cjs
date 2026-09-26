@@ -8,7 +8,7 @@ const { zipSync, strToU8 } = require('fflate');
 const { PetLibrary, sourceUrl, readPackage } = require('../src/main/pet-library.cjs');
 const config = { id: 'test-pet', displayName: 'Test Pet', spriteVersionNumber: 2, spritesheetPath: 'spritesheet.webp' };
 let spritePromise;
-const sprite = () => spritePromise ||= fs.readFile(path.join(__dirname, '../assets/pets/rinnegan/spritesheet.webp'));
+const sprite = () => spritePromise ||= fs.readFile(path.join(__dirname, '../assets/pets/lago-realistic/spritesheet.webp'));
 async function archive(manifest = config, extras = {}, prefix = '') { return zipSync({ [prefix + 'pet.json']: strToU8(JSON.stringify(manifest)), [prefix + 'spritesheet.webp']: await sprite(), ...extras }, { level: 0 }); }
 
 test('pet source parsing accepts names and install text but never executes commands', () => {

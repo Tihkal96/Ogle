@@ -1,6 +1,6 @@
 # Ogle
 
-A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, a code editor, shortcut groups and embedded terminals. Existing pet projects are preserved; the app includes copies of Rinnegan and Lago Cartoon and can use installed v2 pets.
+A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, a code editor, shortcut groups and embedded terminals. Existing pet projects are preserved; the app bundles only Rinne Mini (the default), Rinne, and Lago Realistic. Separately installed custom v2 pets remain available. Saved pet choices are preserved; missing choices fall back to Rinne Mini.
 
 ## Download and run
 
@@ -25,7 +25,7 @@ npm ci
 npm start
 ```
 
-Build the Windows application with `npm run package`, then launch `dist/Ogle-win32-x64/Ogle.exe` or `./Launch-Ogle.ps1`. Codex must be installed, signed in, and available as `codex.exe` on PATH. Set `PETDOCK_CODEX_PATH` to its full executable path if needed.
+Build the Windows application with `npm run package`, then launch `dist/Ogle-win32-x64/Ogle.exe` or `./Launch-Ogle.ps1`. Codex must be installed and signed in. Ogle discovers `codex.exe` through PATH, the local Codex installation, Microsoft Store package, and standard npm native package locations. If your installation is elsewhere, set `PETDOCK_CODEX_PATH` to the full executable path and restart Ogle. A missing installation now shows setup guidance instead of a raw ENOENT error.
 
 ### Compatibility with earlier PetDock versions
 
@@ -35,9 +35,9 @@ Ogle is the new project and application name. Existing user data remains under `
 
 Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch in your fork, and open a pull request. **@Tihkal96 reviews and merges contributions; contributors do not push directly to the upstream repository.** See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and checks. [CODEOWNERS](.github/CODEOWNERS) assigns review ownership; it does not by itself enforce repository permissions or branch protection.
 
-## Version 0.5
+## Version 0.5.1
 
-The compact toolbar is 36 pixels tall and its idle ball is 26 pixels. Compact tool buttons are unselected; the up arrow opens the last full panel and the down arrow folds it. Shell now comes before Links. Quick prompts fold to the ball after five seconds without actual mouse/keyboard/input activity, keeping their text and image attachments. Focus alone does not keep the prompt open.
+The compact toolbar is 36 pixels tall and its idle ball is 26 pixels. The conversation selector has its own row below the tool buttons. Pin up to five items in Links to show their icons immediately after Links in the horizontal bar; unpin an item to free a slot. Folder and group pins open their contents in Links. Compact tool buttons are unselected; the up arrow opens the last full panel and the down arrow folds it. Shell now comes before Links. Auto-collapse delay is adjustable in Settings (1–120 seconds), defaulting to 10 seconds for the toolbar, quick prompt and unpinned panels. Quick prompts fold to the ball after the configured delay without actual mouse/keyboard/input activity, keeping their text and image attachments. Focus alone does not keep the prompt open.
 
 Working animation loops continuously while Codex or the embedded ChatGPT tab is working. Completion/failure reactions start at frame zero, take priority over hover, and wait until other work finishes. ChatGPT detection is best-effort: it observes stop/streaming and final action controls in the embedded website, including while hidden. Navigation does not count as completion. Website changes, very short generations, and manual Stop can limit classification; it is not an official ChatGPT event API. The observer reads activity booleans, not conversation text.
 
@@ -45,7 +45,7 @@ Editor Tab accepts an active completion instead of moving focus, and indents oth
 
 Links defaults to an Android-style icon grid. Groups and real folders open separate icon pages with navigation rather than expanding inline. Windows icons refresh for existing shortcuts, and website favicons are fetched from the site's own `/favicon.ico` when available. Details view remains available. This update migrates earlier default layouts to icons once; later view choices persist.
 
-Start with Windows is on by default for the packaged app and can be disabled in Settings. It registers one per-user login entry. On a login launch, Ogle gives Codex's own startup a grace period, checks its desktop connection/process, and opens it only if absent. Test profiles and development runs never register startup entries. The window's taskbar icon follows the selected pet's first idle frame; the executable's bundled icon uses Rinnegan's first idle frame. Windows may cache an already-pinned launcher icon separately.
+Start with Windows is on by default for the packaged app and can be disabled in Settings. It registers one per-user login entry. On a login launch, Ogle gives Codex's own startup a grace period, checks its desktop connection/process, and opens it only if absent. Test profiles and development runs never register startup entries. The window's taskbar icon follows the selected pet's first idle frame; the executable's bundled icon uses Rinne Mini's first idle frame. Windows may cache an already-pinned launcher icon separately.
 
 ### Version 0.4 foundation
 
@@ -91,6 +91,7 @@ Settings, notes, pins, drafts, editor tabs and shortcuts live in `settings.json`
 - `src/main/main.cjs`, `window-layout.cjs`: windows, geometry, trusted IPC and lifecycle.
 - `src/main/startup.cjs`, `pet-icon.cjs`: per-user startup, duplicate-launch checks and pet taskbar icons.
 - `src/main/codex-bridge.cjs`: app-server transport, desktop coordination, history and turns.
+- `src/main/codex-executable.cjs`: executable discovery for Windows installations without a CLI PATH entry.
 - `src/main/settings.cjs`: validated atomic settings persistence.
 - `src/main/chatgpt-panel.cjs`, `chatgpt-activity.cjs`: isolated embedded ChatGPT view, controls and best-effort activity signals.
 - `src/main/files.cjs`: editor files, conflict prompts, shortcuts and icons.
@@ -103,7 +104,9 @@ Settings, notes, pins, drafts, editor tabs and shortcuts live in `settings.json`
 
 ## Verification
 
-Version 0.5 adds `tests/editor-links-runtime.cjs`, `tests/chatgpt-activity-runtime.cjs`, and `tests/taskbar-runtime.cjs`. These verify Tab completion with focus retention, icon-page navigation, existing Windows icon refresh, startup setting persistence, hidden ChatGPT activity transitions, and native taskbar icon changes on pet selection. Compact and interaction checks now cover five-second inactivity, retained image/text drafts, continuous combined work, and a full completion frame cycle despite hover. Startup unit checks verify duplicate prevention and avoid modifying real Windows login entries.
+`node tests/pinned-links-runtime.cjs` verifies the five-pin limit, link targets, persistence and separate conversation row. `node tests/auto-collapse-runtime.cjs` verifies the 10-second default, seconds display, saved values and configured collapse deadline. `node tests/pet-menu-runtime.cjs` opens and closes the real native pet menu through renderer IPC, checking that no native object is returned across the process boundary. Set `PETDOCK_TEST_EXE` to the packaged executable to verify the shipped build. The packaged smoke check removes Codex from PATH and uses an empty custom-pet directory to verify executable discovery and the three bundled pets.
+
+Version 0.5 adds `tests/editor-links-runtime.cjs`, `tests/chatgpt-activity-runtime.cjs`, and `tests/taskbar-runtime.cjs`. These verify Tab completion with focus retention, icon-page navigation, existing Windows icon refresh, startup setting persistence, hidden ChatGPT activity transitions, and native taskbar icon changes on pet selection. Compact and interaction checks now cover configurable inactivity, retained image/text drafts, continuous combined work, and a full completion frame cycle despite hover. Startup unit checks verify duplicate prevention and avoid modifying real Windows login entries.
 
 Run `npm test`, `node tests/compact-runtime.cjs`, `node tests/interaction-runtime.cjs`, `node tests/attachments-runtime.cjs`, `node tests/shortcuts-runtime.cjs`, `node tests/chatgpt-controls-runtime.cjs`, `npm run test:layout`, `npm run test:ui`, `npm run package`, and `node scripts/package-smoke.cjs`. Tests that send prompts require `PETDOCK_SMOKE_THREAD_ID` to identify a disposable test task you created. Feature checks send response-only prompts to that explicit task. Attachments runtime with `--real-send` additionally sends a synthetic colored-square image. Screenshots/reports and isolated test profiles are under the excluded `artifacts/` directory. Start/package rebuild frontend bundles automatically.
 

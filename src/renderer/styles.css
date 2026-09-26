@@ -20,3 +20,20 @@
 .collapsed .toolbar>.spacer{display:none}.collapsed #conversation-strip{max-width:none;flex:1}.toolbar>#status-dot{margin:0 4px;flex:none}.quick-compose #composer{max-height:185px;overflow:auto}
 
 .collapsed .tool.selected{background:transparent;color:var(--muted);box-shadow:none}.collapsed .tool.selected:hover{background:var(--selection);color:var(--text)}
+
+/* Horizontal tools and pinned links share the first row; conversations have their own row. */
+#pinned-links{display:none;align-items:center;gap:1px;flex:none;margin:0 3px 0 1px;-webkit-app-region:no-drag}
+.collapsed #pinned-links{display:flex}.bar-idle #pinned-links{display:none!important}
+.pinned-link{width:24px;height:28px;flex:none;padding:3px;display:flex;align-items:center;justify-content:center}
+.pinned-link .links-icon{width:18px;height:18px;flex:none;font-size:16px;display:flex;align-items:center;justify-content:center}
+.pinned-link .links-icon img{width:18px;height:18px;object-fit:contain}
+.pinned-link .links-group-icon{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:1px;padding:1px;border:1px solid var(--border);border-radius:3px}
+.pinned-link .links-group-icon>span{min-width:0;min-height:0;font-size:7px;display:flex;align-items:center;justify-content:center}
+.pinned-link .links-group-icon img{width:7px;height:7px}
+.collapsed .tool{width:28px;min-width:28px}.collapsed .icon{width:24px}
+.collapsed .toolbar>.spacer{display:block;min-width:0}
+.collapsed #conversation-strip{flex:none;width:calc(100% - 12px);height:32px;min-height:32px;margin:0 6px 4px;max-width:none}
+#conversation-picker-toggle{height:30px;width:30px}
+.bar-idle #conversation-strip{display:none!important}
+@media(max-width:560px){.collapsed .tool{width:24px;min-width:24px}.pinned-link{width:21px;padding:2px}.collapsed .icon{width:22px}.collapsed time{max-width:74px;overflow:hidden;text-overflow:ellipsis}}
+@media(max-width:430px){.collapsed time{display:none}.collapsed .tool{width:22px;min-width:22px}.pinned-link{width:20px}.collapsed .icon{width:20px}.collapsed .toolbar{padding-left:4px;padding-right:4px;gap:0}}

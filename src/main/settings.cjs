@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinnegan', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
+const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 10000, petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
 function validatePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
   const clean = {};
@@ -25,9 +25,14 @@ function validatePatch(patch) {
         result[field] = item[field];
       }
       if (key === 'editorTabs') result.dirty = Boolean(item.dirty);
-      if (key === 'shortcuts') result.kind = ['group','folder','file','url'].includes(item.kind) ? item.kind : 'file';
+      if (key === 'shortcuts') {
+        result.kind = ['group','folder','file','url'].includes(item.kind) ? item.kind : 'file';
+        if(Object.hasOwn(item,'pinned') && typeof item.pinned!=='boolean')throw new Error('Invalid shortcut pin');
+        result.pinned = item.pinned === true;
+      }
       return result;
     });
+    if(key==='shortcuts' && clean[key].filter(item=>item.pinned).length>5)throw new Error('Pin up to five links to the toolbar.');
   }
   if (Object.hasOwn(patch, 'toolbarOrder')) {
     if (!Array.isArray(patch.toolbarOrder) || patch.toolbarOrder.some(x => typeof x !== 'string') || patch.toolbarOrder.length > 100) throw new Error('Invalid toolbar order');
@@ -37,7 +42,7 @@ function validatePatch(patch) {
     if (typeof patch[key] !== 'boolean') throw new Error(`Invalid ${key}`);
     clean[key] = patch[key];
   }
-  for (const [key, min, max] of [['petScale',0.5,2],['hoverDelay',500,10000]]) if (Object.hasOwn(patch,key)) {
+  for (const [key, min, max] of [['petScale',0.5,2],['hoverDelay',500,10000],['autoCollapseDelay',1000,120000]]) if (Object.hasOwn(patch,key)) {
     if (!Number.isFinite(patch[key]) || patch[key] < min || patch[key] > max) throw new Error(`Invalid ${key}`);
     clean[key] = patch[key];
   }

@@ -57,7 +57,7 @@ class PetLibrary {
         result.set(entry.name,{id:entry.name,name:config.displayName||entry.name,config,spriteUrl:pathToFileURL(sprite).href});
       }catch{}
     }
-    return [...result.values()];
+    return [...result.values()].sort((a,b)=>(b.id==='rinne-mini')-(a.id==='rinne-mini'));
   }
   async install(input) {
     const url=sourceUrl(input);

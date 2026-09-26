@@ -125,7 +125,7 @@ app.whenReady().then(async () => {
     }
     const moved=petDragState.moved;if(action==='end')petDragState=null;return {moved};
   });
-  register('petMenu',()=>Menu.buildFromTemplate([
+  register('petMenu',()=>{Menu.buildFromTemplate([
     {label:'Open Codex',click:()=>shell.openExternal('codex://')},
     {label:expanded?'Collapse dock':'Expand dock',click:()=>send({type:'toggle-panel',expanded:!expanded})},
     {label:'Settings',click:()=>send({type:'settings-open'})},
@@ -133,7 +133,7 @@ app.whenReady().then(async () => {
     {type:'separator'},
     {label:'Minimize',click:()=>win.minimize()},
     {label:'Quit Ogle',click:()=>send({type:'request-close'})}
-  ]).popup({window:win}));
+  ]).popup({window:win});return true;});
   register('listPets',()=>pets());
   register('petIcon',data=>{
     if(typeof data!=='string'||data.length>180000||!data.startsWith('data:image/png;base64,'))throw new Error('Invalid pet icon');
