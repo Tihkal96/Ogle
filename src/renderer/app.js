@@ -10,7 +10,27 @@ function save(partial) { Object.assign(state.settings, partial); const pending =
 function title(thread) { return thread?.name || thread?.title || thread?.preview?.slice(0, 90) || 'Untitled task'; }
 function basename(path) { return String(path || '').split(/[\\/]/).filter(Boolean).pop() || 'No project'; }
 function setConnection(connection, detail) { detail ||= connection?.detail; const value = typeof connection === 'object' ? connection?.state : connection; state.connected = ['ready', 'connected','desktop'].includes(value); if (['error','disconnected'].includes(value)) state.running.clear(); $('status-dot').title=detail || (state.connected?'Codex connected':value || 'Disconnected'); $('status-dot').setAttribute('aria-label',$('status-dot').title); $('status-dot').className = state.connected ? 'ready' : 'error'; $('footer-status').textContent = '';  updateComposer(); }
-function updateComposer() { const running = state.selected && state.running.get(state.selected.id); $('send').disabled = !state.selected || !state.connected || !!running || (!$('prompt').value.trim() && !window.PetDockAttachments?.hasImages()) || !!window.PetDockAttachments?.isBusy(); $('stop').hidden = !running; $('composer-target').textContent = state.selected ? title(state.selected) : 'No task selected'; $('conversation-name').textContent=state.selected?title(state.selected):'Choose a conversation';$('conversation-name').title=state.selected?`Write to ${title(state.selected)}`:'Choose a conversation'; $('prompt').placeholder = state.selected ? `Message ${title(state.selected).slice(0,38)}…` : 'Choose a Codex task…'; $('prompt').title = state.selected ? `Send to: ${title(state.selected)}` : 'Choose a task in the Codex panel first'; updatePetState(); }
+function compactUsesChatGPT() { return state.settings.compactChatTarget==='chatgpt'; }
+function composerUsesChatGPT() { return state.composerContext==='__chatgpt__'; }
+function syncComposerContext() {
+  const key=state.mode==='quick' && compactUsesChatGPT()?'__chatgpt__':state.selected?.id || '';
+  if(state.composerContext===key)return;
+  persistDraft();state.composerContext=key;
+  $('prompt').value=state.settings.drafts?.[key] || '';
+  window.PetDockAttachments?.setContext(key,{allowFiles:key==='__chatgpt__'});
+}
+function updateComposer() {
+  const gpt=composerUsesChatGPT(),running=gpt?state.chatgptWorking:state.selected && state.running.get(state.selected.id);
+  $('send').disabled=!!state.chatgptSending || (!gpt && (!state.selected || !state.connected)) || !!running || (!$('prompt').value.trim() && !window.PetDockAttachments?.hasImages()) || !!window.PetDockAttachments?.isBusy();
+  $('stop').hidden=gpt || !running;
+  $('composer-target').textContent=gpt?'ChatGPT · active conversation':state.selected?title(state.selected):'No task selected';
+  $('conversation-name').textContent=compactUsesChatGPT()?'ChatGPT · active conversation':state.selected?title(state.selected):'Choose a conversation';
+  $('conversation-name').title=compactUsesChatGPT()?'Message the active ChatGPT conversation, or start a new one':state.selected?`Write to ${title(state.selected)}`:'Choose a conversation';
+  $('conversation-picker-toggle').hidden=compactUsesChatGPT();
+  $('prompt').placeholder=gpt?'Message ChatGPT…':state.selected?`Message ${title(state.selected).slice(0,38)}…`:'Choose a Codex task…';
+  $('prompt').title=gpt?'Sends to the conversation currently open in ChatGPT':state.selected?`Send to: ${title(state.selected)}`:'Choose a task in the Codex panel first';
+  updatePetState();
+}
 function queueReaction(kind) {
   // Keep a completion queued while another Codex task or ChatGPT is still working.
   state.pendingReaction=state.pendingReaction==='failed'?'failed':kind;
@@ -55,7 +75,7 @@ function renderCompactThreads() {
     const button=document.createElement('button');button.type='button';button.className='compact-thread'+(thread.id===state.selected?.id?' current':'');button.dataset.threadId=thread.id;
     const name=document.createElement('strong');name.textContent=(pinned.includes(thread.id)?'★ ':'')+title(thread);
     const project=document.createElement('small');project.textContent=basename(thread.cwd);button.append(name,project);button.title=thread.cwd || title(thread);
-    button.onclick=()=>attempt(async()=>{setMode('quick');await selectThread(thread);$('prompt').focus();});node.append(button);
+    button.onclick=()=>attempt(async()=>{await setMode('quick');await selectThread(thread);$('prompt').focus();});node.append(button);
   }
   if(!threads.length){const empty=document.createElement('p');empty.textContent='No matching conversations.';node.append(empty);}
   node.scrollTop=position;$('compact-load-more').hidden=!state.cursor;
@@ -63,7 +83,7 @@ function renderCompactThreads() {
 $('compact-search').oninput=renderCompactThreads;$('compact-project-filter').onchange=renderCompactThreads;
 $('compact-load-more').onclick=()=>attempt(()=>refresh(true));
 $('conversation-picker-toggle').onclick=()=>setMode(state.mode==='picker'?'reveal':'picker');
-$('conversation-name').onclick=()=>{setMode(state.selected?'quick':'picker');if(state.selected)$('prompt').focus();};
+$('conversation-name').onclick=()=>{setMode(compactUsesChatGPT() || state.selected?'quick':'picker').then(()=>{if(compactUsesChatGPT() || state.selected)$('prompt').focus();});};
 async function refresh(more = false) { const result = await api.listThreads(more ? {cursor:state.cursor} : {}); const threads = Array.isArray(result) ? result : result.data || result.threads || []; state.threads = more ? [...new Map([...state.threads,...threads].map(t=>[t.id,t])).values()] : threads; state.cursor = result.nextCursor; $('load-more').hidden = !state.cursor; renderProjects(); renderThreads(); }
 function contentText(item) { if (typeof item.text === 'string') return item.text; if (Array.isArray(item.content)) return item.content.map(c => c.text || (c.type?.toLowerCase().includes('image') ? '[Image]' : '')).filter(Boolean).join('\n'); return item.aggregatedOutput || item.command || item.output || ''; }
 function nearBottom() { const node = $('messages'); return node.scrollHeight-node.scrollTop-node.clientHeight < 70; }
@@ -72,19 +92,19 @@ $('go-bottom').onclick = scrollBottom;
 function addMessage(id, role, text) { const follow = nearBottom(); let element = state.messages.get(id); if (!element) { const container = $('messages'); container.querySelector('.empty')?.remove(); element = document.createElement('article'); element.className = `message ${role}`; const label = document.createElement('div'); label.className = 'message-label'; label.textContent = role === 'user' ? 'YOU' : role === 'tool' ? 'ACTIVITY' : 'CODEX'; const body = document.createElement('div'); body.className = 'message-text'; element.append(label, body); container.append(element); state.messages.set(id, element); } element.lastChild.textContent = text; if (follow) scrollBottom(); return element; }
 function renderItem(item) { const type = item.type?.toLowerCase() || ''; if (type === 'usermessage') addMessage(item.id, 'user', contentText(item)); else if (type === 'agentmessage') addMessage(item.id, 'assistant', contentText(item)); else if (['commandexecution','filechange','mcpToolCall'.toLowerCase()].includes(type)) addMessage(item.id,'tool',contentText(item) || `${item.type}: ${item.status || 'completed'}`); }
 let selectionVersion = 0;
-async function selectThread(thread) { const version = ++selectionVersion; if (state.selected) persistDraft(); state.selected = thread; window.PetDockAttachments?.setContext(thread.id); save({lastThreadId:thread.id}); $('prompt').value = state.settings.drafts?.[thread.id] || ''; $('thread-title').textContent = title(thread); $('thread-path').textContent = thread.cwd || 'No project folder'; $('pin-thread').disabled = false; $('pin-thread').textContent = (state.settings.pinnedThreads || []).includes(thread.id) ? '★' : '☆'; state.messages.clear(); $('messages').replaceChildren(); $('activity').textContent = 'Loading conversation…'; renderThreads(); updateComposer(); const result = await api.readThread(thread.id); if (version !== selectionVersion) return; const full = result.thread || result; if(result.runtime) setRuntime(thread.id,result.runtime); for (const turn of full.turns || []) { for (const item of turn.items || []) renderItem(item); } scrollBottom(); $('activity').textContent = state.running.has(thread.id) ? 'Codex is working…' : ''; updateComposer(); }
-function persistDraft() { if (state.selected) save({drafts:{...state.settings.drafts,[state.selected.id]:$('prompt').value}}); }
+async function selectThread(thread) { const version = ++selectionVersion; if (state.selected) persistDraft(); state.selected = thread; syncComposerContext(); save({lastThreadId:thread.id}); $('thread-title').textContent = title(thread); $('thread-path').textContent = thread.cwd || 'No project folder'; $('pin-thread').disabled = false; $('pin-thread').textContent = (state.settings.pinnedThreads || []).includes(thread.id) ? '★' : '☆'; state.messages.clear(); $('messages').replaceChildren(); $('activity').textContent = 'Loading conversation…'; renderThreads(); updateComposer(); const result = await api.readThread(thread.id); if (version !== selectionVersion) return; const full = result.thread || result; if(result.runtime) setRuntime(thread.id,result.runtime); for (const turn of full.turns || []) { for (const item of turn.items || []) renderItem(item); } scrollBottom(); $('activity').textContent = state.running.has(thread.id) ? 'Codex is working…' : ''; updateComposer(); }
+function persistDraft() { if (state.composerContext) save({drafts:{...state.settings.drafts,[state.composerContext]:$('prompt').value}}); }
 let draftTimer;
 $('prompt').addEventListener('input', () => { updateComposer(); clearTimeout(draftTimer); draftTimer = setTimeout(persistDraft, 350); });
 $('prompt').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); } });
-$('composer').onsubmit = event => { event.preventDefault(); if ($('send').disabled) return; attempt(async () => { const thread = state.selected, text = $('prompt').value.trim(),images=window.PetDockAttachments?.getInputs() || []; state.running.set(thread.id, 'pending'); updateComposer(); try { const result = await api.sendTurn(thread.id, text,images); const turn = result.turn || result; window.PetDockAttachments?.clear(thread.id,images); if (state.running.get(thread.id) === 'pending') state.running.set(thread.id, turn.id); if (state.selected?.id === thread.id) { if ($('prompt').value.trim() === text) { $('prompt').value = ''; persistDraft(); } if (![...state.messages.values()].some(el => el.classList.contains('user') && el.lastChild.textContent === text)) addMessage(`local-${Date.now()}`, 'user', text+(images.length?`\n[${images.length} attached image${images.length===1?'':'s'}]`:'')); $('activity').textContent = 'Codex is working…'; } } catch (err) { state.running.delete(thread.id); queueReaction('failed'); throw err; } finally { updateComposer(); } }); };
+$('composer').onsubmit = event => { event.preventDefault(); if ($('send').disabled) return; if(composerUsesChatGPT())return attempt(sendCompactChatGPT); attempt(async () => { const thread = state.selected, text = $('prompt').value.trim(),images=window.PetDockAttachments?.getInputs() || []; state.running.set(thread.id, 'pending'); updateComposer(); try { const result = await api.sendTurn(thread.id, text,images); const turn = result.turn || result; window.PetDockAttachments?.clear(thread.id,images); if (state.running.get(thread.id) === 'pending') state.running.set(thread.id, turn.id); if (state.selected?.id === thread.id) { if (state.composerContext===thread.id && $('prompt').value.trim() === text) { $('prompt').value = ''; persistDraft(); } if (![...state.messages.values()].some(el => el.classList.contains('user') && el.lastChild.textContent === text)) addMessage(`local-${Date.now()}`, 'user', text+(images.length?`\n[${images.length} attached image${images.length===1?'':'s'}]`:'')); $('activity').textContent = 'Codex is working…'; } } catch (err) { state.running.delete(thread.id); queueReaction('failed'); throw err; } finally { updateComposer(); } }); };
 $('stop').onclick = () => attempt(() => api.interrupt(state.selected.id, state.running.get(state.selected.id)));
 $('refresh').onclick = () => attempt(() => refresh()); $('load-more').onclick = () => attempt(() => refresh(true)); $('search').oninput = renderThreads; $('project-filter').onchange = renderThreads;
 $('new-task').onclick = () => attempt(async () => { const cwd = await api.chooseFolder(); if (!cwd) return; const result = await api.startThread(cwd); const thread = result.thread || result; state.threads.unshift(thread); renderProjects(); await selectThread(thread); });
 $('pin-thread').onclick = () => { if (!state.selected) return; const pins = new Set(state.settings.pinnedThreads || []); pins.has(state.selected.id) ? pins.delete(state.selected.id) : pins.add(state.selected.id); save({pinnedThreads:[...pins]}); $('pin-thread').textContent = pins.has(state.selected.id) ? '★' : '☆'; renderThreads(); };
 let noteTimer; $('note').oninput = () => { $('note-status').textContent = 'Saving…'; clearTimeout(noteTimer); noteTimer = setTimeout(async () => { try { await save({note:$('note').value}); $('note-status').textContent = 'Saved locally'; } catch { $('note-status').textContent = 'Save failed'; } }, 400); };
 function chatgptLayout() {
-  const host = $('chatgpt-host'), visible = !state.collapsed && state.activePanel === 'chatgpt';
+  const host = $('chatgpt-host'), visible = !window.DockLayoutTransition.busy && !state.collapsed && state.activePanel === 'chatgpt';
   const rect = host.getBoundingClientRect();
   api.chatgptLayout({visible,bounds:{x:Math.round(rect.x),y:Math.round(rect.y),width:Math.max(1,Math.round(rect.width)),height:Math.max(1,Math.round(rect.height))}}).catch(error);
 }
@@ -94,8 +114,7 @@ function switchPanel(name) {
   for (const button of document.querySelectorAll('[data-panel]')) button.classList.toggle('selected',button.dataset.panel === name);
   for (const panel of document.querySelectorAll('#expanded > .panel')) panel.hidden = panel.id !== `${name}-panel`;
   $('composer').hidden = name !== 'chats' && !state.collapsed;
-  setMode('expand');
-  requestAnimationFrame(() => { chatgptLayout(); window.PetDockTerminal?.resize(); });
+  return setMode('expand').then(() => { chatgptLayout(); window.PetDockTerminal?.resize(); });
 }
 for (const button of document.querySelectorAll('[data-panel]')) button.onclick = () => switchPanel(button.dataset.panel);
 for (const button of document.querySelectorAll('[data-chatgpt-action]')) button.onclick = () => attempt(() => api.openChatGPT(button.dataset.chatgptAction));
@@ -125,14 +144,17 @@ $('pet').addEventListener('mouseenter',()=>{state.petHovered=true;updateComposer
 $('pet').addEventListener('mouseleave',()=>{state.petHovered=false;updateComposer();});
 async function flushLocal() {
   clearTimeout(noteTimer); clearTimeout(draftTimer);
-  if (state.selected) await save({drafts:{...state.settings.drafts,[state.selected.id]:$('prompt').value}});
+  if (state.composerContext) await save({drafts:{...state.settings.drafts,[state.composerContext]:$('prompt').value}});
   await save({note:$('note').value}); await window.PetDockEditor?.flush();
 }
 $('sidebar-toggle').onclick=()=>{save({sidebarVisible:state.settings.sidebarVisible===false});applySettings();};
 function setMode(mode) {
   clearTimeout(hoverTimer);clearTimeout(quickIdleTimer);
   state.mode=mode;state.collapsed=mode!=='expand';if(mode!=='idle')state.suppressHoverReveal=false;
-  document.body.classList.toggle('collapsed',state.collapsed);
+  syncComposerContext();updateComposer();
+  api.chatgptLayout({visible:false,bounds:{x:0,y:0,width:1,height:1}}).catch(error);
+  return window.DockLayoutTransition.run(() => {
+  document.body.classList.toggle('collapsed',mode!=='expand');
   document.body.classList.toggle('bar-idle',mode==='idle');
   document.body.classList.toggle('bar-revealed',['reveal','quick','picker'].includes(mode));
   document.body.classList.toggle('quick-compose',mode==='quick');
@@ -140,22 +162,37 @@ function setMode(mode) {
   $('bar-orb').hidden=mode!=='idle';$('conversation-strip').hidden=!state.collapsed || mode==='idle';
   $('conversation-picker').hidden=mode!=='picker';$('conversation-picker-toggle').setAttribute('aria-expanded',String(mode==='picker'));
   $('composer').hidden=!(mode==='quick' || (mode==='expand' && state.activePanel==='chats'));
-  $('collapse').textContent=state.collapsed?'⌃':'⌄';$('collapse').title=state.collapsed?'Open panel':'Hide panel';
-  if(mode==='picker')renderCompactThreads();if(mode==='quick')resetQuickIdle();
-  if(state.collapsed)api.chatgptLayout({visible:false,bounds:{x:0,y:0,width:1,height:1}}).catch(error);
-  api.windowAction(mode).then(()=>requestAnimationFrame(chatgptLayout)).catch(error);
+  $('collapse').textContent='⌖';$('collapse').title=state.collapsed?'Open panel':'Hide panel';$('collapse').setAttribute('aria-label',$('collapse').title);$('collapse').setAttribute('aria-expanded',String(!state.collapsed));
+  if(mode==='picker')renderCompactThreads();
+  }, () => api.windowAction(mode)).then(() => {
+    if(state.mode===mode) {if(mode==='quick')resetQuickIdle();else resetPanelIdle();chatgptLayout();}
+  }).catch(error);
 }
-function collapse(value) {setMode(value?'idle':'expand');}
-$('collapse').onclick=()=>{if(state.collapsed)switchPanel(state.activePanel);else setMode('idle');};
+function collapse(value) {
+  const mode=value?(state.mode==='expand'?'reveal':'idle'):'expand';
+  return setMode(mode);
+}
+$('collapse').onclick=()=>{if(state.collapsed)switchPanel(state.activePanel);else collapse(true);};
 $('bar-orb').onclick=()=>setMode('reveal');
 $('always-top').onclick=()=>attempt(async()=>{const pinned=await api.windowAction('pin');state.settings.alwaysOnTop=Boolean(pinned);applySettings();});
 $('panel-pin').onclick=()=>{
   if(state.settings.autoExpand===false)return;
   state.panelPinned=!state.panelPinned;$('panel-pin').classList.toggle('active',state.panelPinned);
-  $('panel-pin').setAttribute('aria-pressed',String(state.panelPinned));$('panel-pin').title=state.panelPinned?'Let dock hide automatically':'Keep dock open';
+  $('panel-pin').setAttribute('aria-pressed',String(state.panelPinned));$('panel-pin').title=state.panelPinned?'Unpin expanded panel':'Keep expanded panel open';
+  resetPanelIdle();
 };
 let hoverTimer,quickIdleTimer;
 function autoCollapseDelay() { const value=Number(state.settings.autoCollapseDelay);return Number.isFinite(value)&&value>=1000&&value<=120000?value:10000; }
+function resetPanelIdle() {
+  clearTimeout(hoverTimer);
+  if(state.settings.autoExpand===false || window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.panelPinned && state.mode==='expand'))return;
+  hoverTimer=setTimeout(()=>{
+    if(window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.panelPinned && state.mode==='expand'))return;
+    if(document.querySelector('dialog[open]') || state.chatgptSending || document.querySelector('.approval') || window.PetDockAttachments?.isBusy()){resetPanelIdle();return;}
+    state.suppressHoverReveal=true;
+    setMode(state.mode==='expand'?'reveal':'idle');
+  },autoCollapseDelay());
+}
 function resetQuickIdle() {
   if(state.mode!=='quick')return;
   clearTimeout(quickIdleTimer);
@@ -168,16 +205,13 @@ function resetQuickIdle() {
 for(const event of ['pointermove','pointerdown','keydown','input','paste','wheel'])document.addEventListener(event,activity=>{
   if(activity.type==='pointermove' && state.suppressHoverReveal){state.suppressHoverReveal=false;if(activity.target.closest?.('#bar-orb'))pointerInside(true);}
   resetQuickIdle();
+  if(['expand','reveal'].includes(state.mode))resetPanelIdle();
 },{passive:true});
 function pointerInside(inside) {
   state.pointerInside=inside;clearTimeout(hoverTimer);
-  if(state.settings.autoExpand===false)return;
-  if(inside) {if(state.mode==='idle' && !petPress && !state.suppressHoverReveal)hoverTimer=setTimeout(()=>{if(!petPress && state.mode==='idle')setMode('reveal');},120);return;}
-  if(state.mode==='quick' || state.mode==='picker' || state.panelPinned || document.querySelector('.approval') || window.PetDockAttachments?.hasImages() || window.PetDockAttachments?.isBusy())return;
-  hoverTimer=setTimeout(()=>{
-    const typing=['TEXTAREA','INPUT','SELECT'].includes(document.activeElement?.tagName)||!!document.activeElement?.closest('.cm-editor');
-    if(!typing && state.mode!=='idle')setMode('idle');
-  },autoCollapseDelay());
+  if(state.settings.autoExpand===false || window.DockLayoutTransition.busy)return;
+  if(inside && state.mode==='idle') {if(!petPress && !state.suppressHoverReveal)hoverTimer=setTimeout(()=>{if(!petPress && state.mode==='idle')setMode('reveal');},120);return;}
+  resetPanelIdle();
 }
 $('bar-orb').addEventListener('mouseenter',()=>pointerInside(true));
 $('bar-orb').addEventListener('mouseleave',()=>{if(state.mode==='idle')clearTimeout(hoverTimer);});
@@ -212,7 +246,7 @@ function desktopThread(params) {
   updateComposer();
 }
 $('desktop-approval').onclick=()=>attempt(()=>api.openCodex(state.selected?.id));
-function onEvent(event) { if(event.type==='chatgpt-activity') {state.chatgptWorking=event.state==='working';if(event.state==='done'||event.state==='failed')queueReaction(event.state==='failed'?'failed':'review');updateComposer();return;} if(event.type==='toggle-panel')return collapse(!event.expanded); if (event.type === 'request-close') return attempt(async()=>{await flushLocal();await api.windowAction('close');}); if(event.type==='settings-open') return switchPanel('settings'); if(event.type==='window/action') {if(event.action==='collapse')return collapse(true);if(event.action==='expand')return collapse(false);if(event.action==='settings')return switchPanel('settings');} if(event.type==='settings') {Object.assign(state.settings,event.settings || {});applySettings();return;} if (event.type === 'pointer') { state.nativePointerInside = event.inside; if(!event.inside)pointerInside(false); return; } if (event.type === 'connection') return setConnection(event.state,event.detail); if (event.type === 'request') return approval(event); if (event.type !== 'codex') return; if(event.method==='petdock/threadState') return desktopThread(event.params || {}); const p = event.params || {}, method = event.method; const threadId = p.threadId || p.thread?.id; if (method === 'turn/started') state.running.set(threadId,p.turn?.id); if (method === 'turn/completed') { state.running.delete(threadId); queueReaction(p.turn?.status==='failed'?'failed':'review'); } if (threadId && threadId !== state.selected?.id) { updateComposer(); return; } if (method === 'item/agentMessage/delta') { const old = state.messages.get(p.itemId)?.lastChild.textContent || ''; addMessage(p.itemId,'assistant',old + (p.delta || '')); } else if (method === 'item/started' || method === 'item/completed') { if (p.item) renderItem(p.item); } else if (method === 'turn/started') $('activity').textContent = 'Codex is working…'; else if (method === 'turn/completed') { $('activity').textContent = p.turn?.status === 'failed' ? 'Turn failed' : p.turn?.status === 'interrupted' ? 'Stopped' : 'Ready for your next prompt'; if (p.turn?.error) error(p.turn.error); } else if (method === 'error') error(p.error || p.message || 'Codex reported an error'); updateComposer(); }
+function onEvent(event) { if(event.type==='chatgpt-interaction')return resetPanelIdle(); if(event.type==='chatgpt-activity') {state.chatgptWorking=event.state==='working';if(event.state==='done'||event.state==='failed')queueReaction(event.state==='failed'?'failed':'review');updateComposer();return;} if(event.type==='toggle-panel')return collapse(!event.expanded); if (event.type === 'request-close') return attempt(async()=>{await flushLocal();await api.windowAction('close');}); if(event.type==='settings-open') return switchPanel('settings'); if(event.type==='window/action') {if(event.action==='collapse')return collapse(true);if(event.action==='expand')return collapse(false);if(event.action==='settings')return switchPanel('settings');} if(event.type==='settings') {Object.assign(state.settings,event.settings || {});applySettings();return;} if (event.type === 'pointer') { state.nativePointerInside = event.inside; if(!event.inside)pointerInside(false); return; } if (event.type === 'connection') return setConnection(event.state,event.detail); if (event.type === 'request') return approval(event); if (event.type !== 'codex') return; if(event.method==='petdock/threadState') return desktopThread(event.params || {}); const p = event.params || {}, method = event.method; const threadId = p.threadId || p.thread?.id; if (method === 'turn/started') state.running.set(threadId,p.turn?.id); if (method === 'turn/completed') { state.running.delete(threadId); queueReaction(p.turn?.status==='failed'?'failed':'review'); } if (threadId && threadId !== state.selected?.id) { updateComposer(); return; } if (method === 'item/agentMessage/delta') { const old = state.messages.get(p.itemId)?.lastChild.textContent || ''; addMessage(p.itemId,'assistant',old + (p.delta || '')); } else if (method === 'item/started' || method === 'item/completed') { if (p.item) renderItem(p.item); } else if (method === 'turn/started') $('activity').textContent = 'Codex is working…'; else if (method === 'turn/completed') { $('activity').textContent = p.turn?.status === 'failed' ? 'Turn failed' : p.turn?.status === 'interrupted' ? 'Stopped' : 'Ready for your next prompt'; if (p.turn?.error) error(p.turn.error); } else if (method === 'error') error(p.error || p.message || 'Codex reported an error'); updateComposer(); }
 const petImage = new Image(), canvas = $('pet'), context = canvas.getContext('2d');
 function loadPet(pet) { if (!pet) return; petImage.src = pet.spriteUrl; save({petId:pet.id}); }
 let pets = [];
@@ -258,8 +292,10 @@ function applySettings() {
   for(const input of document.querySelectorAll('#settings-panel [data-setting]')) { const value=state.settings[input.dataset.setting];if(value!==undefined){if(input.type==='checkbox')input.checked=Boolean(value);else input.value=input.dataset.setting==='autoCollapseDelay'?value/1000:value;} }
   const chosen=pets.find(p=>p.id===state.settings.petId) || pets[0]; if(chosen && petImage.src!==chosen.spriteUrl) petImage.src=chosen.spriteUrl;
   clock();
+  syncComposerContext();updateComposer();
   const nextDelay=autoCollapseDelay(),delayChanged=state.lastAutoCollapseDelay!==undefined && state.lastAutoCollapseDelay!==nextDelay;state.lastAutoCollapseDelay=nextDelay;
-  if(delayChanged){if(state.mode==='quick')resetQuickIdle();else if(state.pointerInside===false)pointerInside(false);}
+  const autoChanged=state.lastAutoExpand!==state.settings.autoExpand;state.lastAutoExpand=state.settings.autoExpand;
+  if(delayChanged || autoChanged){if(state.mode==='quick')resetQuickIdle();else resetPanelIdle();}
 }
 clock();setInterval(clock,1000);
 let refreshing=false;
@@ -286,6 +322,7 @@ attempt(async () => {
   window.PetDockTerminal?.mount($('terminal-panel'),api);
   window.PetDockSettings?.mount($('settings-panel'),api,state.settings,pets,save,applySettings,error,async()=>{const fresh=await api.boot();pets=fresh.pets || [];return pets;},()=>switchPanel('chatgpt'));
   state.threads=Array.isArray(boot.threads)?boot.threads:boot.threads?.data || [];state.cursor=boot.threads?.nextCursor;
-  $('note').value=state.settings.note || '';applySettings();setMode('idle');setConnection(boot.connection);renderProjects();renderThreads();$('load-more').hidden=!state.cursor;
-  const previous=state.threads.find(t=>t.id===state.settings.lastThreadId);if(previous)await selectThread(previous);
+  $('note').value=state.settings.note || '';applySettings();await setMode('idle');setConnection(boot.connection);renderProjects();renderThreads();$('load-more').hidden=!state.cursor;
+  const previous=state.threads.find(t=>t.id===state.settings.lastThreadId);if(previous)await attempt(()=>selectThread(previous));
+  if(!state.settings.compactChatTarget)await chooseCompactTarget();
 });

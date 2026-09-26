@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('dock', Object.freeze({
   saveSettings: patch => invoke('saveSettings', patch),
   chooseFolder: () => invoke('chooseFolder'),
   openChatGPT: action => invoke('openChatGPT', action),
+  chatgptSend: payload => invoke('chatgptSend', payload),
   chatgptLayout: layout => invoke('chatgptLayout', layout),
   openCodex: id => invoke('openCodex', id),
   petMenu: () => invoke('petMenu'),

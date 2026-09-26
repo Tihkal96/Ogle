@@ -7,6 +7,7 @@ const { pathToFileURL } = require('node:url');
 const { SettingsStore } = require('./settings.cjs');
 const { CodexBridge } = require('./codex-bridge.cjs');
 const { ChatGPTPanel } = require('./chatgpt-panel.cjs');
+const { sendChatGPT } = require('./chatgpt-composer.cjs');
 const { DockFiles } = require('./files.cjs');
 const { TerminalManager } = require('./terminal-manager.cjs');
 const { PetLibrary } = require('./pet-library.cjs');
@@ -59,7 +60,7 @@ app.whenReady().then(async () => {
   win = new BrowserWindow({ title: 'Ogle', width: Math.min(600, area.width), height: Math.min(200, area.height), x: area.x + Math.max(0, area.width - 620), y: area.y + Math.max(0, area.height - 220), transparent: true, frame: false, resizable: false, backgroundColor: '#00000000', alwaysOnTop: store.value.alwaysOnTop, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== indexUrl) event.preventDefault(); });
-  chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}) });
+  chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}) });
   files = new DockFiles(win);
   petLibrary = new PetLibrary(path.join(root,'assets/pets'),{fetcher:(...args)=>net.fetch(...args)});
   await updatePetIcon();
@@ -112,6 +113,12 @@ app.whenReady().then(async () => {
     return result.canceled ? null : result.filePaths[0];
   });
   register('openChatGPT', action => chatgpt.show(action));
+  register('chatgptSend', async payload => {
+    await chatgpt.show();
+    const contents=chatgpt.view.webContents,deadline=Date.now()+10000;
+    while(!contents.isDestroyed() && contents.isLoadingMainFrame() && Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,50));
+    return sendChatGPT(contents,payload);
+  });
   register('chatgptLayout', layout => chatgpt.layout(layout));
   register('openCodex', id => shell.openExternal(id ? `codex://threads/${encodeURIComponent(string(id, 'task ID'))}` : 'codex://'));
   register('petDrag', action => {
@@ -166,7 +173,7 @@ app.whenReady().then(async () => {
     else if (action === 'pin') { const pinned = !win.isAlwaysOnTop(); win.setAlwaysOnTop(pinned); store.update({ alwaysOnTop: pinned }); return pinned; }
     else if (['collapse','expand','idle','reveal','quick','picker'].includes(action)) resize(action);
     else throw new Error('Unknown window action');
-    return { expanded,mode:layoutMode };
+    return { expanded,mode:layoutMode,bounds:win.getBounds() };
   });
   await win.loadFile(indexPath);
   resize();
