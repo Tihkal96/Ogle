@@ -309,7 +309,7 @@ const idleAnimation=new window.OgleIdleAnimation();
 let lastFrame=-1,lastGeneration=-1;
 function animate(time) {
   if(state.reactionUntil && time>=state.reactionUntil && ['review','failed'].includes(state.petState))updatePetState();
-  const flourish=idleAnimation.tick(time,state.petState==='idle',animations);
+  const flourish=idleAnimation.tick(time,state.petState,animations);
   const visualState=flourish?.name || state.petState;
   canvas.dataset.state=visualState;
   const [row,count,duration]=animations[visualState] || animations.idle;

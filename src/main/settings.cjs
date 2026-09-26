@@ -36,7 +36,7 @@ function validatePatch(patch) {
       }
       return result;
     });
-    if(key==='shortcuts' && clean[key].filter(item=>item.pinned).length>5)throw new Error('Pin up to five links to the toolbar.');
+    if(key==='shortcuts' && clean[key].filter(item=>item.pinned).length>7)throw new Error('Pin up to seven links to the toolbar.');
   }
   if (Object.hasOwn(patch, 'toolbarOrder')) {
     if (!Array.isArray(patch.toolbarOrder) || patch.toolbarOrder.some(x => typeof x !== 'string') || patch.toolbarOrder.length > 100) throw new Error('Invalid toolbar order');
