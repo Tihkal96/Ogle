@@ -57,3 +57,8 @@ test('invalid settings cannot overwrite saved content', () => {
   assert.throws(() => validatePatch({ pinnedThreads: [12] }));
   assert.deepEqual(validatePatch({ unexpected: 'ignored' }), {});
 });
+
+test('pet click actions validate and preserve a chosen behavior',()=>{
+ for(const value of ['codex','animation','expand','reveal','toggle','chatgpt','none'])assert.equal(validatePatch({petClickAction:value}).petClickAction,value);
+ assert.throws(()=>validatePatch({petClickAction:'execute script'}),/pet click action/);
+});

@@ -10,19 +10,33 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
 
  await page.evaluate(()=>{state.selected={id:'draft-task',name:'Draft task'};state.settings.drafts={'draft-task':'Codex draft',__chatgpt__:'GPT draft'};return setMode('quick');});
  assert.equal(await page.locator('#prompt').inputValue(),'Codex draft');
- await page.locator('#conversation-strip').dispatchEvent('contextmenu');
+ await page.locator('#conversation-name').click({button:'right'});
  assert.equal(await page.locator('#chat-target-menu').isVisible(),true);
- await page.locator('[data-chat-target="chatgpt"]').evaluate(el=>el.click());
+ await page.locator('[data-chat-target="chatgpt"]').click();
  await page.waitForFunction(()=>state.settings.compactChatTarget==='chatgpt'&&$('chat-target-menu').hidden);
  assert.equal(await page.locator('#conversation-name').textContent(),'Write prompt…');
  assert.equal(await page.locator('#prompt').inputValue(),'GPT draft');
  assert.equal(await page.locator('#conversation-picker-toggle').isHidden(),true);
- await page.locator('#chat-target-toggle').evaluate(el=>el.click());
- await page.locator('[data-chat-target="codex"]').evaluate(el=>el.click());
+ await page.locator('#chat-target-toggle').click();
+ // The upper menu item overlaps the native draggable pet stage. DOM clicks
+ // bypass that Windows hit-test, so assert the no-drag region and use pointer clicks.
+ assert.equal(await page.locator('#chat-target-menu').evaluate(el=>getComputedStyle(el).webkitAppRegion),'no-drag');
+ assert.equal(await page.locator('[data-chat-target="codex"]').evaluate(el=>getComputedStyle(el).webkitAppRegion),'no-drag');
+ await page.locator('[data-chat-target="codex"]').click();
  await page.waitForFunction(()=>state.settings.compactChatTarget==='codex'&&$('chat-target-menu').hidden);
  assert.equal(await page.locator('#prompt').inputValue(),'Codex draft');
  assert.equal(await page.locator('#conversation-picker-toggle').isVisible(),true);
- await page.locator('#chat-target-toggle').evaluate(el=>el.click());
+ // Both choices also work in the horizontal-only bar, with the upper item
+ // extending into the pet stage rather than a quick-compose panel.
+ await page.evaluate(()=>setMode('reveal'));
+ for(const target of ['chatgpt','codex']){
+  await page.locator('#chat-target-toggle').click();
+  const geometry=await page.locator('[data-chat-target="codex"]').evaluate(el=>({top:el.getBoundingClientRect().top,stageBottom:document.querySelector('.pet-stage').getBoundingClientRect().bottom}));
+  assert.ok(geometry.top<geometry.stageBottom,'upper destination row overlaps the draggable stage');
+  await page.locator(`[data-chat-target="${target}"]`).click();
+  await page.waitForFunction(value=>state.settings.compactChatTarget===value&&$('chat-target-menu').hidden,target);
+ }
+ await page.locator('#chat-target-toggle').click();
  await page.evaluate(()=>setMode('idle'));
  assert.equal(await page.locator('#chat-target-menu').isHidden(),true);
  await page.evaluate(()=>saveQueue);

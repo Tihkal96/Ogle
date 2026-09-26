@@ -1,5 +1,6 @@
 'use strict';
 const { app, BrowserWindow, ipcMain, dialog, screen, Notification, shell, Menu, net, nativeImage } = require('electron');
+if (process.argv.includes('--persistent-terminal-worker')) { require('./persistent-admin-worker.cjs').runPersistentWorker(); return; }
 if (process.argv.includes('--terminal-worker')) { require('./terminal-worker.cjs').runWorker(); return; }
 const fs = require('node:fs');
 const path = require('node:path');
@@ -10,7 +11,7 @@ const { ChatGPTPanel } = require('./chatgpt-panel.cjs');
 const { sendChatGPT } = require('./chatgpt-composer.cjs');
 const { DockFiles } = require('./files.cjs');
 const windowsTools=require('./windows-tools.cjs').createWindowsTools();
-const fileSearch=require('./file-search.cjs').createFileSearch();
+const fileSearch=require('./file-search.cjs').createFileSearch({dataDir:()=>app.getPath('userData'),roots:()=>['desktop','documents','downloads','pictures','music','videos'].map(name=>app.getPath(name))});
 const { TerminalManager } = require('./terminal-manager.cjs');
 const { PetLibrary } = require('./pet-library.cjs');
 const { dockBounds } = require('./window-layout.cjs');
@@ -68,7 +69,7 @@ app.whenReady().then(async () => {
   files = new DockFiles(win);
   petLibrary = new PetLibrary(path.join(root,'assets/pets'),{fetcher:(...args)=>net.fetch(...args)});
   await updatePetIcon();
-  terminals = new TerminalManager({ onEvent: send, executable: process.execPath, workerArgs: app.isPackaged ? [] : [app.getAppPath()] });
+  terminals = new TerminalManager({ packaged:app.isPackaged && !process.env.PETDOCK_DATA_DIR,onEvent: send, executable: process.execPath, workerArgs: app.isPackaged ? [] : [app.getAppPath()] });
   let lastInside;
   pointerTimer = setInterval(() => {
     if (!win || win.isDestroyed()) return;
@@ -175,6 +176,9 @@ app.whenReady().then(async () => {
   register('terminalResize', (id, cols, rows) => terminals.resize(id, cols, rows));
   register('terminalClose', id => terminals.close(id));
   register('terminalReleaseAdmin',()=>terminals.releaseAdmin());
+  register('terminalAdminStatus',()=>terminals.adminStatus());
+  register('terminalEnableAdmin',()=>terminals.enableAdmin());
+  register('terminalDisableAdmin',()=>terminals.disableAdmin());
   register('windowAction', action => {
     if (action === 'close') app.quit();
     else if (action === 'minimize') win.minimize();
@@ -193,5 +197,11 @@ app.whenReady().then(async () => {
   resize();
   win.show();
 });
-app.on('before-quit', () => { clearInterval(pointerTimer); chatgpt?.close(); bridge?.close(); terminals?.dispose(); });
+let quitReady=false;
+app.on('before-quit', event => {
+  if(quitReady)return;
+  event.preventDefault();clearInterval(pointerTimer);chatgpt?.close();bridge?.close();terminals?.dispose();
+  let timeout;
+  Promise.race([fileSearch.dispose(),new Promise(resolve=>{timeout=setTimeout(resolve,5000);})]).catch(()=>{}).finally(()=>{clearTimeout(timeout);quitReady=true;app.quit();});
+});
 app.on('window-all-closed', () => app.quit());
