@@ -21,6 +21,10 @@ window.PetDockSettings = (() => {
     const appearance=section('Appearance');select(appearance,'Theme','theme',[['dark','Graphite'],['light','Paper'],['midnight','Midnight']], 'dark');
     const clock=section('Clock & date');check(clock,'Show time','showTime',true);select(clock,'Time format','timeFormat',[['24h','24-hour'],['12h','12-hour']], '24h');check(clock,'Show date','showDate',false);select(clock,'Date format','dateFormat',[['locale','System format'],['iso','YYYY-MM-DD']], 'locale');
     const behavior=section('Dock behavior','Hover to reveal the compact toolbar. Choose a tool to open its panel. Pin keeps the toolbar visible while Auto is enabled.');check(behavior,'Reveal toolbar on hover','autoExpand',true);check(behavior,'Show Codex task list','sidebarVisible',true);
+    const delayRow=el('label',null,'settings-row');delayRow.append(el('span','Auto-collapse delay (seconds)'));
+    const delay=el('input');delay.type='number';delay.dataset.setting='autoCollapseDelay';delay.min='1';delay.max='120';delay.step='1';delay.value=String((settings.autoCollapseDelay ?? 10000)/1000);
+    delay.onchange=async()=>{try{const seconds=Number(delay.value);if(!Number.isInteger(seconds)||seconds<1||seconds>120)throw new Error('Choose an auto-collapse delay from 1 to 120 seconds.');await save({autoCollapseDelay:seconds*1000});apply();}catch(err){delay.value=String((settings.autoCollapseDelay ?? 10000)/1000);report(err);}};
+    delayRow.append(delay);behavior.append(delayRow);
     const startup=section('Windows startup','Start Ogle when you sign in to Windows. Ogle starts Codex only when it is not already running.');check(startup,'Start with Windows','autoStart',true);
     const admin=section('Administrator terminals','Admin shells reuse one Windows approval until Ogle exits or you release access. Releasing closes every administrator shell.');
     const adminStatus=el('p',null,'settings-hint'),adminActions=el('div',null,'settings-actions');

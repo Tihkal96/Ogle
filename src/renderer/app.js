@@ -155,6 +155,7 @@ $('panel-pin').onclick=()=>{
   $('panel-pin').setAttribute('aria-pressed',String(state.panelPinned));$('panel-pin').title=state.panelPinned?'Let dock hide automatically':'Keep dock open';
 };
 let hoverTimer,quickIdleTimer;
+function autoCollapseDelay() { const value=Number(state.settings.autoCollapseDelay);return Number.isFinite(value)&&value>=1000&&value<=120000?value:10000; }
 function resetQuickIdle() {
   if(state.mode!=='quick')return;
   clearTimeout(quickIdleTimer);
@@ -162,25 +163,27 @@ function resetQuickIdle() {
     if(state.mode!=='quick')return;
     if(window.PetDockAttachments?.isBusy()){quickIdleTimer=setTimeout(foldWhenReady,250);return;}
     persistDraft();state.suppressHoverReveal=true;setMode('idle');
-  },5000);
+  },autoCollapseDelay());
 }
 for(const event of ['pointermove','pointerdown','keydown','input','paste','wheel'])document.addEventListener(event,activity=>{
   if(activity.type==='pointermove' && state.suppressHoverReveal){state.suppressHoverReveal=false;if(activity.target.closest?.('#bar-orb'))pointerInside(true);}
   resetQuickIdle();
 },{passive:true});
 function pointerInside(inside) {
-  clearTimeout(hoverTimer);
+  state.pointerInside=inside;clearTimeout(hoverTimer);
   if(state.settings.autoExpand===false)return;
   if(inside) {if(state.mode==='idle' && !petPress && !state.suppressHoverReveal)hoverTimer=setTimeout(()=>{if(!petPress && state.mode==='idle')setMode('reveal');},120);return;}
   if(state.mode==='quick' || state.mode==='picker' || state.panelPinned || document.querySelector('.approval') || window.PetDockAttachments?.hasImages() || window.PetDockAttachments?.isBusy())return;
   hoverTimer=setTimeout(()=>{
     const typing=['TEXTAREA','INPUT','SELECT'].includes(document.activeElement?.tagName)||!!document.activeElement?.closest('.cm-editor');
     if(!typing && state.mode!=='idle')setMode('idle');
-  },700);
+  },autoCollapseDelay());
 }
 $('bar-orb').addEventListener('mouseenter',()=>pointerInside(true));
 $('bar-orb').addEventListener('mouseleave',()=>{if(state.mode==='idle')clearTimeout(hoverTimer);});
 document.querySelector('.toolbar').addEventListener('mouseenter',()=>pointerInside(true));
+$('conversation-strip').addEventListener('mouseenter',()=>pointerInside(true));
+$('conversation-strip').addEventListener('mouseleave',()=>{if(state.mode==='reveal')pointerInside(false);});
 document.querySelector('.toolbar').addEventListener('mouseleave',()=>{if(state.mode==='reveal')pointerInside(false);});
 $('dock').addEventListener('mouseleave',()=>{if(state.nativePointerInside!==true)pointerInside(false);});
 function approval(event) { const box = document.createElement('div'); box.className = 'approval'; const heading = document.createElement('strong'); heading.textContent = 'Codex needs your approval'; const description = document.createElement('p'); description.textContent = event.params?.reason || event.params?.command || event.method; const detail = document.createElement('p'); detail.textContent = `Task: ${title(state.threads.find(t => t.id === event.params?.threadId))} (${event.params?.threadId || 'unknown'})\n${event.params?.cwd || ''}`; box.append(heading,description,detail); const supported = ['item/commandExecution/requestApproval','item/fileChange/requestApproval'].includes(event.method); if (supported) for (const [label,decision] of [['Approve','accept'],['Decline','decline']]) { const button = document.createElement('button'); button.textContent = label; button.className = decision; button.onclick = () => attempt(async () => { await api.respond(event.id,{decision}); box.remove(); updateComposer(); }); box.append(button); } else { const text = document.createElement('p'); text.textContent = 'This request requires a response type not yet supported by the dock.'; box.append(text); } $('approvals').append(box); if (state.collapsed) collapse(false); updateComposer(); }
@@ -252,9 +255,11 @@ function applySettings() {
   window.PetDockEditor?.applyTheme?.(state.settings.theme || 'dark');window.PetDockTerminal?.applyTheme?.(state.settings.theme || 'dark');
   if (state.settings.autoExpand === false) {state.panelPinned=false;$('panel-pin').classList.remove('active');$('panel-pin').setAttribute('aria-pressed','false');clearTimeout(hoverTimer);}
   document.querySelector('.sidebar').hidden=state.settings.sidebarVisible === false;
-  for(const input of document.querySelectorAll('#settings-panel [data-setting]')) { const value=state.settings[input.dataset.setting];if(value!==undefined){if(input.type==='checkbox')input.checked=Boolean(value);else input.value=value;} }
+  for(const input of document.querySelectorAll('#settings-panel [data-setting]')) { const value=state.settings[input.dataset.setting];if(value!==undefined){if(input.type==='checkbox')input.checked=Boolean(value);else input.value=input.dataset.setting==='autoCollapseDelay'?value/1000:value;} }
   const chosen=pets.find(p=>p.id===state.settings.petId) || pets[0]; if(chosen && petImage.src!==chosen.spriteUrl) petImage.src=chosen.spriteUrl;
   clock();
+  const nextDelay=autoCollapseDelay(),delayChanged=state.lastAutoCollapseDelay!==undefined && state.lastAutoCollapseDelay!==nextDelay;state.lastAutoCollapseDelay=nextDelay;
+  if(delayChanged){if(state.mode==='quick')resetQuickIdle();else if(state.pointerInside===false)pointerInside(false);}
 }
 clock();setInterval(clock,1000);
 let refreshing=false;
@@ -277,7 +282,7 @@ api.onEvent(onEvent);
 attempt(async () => {
   const boot=await api.boot(); state.settings=boot.settings || {}; pets=boot.pets || [];
   window.PetDockEditor?.mount($('editor-panel'),api,state.settings,save,error);
-  window.PetDockShortcuts?.mount($('shortcuts-panel'),api,state.settings,save,error);
+  window.PetDockShortcuts?.mount($('shortcuts-panel'),api,state.settings,save,error,()=>switchPanel('shortcuts'));
   window.PetDockTerminal?.mount($('terminal-panel'),api);
   window.PetDockSettings?.mount($('settings-panel'),api,state.settings,pets,save,applySettings,error,async()=>{const fresh=await api.boot();pets=fresh.pets || [];return pets;},()=>switchPanel('chatgpt'));
   state.threads=Array.isArray(boot.threads)?boot.threads:boot.threads?.data || [];state.cursor=boot.threads?.nextCursor;

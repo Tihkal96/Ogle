@@ -5,6 +5,19 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { SettingsStore, validatePatch } = require('../src/main/settings.cjs');
+
+test('up to five shortcut pins persist and excess pins are rejected atomically',()=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ogle-pins-')),file=path.join(dir,'settings.json');
+  try {
+    const store=new SettingsStore(file);
+    const shortcuts=Array.from({length:5},(_,i)=>({id:String(i),name:`Link ${i}`,path:`https://example.com/${i}`,kind:'url',pinned:true}));
+    store.update({shortcuts});
+    assert.equal(new SettingsStore(file).value.shortcuts.filter(item=>item.pinned).length,5);
+    assert.throws(()=>store.update({shortcuts:[...shortcuts,{id:'six',kind:'group',name:'Six',pinned:true}]}),/five links/);
+    assert.equal(new SettingsStore(file).value.shortcuts.length,5);
+    assert.throws(()=>validatePatch({shortcuts:[{id:'x',pinned:'true'}]}),/shortcut pin/);
+  }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
 test('icon-layout migration is once-only and startup defaults on',()=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'petdock-migrate-')),file=path.join(dir,'settings.json');
   try {
@@ -19,9 +32,14 @@ test('notes, independent drafts and pins survive reopening', () => {
   const file = path.join(dir, 'settings.json');
   const store = new SettingsStore(file);
   assert.equal(store.value.petId, 'rinne-mini');
+  assert.equal(store.value.autoCollapseDelay, 10000);
   store.update({ note: 'my note\nsecond line', drafts: { one: 'draft 1', two: 'draft 2' }, pinnedThreads: ['two'] });
   store.update({ petId: 'lago-cartoon' });
+  store.update({ autoCollapseDelay: 12000 });
   const reopened = new SettingsStore(file);
+  assert.equal(reopened.value.autoCollapseDelay, 12000);
+  assert.throws(()=>validatePatch({autoCollapseDelay:999}),/autoCollapseDelay/);
+  assert.throws(()=>validatePatch({autoCollapseDelay:120001}),/autoCollapseDelay/);
   assert.equal(reopened.value.note, 'my note\nsecond line');
   assert.equal(reopened.value.drafts.one, 'draft 1');
   assert.equal(reopened.value.drafts.two, 'draft 2');

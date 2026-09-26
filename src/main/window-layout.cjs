@@ -1,6 +1,6 @@
 'use strict';
 function dockBounds(mode, bounds, area, scale = 1) {
-  const heights = { idle: 180, reveal: 180, quick: 350, picker: 470, expand: 820 };
+  const heights = { idle: 180, reveal: 216, quick: 386, picker: 506, expand: 820 };
   if (!Object.hasOwn(heights, mode)) throw new Error('Unknown dock layout');
   const width = Math.min(mode === 'expand' ? 760 : mode === 'idle' ? Math.max(220, Math.round(192*scale+24)) : 600, area.width);
   const height = Math.min(Math.round(heights[mode]+(mode==='expand'?145:128)*(scale-1)),area.height);
