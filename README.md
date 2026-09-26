@@ -8,7 +8,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.6](https://github.com/Tihkal96/Ogle/releases/download/v0.5.6/Ogle-0.5.6-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.7](https://github.com/Tihkal96/Ogle/releases/download/v0.5.7/Ogle-0.5.7-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -38,6 +38,12 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 ## Release checklist for maintainers and AI agents
 
 Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release.
+
+## Version 0.5.7
+
+After a minute of uninterrupted idle, the pet plays one random wave or happy animation, then returns to idle for another minute. Working, approvals, hover and completion reactions take priority. The horizontal ChatGPT bar says “Write prompt…”. Its arrow or right-click menu switches between Codex and ChatGPT while keeping their drafts separate.
+
+Codex conversations open at the latest message on first selection and remember where you scrolled when switching tasks or panels during the session. While Codex is working, **Queue** captures your prompt and images for that task. Queued prompts send one at a time after confirmed completion; use **Remove** to cancel one. Failed sends stay paused with an explicit **Retry** button; check the conversation before retrying an uncertain send. Queues are local to the running Ogle session (up to 20 prompts per task), and wait through approval requests. This queues the next turn rather than interrupting or steering the active turn.
 
 ## Version 0.5.6
 

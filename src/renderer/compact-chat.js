@@ -32,3 +32,25 @@ async function chooseCompactTarget() {
   }
   dialog.showModal();
 }
+
+function closeChatTargetMenu(){
+  $('chat-target-menu').hidden=true;$('chat-target-toggle').setAttribute('aria-expanded','false');
+}
+function openChatTargetMenu(){
+  const menu=$('chat-target-menu');menu.hidden=false;
+  $('chat-target-toggle').setAttribute('aria-expanded','true');
+  for(const button of menu.children)button.setAttribute('aria-checked',String(button.dataset.chatTarget===(state.settings.compactChatTarget || 'codex')));
+  menu.querySelector('[aria-checked="true"]').focus();
+}
+function mountChatTargetMenu(){
+  $('chat-target-toggle').onclick=()=>{$('chat-target-menu').hidden?openChatTargetMenu():closeChatTargetMenu();};
+  $('conversation-strip').oncontextmenu=event=>{event.preventDefault();openChatTargetMenu();};
+  for(const button of $('chat-target-menu').children)button.onclick=()=>attempt(async()=>{
+    persistDraft();await save({compactChatTarget:button.dataset.chatTarget});closeChatTargetMenu();applySettings();
+    if(state.mode==='picker')await setMode('reveal');
+    if(state.mode==='quick')$('prompt').focus();
+  });
+  document.addEventListener('pointerdown',event=>{if(!event.target.closest('#chat-target-menu,#chat-target-toggle'))closeChatTargetMenu();});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('chat-target-menu').hidden){closeChatTargetMenu();$('chat-target-toggle').focus();}});
+  $('chat-target-menu').addEventListener('keydown',event=>{if(['ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const buttons=[...$('chat-target-menu').children];buttons[(buttons.indexOf(document.activeElement)+1)%buttons.length].focus();}});
+}
