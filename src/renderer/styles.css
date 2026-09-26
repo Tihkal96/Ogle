@@ -50,3 +50,7 @@ body:not(.collapsed) .toolbar .tool{min-width:28px;padding-left:5px;padding-righ
 #pinned-links:not([hidden]){border-left:1px solid var(--border);padding-left:5px;margin-left:4px}
 .message{content-visibility:auto;contain-intrinsic-size:auto 100px}
 .links-remove-dialog{max-width:420px;border:1px solid var(--border);border-radius:6px;padding:22px;background:var(--surface);color:var(--text)}.links-remove-dialog::backdrop{background:#0008}.links-remove-dialog p{color:var(--muted);line-height:1.5}.links-remove-dialog button{padding:8px 14px;background:var(--raised);margin-right:8px}
+
+#conversation-strip{position:relative}#chat-target-toggle{width:30px;height:30px;flex:none;border-left:1px solid var(--border);border-radius:0}#chat-target-menu{position:absolute;right:0;bottom:calc(100% + 4px);z-index:50;min-width:130px;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;box-shadow:0 4px 16px #0004}#chat-target-menu button{display:block;width:100%;text-align:left;padding:8px 12px}#chat-target-menu button[aria-checked="true"]{background:var(--raised);color:var(--accent)}
+
+#codex-queue{max-height:95px;overflow:auto;margin-bottom:6px}.queued-prompt{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px}.queued-prompt span{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.queued-prompt small{color:var(--muted)}.queued-prompt button{padding:3px 6px;border:1px solid var(--border);flex:none}
