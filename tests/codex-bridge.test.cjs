@@ -159,3 +159,43 @@ test('image inputs validate types, decoding, count and pixel limits before conne
   assert.throws(() => promptInputs('', [{ type: 'image', url: 'data:image/png;base64,' + oversized.toString('base64') }]), /dimensions/);
   const { bridge, sent } = fixture(); await assert.rejects(bridge.sendTurn('thread', '', [{ type: 'localImage', path: 'C:/secret.png' }]), /Invalid image/); assert.equal(sent.length, 0);
 });
+
+test('UI history omits reasoning and tool payloads while preserving all visible messages', () => {
+  const turns = Array.from({length: 250}, (_, i) => ({turnId: String(i), status: 'completed', items: [
+    {id: `u${i}`, type: 'userMessage', content: [{type:'text', text:'question'}, {type:'image',url:'large'}]},
+    {id: `r${i}`, type: 'reasoning', text:'private thinking'},
+    {id: `t${i}`, type: 'commandExecution', aggregatedOutput:'large output'},
+    {id: `a${i}`, type: 'agentMessage', text:'answer'}
+  ]}));
+  const projected = desktopThread({id:'t', turns});
+  assert.equal(projected.thread.turns.length, 250);
+  assert.deepEqual(projected.thread.turns[0].items.map(i=>i.type), ['userMessage','agentMessage']);
+  assert.equal(projected.thread.turns[0].items[0].text, 'question\n[Image]');
+  assert.equal(JSON.stringify(projected).includes('private thinking'), false);
+});
+
+test('stream burst coalesces answer deltas, ignores thinking and preserves completion ordering', async () => {
+  const {bridge,children}=fixture(); await bridge.connect(); const events=[];
+  bridge.on('notification', e=>events.push(e));
+  for(let i=0;i<1000;i++) {
+    children[0].reply({method:'item/reasoning/textDelta',params:{delta:'thinking'}});
+    children[0].reply({method:'item/commandExecution/outputDelta',params:{delta:'output'}});
+    children[0].reply({method:'item/agentMessage/delta',params:{threadId:'t',itemId:'a',delta:'x'}});
+  }
+  assert.equal(events.length,0);
+  children[0].reply({method:'turn/completed',params:{threadId:'t',turn:{id:'turn',status:'completed'}}});
+  assert.deepEqual(events.map(e=>e.method),['item/agentMessage/delta','turn/completed']);
+  assert.equal(events[0].params.delta.length,1000);
+  bridge.close();
+});
+
+test('desktop thinking patches update transport revision without repeated UI snapshots', async () => {
+  const desktop = new DesktopIpc(), events=[]; desktop.followed.add('t'); desktop.on('state',e=>events.push(e));
+  const deliver=change=>desktop._receive({type:'broadcast',method:'thread-stream-state-changed',version:11,params:{hostId:'local',conversationId:'t',change}});
+  deliver({type:'snapshot',revision:1,conversationState:{id:'t',threadRuntimeStatus:{type:'active'},turns:[{turnId:'turn',status:'inProgress',items:[{id:'r',type:'reasoning',text:''},{id:'a',type:'agentMessage',text:''}]}]}});
+  await new Promise(r=>setTimeout(r,150)); assert.equal(events.length,1);
+  for(let revision=2;revision<=1001;revision++) deliver({type:'patches',baseRevision:revision-1,revision,patches:[{op:'replace',path:['turns',0,'items',0,'text'],value:'thinking '+revision}]});
+  await new Promise(r=>setTimeout(r,150)); assert.equal(events.length,1); assert.equal(desktop.states.get('t').revision,1001);
+  deliver({type:'patches',baseRevision:1001,revision:1002,patches:[{op:'replace',path:['turns',0,'items',1,'text'],value:'final answer'},{op:'replace',path:['threadRuntimeStatus'],value:{type:'idle'}}]});
+  await new Promise(r=>setTimeout(r,150)); assert.equal(events.length,2); assert.equal(events[1].runtime.running,false); assert.equal(events[1].thread.turns[0].items[0].text,'final answer'); desktop.close();
+});

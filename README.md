@@ -8,7 +8,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.4](https://github.com/Tihkal96/Ogle/releases/download/v0.5.4/Ogle-0.5.4-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.6](https://github.com/Tihkal96/Ogle/releases/download/v0.5.6/Ogle-0.5.6-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -34,6 +34,14 @@ Ogle is the new project and application name. Existing user data remains under `
 ## Contributing
 
 Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch in your fork, and open a pull request. **@Tihkal96 reviews and merges contributions; contributors do not push directly to the upstream repository.** See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and checks. [CODEOWNERS](.github/CODEOWNERS) assigns review ownership; it does not by itself enforce repository permissions or branch protection.
+
+## Release checklist for maintainers and AI agents
+
+Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release.
+
+## Version 0.5.6
+
+Links now asks before removal and discards unfinished edits when navigating away, collapsing or leaving the dock. A vertical separator distinguishes Links from pinned shortcuts. Codex displays user/assistant messages without streaming thinking or tool output into the UI. Message updates are batched and paused while hidden; switching between full panels avoids hiding/resizing an unchanged window.
 
 ## Version 0.5.5
 

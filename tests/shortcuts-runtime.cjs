@@ -37,6 +37,7 @@ const assert = require('node:assert/strict');
     await page.waitForTimeout(300);
     assert.ok(stored().shortcuts.some(x=>x.kind==='url'&&x.parentId==='group-b'&&x.path.includes('electronjs.org')),'External URL drop persisted inside target group');
     await page.locator('.links-entry[data-id="group-b"] > .links-row button[title^="Remove group"]').click();
+    await page.getByRole('dialog',{name:'Confirm removal'}).getByRole('button',{name:'Remove',exact:true}).click();
     await page.waitForTimeout(150);
     assert.ok(stored().shortcuts.some(x=>x.path?.includes('electronjs.org')&&x.parentId==='group-a'),'Removing group preserves its links');
     await page.evaluate(()=>{const input=document.createElement('input');input.type='file';input.id='drop-fixture';input.hidden=true;document.body.append(input);});

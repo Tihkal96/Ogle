@@ -6,6 +6,7 @@ class WindowTransition {
   async begin(mode,reducedMotion=false){
     const win=this.win,from=win.getBounds();
     const target=dockBounds(mode,from,this.getArea(from),this.getScale());
+    if(['x','y','width','height'].every(key=>target[key]===from[key]))return {unchanged:true};
     // Move the existing surface to its final pet anchor before changing size.
     // Resizing and repositioning together exposes a stale DWM frame on Windows.
     const x=Math.round(target.x+target.width/2-from.width/2),y=target.y;

@@ -46,3 +46,7 @@
 body:not(.collapsed) .toolbar .tool{min-width:28px;padding-left:5px;padding-right:5px}body:not(.collapsed) .toolbar time{max-width:80px;overflow:hidden;text-overflow:ellipsis}
 
 @media(max-width:680px){body:not(.collapsed) .toolbar .tool span{display:none}}
+
+#pinned-links:not([hidden]){border-left:1px solid var(--border);padding-left:5px;margin-left:4px}
+.message{content-visibility:auto;contain-intrinsic-size:auto 100px}
+.links-remove-dialog{max-width:420px;border:1px solid var(--border);border-radius:6px;padding:22px;background:var(--surface);color:var(--text)}.links-remove-dialog::backdrop{background:#0008}.links-remove-dialog p{color:var(--muted);line-height:1.5}.links-remove-dialog button{padding:8px 14px;background:var(--raised);margin-right:8px}

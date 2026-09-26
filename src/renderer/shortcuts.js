@@ -30,6 +30,7 @@ const ShortcutModel = {
 };
 if (typeof module !== 'undefined') module.exports = ShortcutModel;
 if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
+  let discardCurrentEdit = () => {};
   function mount(root, api, settings, save, report, showPanel = () => {}) {
     let items = Array.isArray(settings.shortcuts) ? settings.shortcuts.map(item => ({ ...item })) : [];
     let mode = settings.shortcutsView === 'details' ? 'details' : 'icons';
@@ -42,6 +43,34 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     const spacer = document.createElement('span'); spacer.className = 'spacer'; toolbar.append(spacer);
     const destination = document.createElement('select'); destination.setAttribute('aria-label', 'Add links to'); toolbar.append(destination);
     const form = document.createElement('form'); form.className = 'links-form'; form.hidden = true;
+    const removal = document.createElement('dialog'); removal.className = 'links-remove-dialog';
+    removal.setAttribute('aria-label', 'Confirm removal');
+    function discardEdit() {
+      form.hidden = true; form.replaceChildren(); form.onsubmit = null;
+      if (removal.open) removal.close();
+      removal.replaceChildren();
+    }
+    discardCurrentEdit = discardEdit;
+    function confirmRemove(entry) {
+      discardEdit();
+      const heading = document.createElement('h3'); heading.textContent = `Remove ${entry.kind === 'group' ? 'group' : 'link'}?`;
+      const explanation = document.createElement('p');
+      explanation.textContent = `Remove “${entry.alias || entry.name}” from Links?` + (entry.kind === 'group' ? ' Its links will be kept in the parent group.' : ' The original file or website will not be deleted.');
+      const cancel = button('Cancel', discardEdit);
+      const approve = button('Remove', async () => { discardEdit(); await commit(ShortcutModel.remove(items, entry.id)); });
+      removal.append(heading, explanation, cancel, approve); removal.showModal(); cancel.focus();
+    }
+    removal.addEventListener('cancel', event => { event.preventDefault(); discardEdit(); });
+    // Navigation away discards drafts; form inputs and its explicit Save remain untouched.
+    root.addEventListener('pointerdown', event => {
+      if (!form.hidden && !form.contains(event.target) && !removal.contains(event.target)) discardEdit();
+    }, true);
+    root.addEventListener('focusin', event => {
+      if (!form.hidden && !form.contains(event.target) && !removal.contains(event.target)) discardEdit();
+    });
+    root.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && (!form.hidden || removal.open)) { event.preventDefault(); event.stopImmediatePropagation(); discardEdit(); }
+    }, true);
     const content = document.createElement('div'); content.className = 'links-content';
     const navigation = document.createElement('nav'); navigation.className = 'links-navigation'; navigation.setAttribute('aria-label', 'Link folder navigation');
     const rootDrop = document.createElement('div'); rootDrop.className = 'links-root-drop'; rootDrop.textContent = 'Top level · drop files, folders, URLs or links here'; rootDrop.tabIndex = 0;
@@ -99,8 +128,8 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       render();
     }
     function field(label, value = '') { const wrapper = document.createElement('label'); wrapper.textContent = label; const input = document.createElement('input'); input.value = value; input.setAttribute('aria-label', label); wrapper.append(input); form.append(wrapper); return input; }
-    function startForm() { form.replaceChildren(); form.hidden = false; }
-    function finishForm(handler, label = 'Save') { const submit = button(label, handler); submit.dataset.submit = 'true'; form.append(submit, button('Cancel', () => { form.hidden = true; })); form.onsubmit = e => { e.preventDefault(); invoke(handler); }; }
+    function startForm() { discardEdit(); form.hidden = false; }
+    function finishForm(handler, label = 'Save') { const submit = button(label, handler); submit.dataset.submit = 'true'; form.append(submit, button('Cancel', discardEdit)); form.onsubmit = e => { e.preventDefault(); invoke(handler); }; }
     async function imported(payload, parentId = destination.value || null) {
       const result = await api.importShortcuts(payload);
       if (!Array.isArray(result)) throw new Error('Could not import these links.');
@@ -211,7 +240,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       if (!filesystemEntry) {
         const actions = document.createElement('span'); actions.className = 'links-entry-actions';
         const pin=button(entry.pinned?'◆':'◇',()=>togglePin(entry),entry.pinned?'Unpin from toolbar':'Pin to toolbar');pin.className='links-pin';pin.setAttribute('aria-pressed',String(Boolean(entry.pinned)));pin.setAttribute('aria-label',`${entry.pinned?'Unpin':'Pin'} ${entry.alias || entry.name} ${entry.pinned?'from':'to'} toolbar`);actions.append(pin);
-        actions.append(button('✎', () => editForm(entry), 'Rename or edit target'), button('×', () => commit(ShortcutModel.remove(items, entry.id)), entry.kind === 'group' ? 'Remove group; keep its contents in the parent group' : 'Remove link')); line.append(actions);
+        actions.append(button('✎', () => editForm(entry), 'Rename or edit target'), button('×', () => confirmRemove(entry), entry.kind === 'group' ? 'Remove group; keep its contents in the parent group' : 'Remove link')); line.append(actions);
         line.addEventListener('contextmenu', event => { event.preventDefault(); editForm(entry); });
       }
       wrapper.append(line);
@@ -250,7 +279,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     }
     dropTarget(content, () => mode === 'icons' ? currentGroup : null);
     root.addEventListener('keydown', event => { if (event.key === 'Escape' && mode === 'icons' && (currentGroup || folderNavigation.length) && !event.target.matches('input,select,textarea')) { event.preventDefault(); goBack(); } });
-    root.append(toolbar, pinStatus, form, navigation, content); render(); refreshIcons().catch(report);
+    root.append(toolbar, pinStatus, form, navigation, content, removal); render(); refreshIcons().catch(report);
   }
-  return { mount };
+  return { mount, discardEdit: () => discardCurrentEdit() };
 })();

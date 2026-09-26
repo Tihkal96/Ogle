@@ -48,6 +48,22 @@ function applyDesktopPatches(state, patches) {
   }
   return state;
 }
+// Keep transport state intact for revision patches, but send only visible conversation
+// content across Electron IPC. Tool output and reasoning can dwarf the messages.
+function messageItem(item) {
+  if (!['usermessage', 'agentmessage'].includes(item?.type?.toLowerCase())) return null;
+  const text = typeof item.text === 'string' ? item.text : (Array.isArray(item.content) ? item.content : []).map(part => part.text || (part.type?.toLowerCase().includes('image') ? '[Image]' : '')).filter(Boolean).join('\n');
+  return { id: item.id, type: item.type, text };
+}
+function messageTurn(turn) { return { id: turn.turnId || turn.id || turn.params?.clientUserMessageId || 'pending', status: turn.status, error: turn.error, items: (turn.items || []).map(messageItem).filter(Boolean) }; }
+function projectThread(thread) { return { id: thread.id, name: thread.name, cwd: thread.cwd, status: thread.status, turns: (thread.turns || []).map(messageTurn) }; }
+function patchChangesMessages(state, patch) {
+  const index = patch.path.indexOf('items');
+  if (index < 0 || patch.path.length <= index + 2 || patch.op === 'remove') return true;
+  let item = state;
+  for (const key of patch.path.slice(0, index + 2)) item = item?.[key];
+  return ['usermessage', 'agentmessage'].includes(item?.type?.toLowerCase());
+}
 function desktopThread(state) {
   const history = state.turnHistory?.kind === 'canonical' ? state.turnHistory.history : null;
   let turns = state.turns || [];
@@ -55,16 +71,17 @@ function desktopThread(state) {
     const keys = history.islands?.flatMap(island => island.entries?.map(entry => entry.value) || []) || [];
     turns = (keys.length ? keys.map(key => history.entitiesByKey[key]) : Object.values(history.entitiesByKey || {})).filter(Boolean);
   }
-  turns = turns.map(turn => ({ ...turn, id: turn.turnId || turn.params?.clientUserMessageId || 'pending', items: turn.items || [] }));
+  const rawLast = turns.at(-1);
+  turns = turns.map(messageTurn);
   const last = turns.at(-1), requests = state.requests || [], flags = state.threadRuntimeStatus?.activeFlags || [];
   return {
     thread: { id: state.id, name: state.title, cwd: state.cwd, status: state.threadRuntimeStatus, turns },
-    runtime: { source: 'desktop', running: state.threadRuntimeStatus?.type === 'active', turnId: last?.status === 'inProgress' ? last.turnId || undefined : undefined, waitingForApproval: flags.includes('waitingOnApproval') || requests.some(req => /approval/i.test(req.method || req.type || '')), waitingForInput: flags.includes('waitingOnUserInput') || requests.some(req => /requestUserInput|elicitation/i.test(req.method || req.type || '')) },
+    runtime: { source: 'desktop', running: state.threadRuntimeStatus?.type === 'active', turnId: last?.status === 'inProgress' ? rawLast?.turnId || rawLast?.id || undefined : undefined, waitingForApproval: flags.includes('waitingOnApproval') || requests.some(req => /approval/i.test(req.method || req.type || '')), waitingForInput: flags.includes('waitingOnUserInput') || requests.some(req => /requestUserInput|elicitation/i.test(req.method || req.type || '')) },
     requestCount: requests.length
   };
 }
 class DesktopIpc extends EventEmitter {
-  constructor({ connectSocket = net.connect, timeoutMs = 10000 } = {}) { super(); this.connectSocket = connectSocket; this.timeoutMs = timeoutMs; this.pending = new Map(); this.states = new Map(); this.owners = new Map(); this.followed = new Set(); this.timers = new Map(); this.clientId = 'initializing-client'; this.socket = null; this.connecting = null; }
+  constructor({ connectSocket = net.connect, timeoutMs = 10000 } = {}) { super(); this.connectSocket = connectSocket; this.timeoutMs = timeoutMs; this.pending = new Map(); this.states = new Map(); this.owners = new Map(); this.followed = new Set(); this.timers = new Map(); this.signatures = new Map(); this.clientId = 'initializing-client'; this.socket = null; this.connecting = null; }
   async connect() {
     if (this.socket && this.clientId !== 'initializing-client') return;
     if (this.connecting) return this.connecting;
@@ -110,7 +127,14 @@ class DesktopIpc extends EventEmitter {
     else if (change.type === 'patches' && old?.revision === change.baseRevision) { try { old.state = applyDesktopPatches(old.state, change.patches); old.revision = change.revision; } catch { this.states.delete(id); this.follow(id, message.sourceClientId); return; } }
     else { this.follow(id, message.sourceClientId); return; }
     this.emit('snapshot', id);
-    if (!this.timers.has(id)) this.timers.set(id, setTimeout(() => { this.timers.delete(id); const entry = this.states.get(id); if (entry) this.emit('state', desktopThread(entry.state)); }, 60));
+    const entry = this.states.get(id);
+    if (change.type === 'patches' && !change.patches.some(patch => patchChangesMessages(entry.state, patch))) return;
+    if (!this.timers.has(id)) this.timers.set(id, setTimeout(() => {
+      this.timers.delete(id); const latest = this.states.get(id); if (!latest) return;
+      const projected = desktopThread(latest.state), signature = JSON.stringify(projected);
+      if (this.signatures.get(id) === signature) return;
+      this.signatures.set(id, signature); this.emit('state', projected);
+    }, 120));
   }
   async owner(id) { await this.connect(); try { const response = await this.request('thread-owner-discovery', { hostId: 'local', conversationId: id }, undefined, 2500); this.owners.set(id, response.handledByClientId); return response.handledByClientId; } catch (error) { if (error.code === 'no-client-found') { this.owners.delete(id); return null; } throw error; } }
   follow(id, owner) { this.followed.add(id); this._write({ type: 'broadcast', method: 'thread-stream-following-changed', params: { hostId: 'local', conversationId: id, following: true }, targetClientIds: owner ? [owner] : undefined, version: 1 }); }
@@ -120,7 +144,7 @@ class DesktopIpc extends EventEmitter {
   }
   async send(id, text, owner, images = []) { const input = promptInputs(text, images); this.follow(id, owner); const response = await this.request('thread-follower-start-turn', { conversationId: id, turnStart: { request: { threadId: id, input }, context: { inheritThreadSettings: true } } }, owner, 30000); return response.result.result; }
   async interrupt(id, turnId, owner) { return (await this.request('thread-follower-interrupt-turn', { conversationId: id, mode: 'user-stop', expectedTurnId: turnId }, owner)).result; }
-  close(error = new Error('Desktop connection closed.')) { const socket = this.socket; this.socket = null; this.clientId = 'initializing-client'; for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); } this.pending.clear(); for (const timer of this.timers.values()) clearTimeout(timer); this.timers.clear(); this.states.clear(); this.owners.clear(); this.followed.clear(); socket?.destroy(); this.emit('disconnected', error); }
+  close(error = new Error('Desktop connection closed.')) { const socket = this.socket; this.socket = null; this.clientId = 'initializing-client'; for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); } this.pending.clear(); for (const timer of this.timers.values()) clearTimeout(timer); this.timers.clear(); this.states.clear(); this.signatures.clear(); this.owners.clear(); this.followed.clear(); socket?.destroy(); this.emit('disconnected', error); }
 }
 
 /** Newline-delimited app-server protocol. Never resolves approvals automatically. */
@@ -130,7 +154,7 @@ class CodexBridge extends EventEmitter {
     Object.assign(this, { executable: executable || 'codex.exe', executableOverride: executable, spawnProcess, timeoutMs, connectTimeoutMs });
     this.pending = new Map(); this.requests = new Set(); this.resumed = new Set(); this.resuming = new Map(); this.nextId = 1;
     this.child = null; this.connected = false; this.connecting = null; this.mode = null;
-    this.desktop = desktop;
+    this.desktop = desktop; this.deltas = new Map(); this.deltaTimer = null;
     desktop?.on('state', state => this.emit('notification', { method: 'petdock/threadState', params: state }));
   }
   async connect() {
@@ -153,7 +177,7 @@ class CodexBridge extends EventEmitter {
     for (const mode of ['shared', 'standalone']) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.5.5' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.5.6' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
@@ -197,7 +221,7 @@ class CodexBridge extends EventEmitter {
   _receive(message) {
     if (message.method) {
       if (message.id !== undefined) { this.requests.add(message.id); this.emit('request', message); }
-      else this.emit('notification', message);
+      else this._notification(message);
       return;
     }
     const pending = this.pending.get(message.id);
@@ -205,6 +229,33 @@ class CodexBridge extends EventEmitter {
     clearTimeout(pending.timer); this.pending.delete(message.id);
     if (message.error) { const error = new Error(message.error.message || 'Codex request failed'); error.code = message.error.code; pending.reject(error); }
     else pending.resolve(message.result);
+  }
+  _flushDeltas() {
+    clearTimeout(this.deltaTimer); this.deltaTimer = null;
+    for (const message of this.deltas.values()) this.emit('notification', message);
+    this.deltas.clear();
+  }
+  _notification(message) {
+    const { method, params = {} } = message;
+    if (method === 'item/agentMessage/delta') {
+      const key = JSON.stringify([params.threadId, params.turnId, params.itemId]);
+      const old = this.deltas.get(key);
+      if (old) old.params.delta += params.delta || '';
+      else this.deltas.set(key, { method, params: { ...params, delta: params.delta || '' } });
+      if (!this.deltaTimer) this.deltaTimer = setTimeout(() => this._flushDeltas(), 120);
+      return;
+    }
+    // Requests take the separate request path, so approvals/input cannot be lost.
+    if (method.startsWith('item/')) {
+      if (!['item/started', 'item/completed'].includes(method)) return;
+      const item = messageItem(params.item); if (!item) return;
+      this._flushDeltas();
+      this.emit('notification', { method, params: { ...params, item } }); return;
+    }
+    if (method === 'turn/completed') this._flushDeltas();
+    if (params.turn) { this.emit('notification', { ...message, params: { ...params, turn: messageTurn(params.turn) } }); return; }
+    if (params.thread) { this.emit('notification', { ...message, params: { ...params, thread: projectThread(params.thread) } }); return; }
+    this.emit('notification', message);
   }
   _write(message) {
     if (!this.child || this.child.stdin.destroyed) throw new Error('Codex is not connected.');
@@ -225,7 +276,8 @@ class CodexBridge extends EventEmitter {
   async readThread(id) {
     await this.connect();
     if (this.desktop) { try { const owner = await this.desktop.owner(id); if (owner) { const result = await this.desktop.read(id, owner); if (result) return result; } } catch { /* Disk history remains readable when desktop closes. */ } }
-    return this._rpc('thread/read', { threadId: id, includeTurns: true });
+    const result = await this._rpc('thread/read', { threadId: id, includeTurns: true });
+    return result.thread ? { ...result, thread: projectThread(result.thread) } : result;
   }
   async accountRead() { await this.connect(); return this._rpc('account/read', { refreshToken: false }); }
   async login() { await this.connect(); return this._rpc('account/login/start', { type: 'chatgpt' }); }
@@ -257,6 +309,7 @@ class CodexBridge extends EventEmitter {
   _dispose(error = new Error('Codex connection closed.')) {
     const child = this.child; this.child = null; this.connected = false;
     this.resumed.clear(); this.resuming.clear(); this.requests.clear();
+    clearTimeout(this.deltaTimer); this.deltaTimer = null; this.deltas.clear();
     for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); }
     this.pending.clear();
     if (child) { child.stdin.destroy(); child.kill(); }

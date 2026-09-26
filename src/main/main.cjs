@@ -50,7 +50,8 @@ function resize(mode = layoutMode) {
   const area = screen.getDisplayMatching(bounds).workArea;
   const scale = store?.value.petScale || 1;
   if (!expanded) chatgpt?.hide();
-  win.setBounds(dockBounds(mode,bounds,area,scale));
+  const next=dockBounds(mode,bounds,area,scale);
+  if(['x','y','width','height'].some(key=>next[key]!==bounds[key]))win.setBounds(next);
 }
 async function connected() { await connectionPromise; if (connection.state === 'error') throw new Error(connection.detail); }
 app.whenReady().then(async () => {
