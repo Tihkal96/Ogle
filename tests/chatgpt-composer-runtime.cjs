@@ -11,6 +11,10 @@ async function attach(incoming){for(const file of incoming){const item=document.
 document.querySelector('input').addEventListener('change',event=>attach(event.target.files));
 if(mode==='image'){document.querySelector('input').remove();editor.addEventListener('paste',event=>{event.preventDefault();attach(event.clipboardData.files);});}
 send.onclick=()=>{window.sent.push({text:editor.innerText,files:[...files.children].map(item=>({name:item.dataset.name,content:item.dataset.content}))});if(mode!=='uncertain'){editor.innerText='';files.innerHTML='';}};
+if(mode==='delayed'){editor.remove();const login=document.createElement('button');login.dataset.testid='login-button';login.textContent='Log in';document.body.append(login);setTimeout(()=>{login.remove();document.querySelector('form').prepend(editor);},1000);}
+if(mode==='alternate'){editor.id='new-composer-editor';editor.setAttribute('role','textbox');editor.className='ProseMirror';}
+if(mode==='signedout'){editor.remove();const login=document.createElement('button');login.dataset.testid='login-button';login.textContent='Log in';document.body.append(login);}
+if(mode==='guest'){const login=document.createElement('button');login.dataset.testid='login-button';login.textContent='Log in';document.body.append(login);}
 </script></body></html>`;
 
 if (process.versions.electron) {
@@ -38,6 +42,16 @@ if (process.versions.electron) {
       }, { modulePath: path.join(root, 'src/main/chatgpt-composer.cjs'), payload });
       assert.deepEqual(await send({ text: 'A prompt with <markup> & a newline\nSecond line' }), { sent: true });
       assert.equal((await page.evaluate(() => window.sent))[0].text, 'A prompt with <markup> & a newline\nSecond line');
+      await page.goto('https://chatgpt.com/c/delayed');
+      assert.deepEqual(await send({text:'Wait for the hydrated composer'}),{sent:true});
+      assert.equal((await page.evaluate(()=>window.sent)).length,1);
+      await page.goto('https://chatgpt.com/c/alternate');
+      assert.deepEqual(await send({text:'Use the accessible ProseMirror composer'}),{sent:true});
+      await page.goto('https://chatgpt.com/c/signedout');
+      assert.match((await send({text:'Keep this draft'})).error,/signed out/);
+      assert.equal((await page.evaluate(()=>window.sent)).length,0);
+      await page.goto('https://chatgpt.com/c/guest');
+      assert.deepEqual(await send({text:'Use the available guest composer'}),{sent:true});
       await page.goto('https://chatgpt.com/c/files');
       assert.deepEqual(await send({ text: 'Read this', attachments: [{ type: 'file', name: 'notes.txt', url: 'data:text/plain;base64,aGVsbG8=' }] }), { sent: true });
       assert.deepEqual((await page.evaluate(() => window.sent))[0].files, [{ name: 'notes.txt', content: 'hello' }]);
@@ -60,7 +74,7 @@ if (process.versions.electron) {
       assert.equal((await page.evaluate(() => window.sent)).length, 1);
       await page.goto('https://other.example/');
       assert.match((await send({ text: 'Wrong host' })).error, /finish signing in/);
-      const result = { textAndMultiline: true, documentTransfer: true, imagePasteTransfer: true, imageAltFilename: true, historyAttachmentsIgnored: true, homeNewChat: true, existingConversationPreserved: true, draftPreserved: true, busyRefused: true, uncertainSendClickedOnce: true, wrongOriginRefused: true, liveAccountUsed: false };
+      const result = { delayedHydration: true, alternateAccessibleComposer: true, signedOutDiagnostic: true, guestComposerAccepted: true, textAndMultiline: true, documentTransfer: true, imagePasteTransfer: true, imageAltFilename: true, historyAttachmentsIgnored: true, homeNewChat: true, existingConversationPreserved: true, draftPreserved: true, busyRefused: true, uncertainSendClickedOnce: true, wrongOriginRefused: true, liveAccountUsed: false };
       fs.mkdirSync(path.join(root, 'artifacts'), { recursive: true });
       fs.writeFileSync(path.join(root, 'artifacts/chatgpt-composer-runtime.json'), JSON.stringify(result, null, 2));
       console.log(JSON.stringify(result));

@@ -30,9 +30,35 @@ async function composeInPage(payload) {
   if (location.origin !== 'https://chatgpt.com') fail('Open ChatGPT and finish signing in before sending.');
   const visible = element => element && element.getClientRects().length > 0;
   const first = selector => [...document.querySelectorAll(selector)].find(visible);
+  const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   const busy = () => first('[data-testid="stop-button"],button[aria-label="Stop streaming"],button[aria-label="Stop generating"]');
-  const editor = first('#prompt-textarea,textarea[data-testid="prompt-textarea"],textarea[placeholder*="Message"], [contenteditable="true"][data-placeholder]');
-  if (!editor || first('[data-testid="login-button"]')) fail('Open ChatGPT and finish signing in; its message box is not available.');
+  const editorSelector = '#prompt-textarea,textarea[data-testid="prompt-textarea"],textarea[placeholder*="Message"],[contenteditable="true"][data-placeholder],form [contenteditable="true"][role="textbox"],form .ProseMirror[contenteditable="true"],[data-testid="composer"] [contenteditable="true"],[data-testid="composer"] textarea,form[data-type="unified-composer"] textarea';
+  // did-finish-load precedes the website's React hydration. Wait for an actual
+  // editable composer to settle instead of treating a loading shell as logout.
+  let editor, previousEditor, stableSamples = 0, loginSince = 0;
+  for (let attempt = 0; attempt < 75; attempt++) {
+    if (location.origin !== 'https://chatgpt.com') fail('ChatGPT opened a sign-in page. Finish signing in before sending.');
+    if (busy()) fail('ChatGPT is still replying. Wait for it to finish before sending.');
+    const candidate = [...document.querySelectorAll(editorSelector)].find(node => visible(node) && !node.disabled && !node.readOnly && (node.tagName === 'TEXTAREA' || node.isContentEditable));
+    const login = first('[data-testid="login-button"]');
+    // Guest ChatGPT can show Log in next to a fully usable composer.
+    if (login && !candidate) {
+      loginSince ||= Date.now();
+      if (Date.now() - loginSince >= 2000) fail('ChatGPT appears signed out. Sign in in the ChatGPT tab, then send your saved bar draft.');
+    } else loginSince = 0;
+    if (candidate) {
+      stableSamples = candidate === previousEditor ? stableSamples + 1 : 1;
+      if (stableSamples >= 2) { editor = candidate; break; }
+    } else stableSamples = 0;
+    previousEditor = candidate;
+    await pause(200);
+  }
+  if (!editor) {
+    if (document.readyState !== 'complete' || first('[aria-busy="true"],[role="progressbar"]')) fail('ChatGPT is still loading its message box. Your draft is saved; try again when the tab is ready.');
+    const editableCount = [...document.querySelectorAll('textarea,[contenteditable="true"]')].filter(visible).length;
+    const matchedCount = [...document.querySelectorAll(editorSelector)].filter(visible).length;
+    fail(`ChatGPT’s message box could not be found after waiting (visible editors: ${editableCount}, matched: ${matchedCount}). Open its tab to finish any website check or use the website composer; your bar draft is saved.`);
+  }
   if (busy()) fail('ChatGPT is still replying. Wait for it to finish before sending.');
   const textOf = () => 'value' in editor ? editor.value : editor.innerText;
   // Historical messages can contain the same attachment components. Only the
@@ -43,7 +69,6 @@ async function composeInPage(payload) {
   if (textOf().trim() || attachmentNodes().length) fail('ChatGPT already has an unsent draft or attachment. Send or clear it in the ChatGPT tab first.');
   const originalURL = location.href;
   const samePage = () => { if (location.href !== originalURL || !editor.isConnected) fail('ChatGPT changed pages. Check the ChatGPT tab before sending again.'); };
-  const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   const sendButton = () => first('[data-testid="send-button"],button[aria-label="Send prompt"],button[aria-label="Send message"],button[aria-label="Send"]');
   editor.focus();
   if (payload.files.length) {
