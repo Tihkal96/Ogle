@@ -16,13 +16,14 @@ const path=require('node:path');
     {id:'other',name:'Other',path:path.join(fixtures,'other.txt'),kind:'file'},
     {id:'child',name:'Child',path:path.join(fixtures,'child.txt'),kind:'file',parentId:'group'}
   ];
-  fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({shortcuts:items,shortcutsView:'icons',autoExpand:true,showTime:true,showDate:true,timeFormat:'12h',dateFormat:'locale',autoCollapseDelay:10000}));
+  fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({compactChatTarget:'codex',autoStart:false,shortcuts:items,shortcutsView:'icons',autoExpand:true,showTime:true,showDate:true,timeFormat:'12h',dateFormat:'locale',autoCollapseDelay:10000}));
   const env={...process.env,PETDOCK_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
   const executable=process.env.PETDOCK_TEST_EXE,errors=[],checks={};let app;
   async function launch(){
     app=await electron.launch({...(executable?{executablePath:path.resolve(executable),args:[]}:{args:[root]}),env});
     const page=await app.firstWindow();page.on('pageerror',err=>errors.push(err.message));
-    await app.evaluate(({screen,shell,net})=>{
+    await app.evaluate(({screen,shell,net,BrowserWindow})=>{
+      const win=BrowserWindow.getAllWindows()[0];win.webContents.setBackgroundThrottling(false);win.hide();
       screen.getCursorScreenPoint=()=>({x:0,y:0});global.__pinOpened=[];
       shell.openPath=async target=>{global.__pinOpened.push({kind:'path',target});return '';};
       shell.openExternal=async target=>{global.__pinOpened.push({kind:'url',target});};
@@ -35,18 +36,19 @@ const path=require('node:path');
   }
   try{
     let page=await launch();
-    const click=selector=>page.locator(selector).evaluate(el=>el.click());
+    const click=async selector=>{await page.locator(selector).evaluate(el=>el.click());await page.waitForFunction(()=>!DockLayoutTransition.busy);};
     const links=()=>click('[data-panel="shortcuts"]');
     const pin=id=>page.locator(`.links-entry[data-id="${id}"] .links-pin`).evaluate(el=>el.click());
-    const reveal=async()=>{await click('#collapse');await click('#bar-orb');await page.waitForTimeout(250);};
+    const reveal=async()=>{await page.evaluate(()=>setMode('reveal'));await page.waitForFunction(()=>!DockLayoutTransition.busy);};
     await links();
     for(const id of ['document','app','folder','group','extra'])await pin(id);
     await page.waitForFunction(()=>document.querySelectorAll('#pinned-links .pinned-link').length===5);
     await pin('other');
     assert.match(await page.locator('.links-pin-status').textContent(),/up to 5 links/);
     assert.equal(await page.locator('.links-entry[data-id="other"] .links-pin').getAttribute('aria-pressed'),'false');
-    assert.equal(await page.locator('#pinned-links').isHidden(),true,'Pins are hidden in expanded panels');
-    checks.fivePinLimitAndFullPanelHidden=true;
+    assert.equal(await page.locator('#pinned-links').isVisible(),true,'Pins remain visible in expanded panels');
+    assert.equal(await page.locator('.toolbar').evaluate(el=>el.scrollWidth>el.clientWidth),false,'Expanded toolbar fits five pins');
+    checks.fivePinLimitAndFullPanelVisible=true;
     await reveal();
     await page.waitForFunction(()=>document.querySelectorAll('#pinned-links img').length>=4);
     assert.equal(await page.locator('#pinned-links').evaluate(el=>el.previousElementSibling.dataset.panel),'shortcuts');

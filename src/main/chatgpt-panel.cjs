@@ -27,6 +27,16 @@ class ChatGPTPanel {
     this.applyLayout();
   }
 
+  allowClipboardWrite(contents, permission, requestingUrl, details = {}) {
+    if (permission !== 'clipboard-sanitized-write' || contents !== this.view?.webContents ||
+        !contents || contents.isDestroyed() || !this.visible || !this.view.getVisible() ||
+        !this.parent?.isFocused() || !contents.isFocused() || details.isMainFrame !== true) return false;
+    try {
+      return new URL(contents.getURL()).origin === 'https://chatgpt.com' &&
+        new URL(requestingUrl).origin === 'https://chatgpt.com';
+    } catch { return false; }
+  }
+
   secure(contents) {
     const guard = (event, url) => { if (!isHttps(url)) event.preventDefault(); };
     contents.on('will-navigate', guard);
@@ -79,8 +89,10 @@ class ChatGPTPanel {
     this.activity?.dispose();
     this.activity = new ChatGPTActivity(contents, this.onActivity);
     // Keep the original partition so the existing login stays intact.
-    contents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
-    contents.session.setPermissionCheckHandler(() => false);
+    contents.session.setPermissionRequestHandler((sender, permission, callback, details) =>
+      callback(this.allowClipboardWrite(sender, permission, details.requestingUrl, details)));
+    contents.session.setPermissionCheckHandler((sender, permission, requestingOrigin, details) =>
+      this.allowClipboardWrite(sender, permission, requestingOrigin, details));
     this.secure(contents);
     this.parent.contentView.addChildView(this.view);
     contents.on('did-start-loading', () => this.setStatus('Loading ChatGPT…'));
