@@ -8,7 +8,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.18](https://github.com/Tihkal96/Ogle/releases/download/v0.5.18/Ogle-0.5.18-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.19](https://github.com/Tihkal96/Ogle/releases/download/v0.5.19/Ogle-0.5.19-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -38,6 +38,10 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 ## Release checklist for maintainers and AI agents
 
 Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release.
+
+## Version 0.5.19
+
+Only hovering the idle ball reveals the horizontal toolbar. Hovering the pet triggers its animation without opening the bar. Pet click actions remain configurable.
 
 ## Version 0.5.18
 
@@ -149,7 +153,7 @@ Start with Windows is on by default for the packaged app and can be disabled in 
 
 ### Version 0.4 foundation
 
-The dock now uses a restrained HUD style with charcoal, light and dark-blue palettes. The pet remains visible above a small idle ball. Hover reveals the compact bar horizontally; full panels open only when a tool is clicked. Clicking the active conversation name opens a prompt below the bar and keeps it compact. The adjacent picker selects a Codex project/task without opening the full task panel. Classic ChatGPT remains in its own embedded tab.
+The dock now uses a restrained HUD style with charcoal, light and dark-blue palettes. The pet remains visible above a small idle ball. Hovering the idle ball reveals the compact bar horizontally; hovering the pet only animates it. full panels open only when a tool is clicked. Clicking the active conversation name opens a prompt below the bar and keeps it compact. The adjacent picker selects a Codex project/task without opening the full task panel. Classic ChatGPT remains in its own embedded tab.
 
 The always-on-top diamond is back in the toolbar. Auto lives in Settings and defaults on; disabling it makes the bar click-only and hides the keep-open pin. A green status light replaces the connected label. The old app title/subtitle are removed. Editor and terminal palettes now follow theme changes immediately, including existing sessions.
 
