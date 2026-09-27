@@ -105,6 +105,7 @@ app.whenReady().then(async () => {
     if (inside !== lastInside || x!==lastPointerX || y!==lastPointerY) { lastInside=inside;lastPointerX=x;lastPointerY=y;send({type:'pointer',inside,x,y}); }
   }, 160);
   bridge = new CodexBridge();
+  bridge.on('thread-opened', threadId => send({ type: 'codex-thread-opened', threadId }));
   const desktopActivity = new Map();
   bridge.on('status', status => { connection = status; send({ type: 'connection', ...status }); });
   bridge.on('notification', event => {
@@ -153,7 +154,11 @@ app.whenReady().then(async () => {
     return sendChatGPT(contents,payload);
   });
   register('chatgptLayout', layout => chatgpt.layout(layout));
-  register('openCodex', id => shell.openExternal(id ? `codex://threads/${encodeURIComponent(string(id, 'task ID'))}` : 'codex://'));
+  register('openCodex', async id => {
+    const threadId = id ? string(id, 'task ID') : null;
+    await shell.openExternal(threadId ? `codex://threads/${encodeURIComponent(threadId)}` : 'codex://');
+    if (threadId) send({ type: 'codex-thread-opened', threadId });
+  });
   register('petDrag', action => {
     if(action==='start'){petDragState={pointer:screen.getCursorScreenPoint(),bounds:win.getBounds(),moved:false};return {moved:false};}
     if(!petDragState)return {moved:false};
