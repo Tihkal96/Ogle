@@ -199,3 +199,39 @@ test('desktop thinking patches update transport revision without repeated UI sna
   deliver({type:'patches',baseRevision:1001,revision:1002,patches:[{op:'replace',path:['turns',0,'items',1,'text'],value:'final answer'},{op:'replace',path:['threadRuntimeStatus'],value:{type:'idle'}}]});
   await new Promise(r=>setTimeout(r,150)); assert.equal(events.length,2); assert.equal(events[1].runtime.running,false); assert.equal(events[1].thread.turns[0].items[0].text,'final answer'); desktop.close();
 });
+
+test('desktop steer uses the owning writer and does not start or interrupt a turn', async () => {
+  const { bridge, sent } = fixture();
+  const desktop = new EventEmitter(); desktop.owners = new Map(); desktop.connect = async () => {}; desktop.owner = async () => 'owner'; desktop.close = () => {};
+  const calls = []; desktop.steer = async (...args) => { calls.push(args); return { turnId: 'active' }; }; bridge.desktop = desktop;
+  assert.deepEqual(await bridge.steerTurn('owned', 'adjust this', [imageInput], 'active'), { turnId: 'active' });
+  assert.deepEqual(calls, [['owned', 'adjust this', 'owner', [imageInput]]]);
+  assert.equal(sent.some(m => ['thread/resume','turn/start','turn/interrupt','turn/steer'].includes(m.method)), false);
+  desktop.steer = async () => { throw new Error('Outcome unknown'); };
+  await assert.rejects(bridge.steerTurn('owned', 'adjust again'), /Outcome unknown/);
+  assert.equal(sent.some(m => m.method === 'turn/steer'), false); bridge.close();
+});
+
+test('shared steer guards the active turn ID without taking ownership', async () => {
+  const { bridge, sent } = fixture((message, child) => { if (message.id) child.reply({ id: message.id, result: { turnId: 'active' } }); });
+  for (const marker of [undefined, 'desktop', 'pending']) await assert.rejects(bridge.steerTurn('task', 'adjust', [], marker), /active turn is not available/);
+  assert.deepEqual(await bridge.steerTurn('task', 'adjust', [], 'active'), { turnId: 'active' });
+  const calls = sent.filter(m => m.method !== 'initialize' && m.method !== 'initialized');
+  assert.equal(calls.length, 1); assert.equal(calls[0].method, 'turn/steer');
+  assert.equal(calls[0].params.expectedTurnId, 'active'); assert.equal(calls[0].params.input[0].text, 'adjust'); bridge.close();
+});
+
+test('desktop steer sends supported follower payload and valid restore context', async () => {
+  const ipc = new DesktopIpc(), calls = []; ipc.states.set('task', { state: { cwd: 'C:/work' } });
+  ipc.follow = (id, owner) => calls.push(['follow', id, owner]);
+  ipc.request = async (...args) => { calls.push(args); return { result: { result: { turnId: 'active' } } }; };
+  assert.deepEqual(await ipc.steer('task', 'change direction', 'owner', [imageInput]), { turnId: 'active' });
+  const [method, params, owner] = calls[1]; assert.equal(method, 'thread-follower-steer-turn'); assert.equal(owner, 'owner');
+  assert.equal(params.input[0].text, 'change direction'); assert.deepEqual(params.input[1], imageInput);
+  assert.equal(params.restoreMessage.id, params.clientUserMessageId); assert.equal(params.restoreMessage.context.prompt, 'change direction');
+  assert.deepEqual(params.restoreMessage.context.workspaceRoots, ['C:/work']);
+  // Exercise the real request envelope to guard the private protocol version.
+  const envelopes = []; ipc._write = m => { envelopes.push(m); queueMicrotask(() => ipc._receive({ type:'response', requestId:m.requestId, resultType:'success', result:{} })); };
+  await DesktopIpc.prototype.request.call(ipc, method, params, owner);
+  assert.equal(envelopes[0].version, 1); ipc.close();
+});

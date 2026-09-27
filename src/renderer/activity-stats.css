@@ -1,8 +1,10 @@
 /* Always within the existing pet stage; no extra native windows or resize work. */
-#activity-stats{position:absolute;z-index:2;right:5px;bottom:2px;width:76px;max-width:calc(100% - 10px);font:10px/12px "Cascadia Mono",Consolas,monospace;color:#fff;text-shadow:0 1px 3px #000,0 0 3px #000;pointer-events:none;-webkit-app-region:no-drag;user-select:none}
+#activity-stats{position:absolute;z-index:0;right:-4px;bottom:2px;width:68px;max-width:calc(100% - 10px);font:10px/12px "Century Gothic","Segoe UI",sans-serif;color:#fff;text-shadow:0 1px 3px #000,0 0 3px #000;pointer-events:none;-webkit-app-region:no-drag;user-select:none}
 #activity-stats[data-position=left]{right:auto;left:5px}
 #activity-stats[data-position=top]{right:auto;left:50%;top:0;bottom:auto;transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:0 9px;width:220px}
 #activity-stats>div{display:flex;gap:7px;justify-content:space-between;white-space:nowrap}
 #activity-stats b{font-weight:400;font-variant-numeric:tabular-nums}
 #activity-stats[hidden],#activity-stats>div[hidden]{display:none}
 
+
+#pet{z-index:1}

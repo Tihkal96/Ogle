@@ -32,7 +32,7 @@ function promptInputs(text, images = []) {
 
 // Desktop coordination protocol observed in Codex 26.924.2738.0. This is a
 // versioned local IPC interface, not the public app-server stdio transport.
-const IPC_VERSIONS = { 'thread-owner-discovery': 1, 'thread-follower-start-turn': 2, 'thread-follower-interrupt-turn': 4, 'thread-stream-following-changed': 1 };
+const IPC_VERSIONS = { 'thread-owner-discovery': 1, 'thread-follower-start-turn': 2, 'thread-follower-steer-turn': 1, 'thread-follower-interrupt-turn': 4, 'thread-stream-following-changed': 1 };
 function applyDesktopPatches(state, patches) {
   for (const patch of patches) {
     if (!Array.isArray(patch.path) || patch.path.some(key => ['__proto__', 'constructor', 'prototype'].includes(key))) throw new Error('Unsupported desktop state path');
@@ -143,6 +143,19 @@ class DesktopIpc extends EventEmitter {
     const entry = this.states.get(id); return entry ? desktopThread(entry.state) : null;
   }
   async send(id, text, owner, images = []) { const input = promptInputs(text, images); this.follow(id, owner); const response = await this.request('thread-follower-start-turn', { conversationId: id, turnStart: { request: { threadId: id, input }, context: { inheritThreadSettings: true } } }, owner, 30000); return response.result.result; }
+  async steer(id, text, owner, images = []) {
+    const input = promptInputs(text, images), clientUserMessageId = randomUUID();
+    const cwd = this.states.get(id)?.state?.cwd;
+    // Match the desktop's follow-up restore metadata, while leaving its active
+    // turn and permissions under the existing writer's control.
+    const restoreMessage = { id: clientUserMessageId, text, createdAt: Date.now(), ...(cwd ? { cwd } : {}), context: {
+      prompt: text, addedFiles: [], fileAttachments: [], ideContext: null,
+      imageAttachments: [], ...(cwd ? { workspaceRoots: [cwd] } : {})
+    } };
+    this.follow(id, owner);
+    const response = await this.request('thread-follower-steer-turn', { conversationId: id, input, restoreMessage, attachments: [], clientUserMessageId }, owner, 30000);
+    return response.result.result;
+  }
   async interrupt(id, turnId, owner) { return (await this.request('thread-follower-interrupt-turn', { conversationId: id, mode: 'user-stop', expectedTurnId: turnId }, owner)).result; }
   close(error = new Error('Desktop connection closed.')) { const socket = this.socket; this.socket = null; this.clientId = 'initializing-client'; for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); } this.pending.clear(); for (const timer of this.timers.values()) clearTimeout(timer); this.timers.clear(); this.states.clear(); this.signatures.clear(); this.owners.clear(); this.followed.clear(); socket?.destroy(); this.emit('disconnected', error); }
 }
@@ -177,7 +190,7 @@ class CodexBridge extends EventEmitter {
     for (const mode of ['shared', 'standalone']) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.5.10' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.5.11' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
@@ -300,6 +313,19 @@ class CodexBridge extends EventEmitter {
       await this.resuming.get(threadId);
     }
     return this._rpc('turn/start', { threadId, approvalPolicy: 'on-request', input });
+  }
+  async steerTurn(threadId, text, images = [], expectedTurnId) {
+    const input = promptInputs(text, images);
+    await this.connect();
+    if (this.desktop) {
+      let owner;
+      try { owner = await this.desktop.owner(threadId); }
+      catch (error) { if (this.mode === 'desktop' || this.desktop.owners.has(threadId)) throw error; }
+      if (owner) return this.desktop.steer(threadId, text, owner, images);
+    }
+    // Never resume a thread to steer: that can compete with its current writer.
+    if (typeof expectedTurnId !== 'string' || !expectedTurnId.trim() || ['desktop', 'pending'].includes(expectedTurnId)) throw new Error('The active turn is not available yet. Wait for Codex to start or queue the message.');
+    return this._rpc('turn/steer', { threadId, input, expectedTurnId });
   }
   async interrupt(threadId, turnId) { await this.connect(); if (this.desktop) { const owner = await this.desktop.owner(threadId); if (owner) return this.desktop.interrupt(threadId, turnId, owner); } return this._rpc('turn/interrupt', { threadId, turnId }); }
   respond(id, result) {

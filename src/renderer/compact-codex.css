@@ -12,3 +12,15 @@
 #chats-panel .thread{padding:7px 8px}
 #chats-panel #activity{font-size:10px;padding:4px 10px}
 #composer .destination{font-size:10px}#composer #send{min-width:32px;padding:6px 9px}
+/* Less chrome around the task list and composer. */
+#chats-panel .conversation-header .section-label{display:none}
+#chats-panel .sidebar>.section-label{font-size:0;min-height:22px;text-align:right}
+#chats-panel .sidebar>.section-label button{font-size:15px}
+#chats-panel .conversation-header{border-bottom:1px solid var(--border);background:transparent}
+#chats-panel #thread-path{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chats-panel .sidebar{border-right:1px solid var(--border);background:transparent}
+#chats-panel .thread{border:0;border-radius:2px;margin:1px 0;padding:0}
+#chats-panel .thread button{width:100%;padding:6px 7px}
+#composer .destination{padding-bottom:4px}#composer #send{font-size:16px;width:32px;min-width:32px;height:29px;align-self:flex-end}
+#composer #steer{font-size:10px;height:29px;padding:4px 7px;align-self:flex-end;background:var(--raised)}
+#composer #stop{height:29px;width:27px;align-self:flex-end}

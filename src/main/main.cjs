@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, screen, Notification, shell, Menu, net, nativeImage, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Notification, shell, Menu, net, nativeImage, globalShortcut, clipboard } = require('electron');
 if (process.argv.includes('--persistent-terminal-worker')) { require('./persistent-admin-worker.cjs').runPersistentWorker(); return; }
 if (process.argv.includes('--terminal-worker')) { require('./terminal-worker.cjs').runWorker(); return; }
 const fs = require('node:fs');
@@ -70,6 +70,7 @@ app.whenReady().then(async () => {
   chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}) });
   shortcuts=new DockShortcuts(globalShortcut,{
     shortcutVisibility:()=>{if(win.isVisible()&&!win.isMinimized()){chatgpt.hide();win.hide();}else{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'dock-shown'});}},
+    shortcutBar:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-bar'});},
     shortcutPanel:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-panel',expanded:!expanded});}
   });
   try{shortcuts.configure(store.value);}catch(error){send({type:'startup-error',message:error.message});}
@@ -120,9 +121,10 @@ app.whenReady().then(async () => {
     return bridge.startThread(cwd);
   });
   register('sendTurn', async (id, text, images=[]) => { await connected(); if(typeof text!=='string'||text.length>200000)throw new Error('Invalid prompt');return bridge.sendTurn(string(id, 'task ID'),text,images); });
+  register('steerTurn', async(id,text,images=[],expectedTurnId)=>{await connected();if(typeof text!=='string'||text.length>200000)throw new Error('Invalid prompt');return bridge.steerTurn(string(id,'task ID'),text,images,expectedTurnId);});
   register('interrupt', (id, turnId) => bridge.interrupt(string(id, 'task ID'), string(turnId, 'turn ID')));
   register('respond', (id, result) => bridge.respond(id, result));
-  register('saveSettings', async patch => { const previous=store.value,changedShortcuts=['shortcutVisibility','shortcutPanel'].some(key=>Object.hasOwn(patch,key));if(changedShortcuts)shortcuts.configure({...previous,...patch});let result;try{result=store.update(patch);}catch(error){if(changedShortcuts)shortcuts.configure(previous);throw error;}activityStats.configure(result);if(Object.hasOwn(patch,'petScale'))resize();if(Object.hasOwn(patch,'alwaysOnTop'))win.setAlwaysOnTop(result.alwaysOnTop);if(Object.hasOwn(patch,'autoStart'))configureStartup(app,result.autoStart);if(Object.hasOwn(patch,'petId'))await updatePetIcon();return result; });
+  register('saveSettings', async patch => { const previous=store.value,changedShortcuts=['shortcutVisibility','shortcutPanel','shortcutBar'].some(key=>Object.hasOwn(patch,key));if(changedShortcuts)shortcuts.configure({...previous,...patch});let result;try{result=store.update(patch);}catch(error){if(changedShortcuts)shortcuts.configure(previous);throw error;}activityStats.configure(result);if(Object.hasOwn(patch,'petScale'))resize();if(Object.hasOwn(patch,'alwaysOnTop'))win.setAlwaysOnTop(result.alwaysOnTop);if(Object.hasOwn(patch,'autoStart'))configureStartup(app,result.autoStart);if(Object.hasOwn(patch,'petId'))await updatePetIcon();return result; });
   register('chooseFolder', async () => {
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: 'Choose a Codex project folder' });
     return result.canceled ? null : result.filePaths[0];
@@ -170,6 +172,8 @@ app.whenReady().then(async () => {
     const result=await dialog.showMessageBox(win,{type:'question',message:'Sign out of the local Codex account?',detail:'The local Codex login can also be used by your other Codex clients.',buttons:['Cancel','Sign out'],defaultId:0,cancelId:0});
     if(result.response===1)return bridge.logout();return {cancelled:true};
   });
+  register('clipboardReadText',()=>clipboard.readText());
+  register('clipboardWriteText',text=>{if(typeof text!=='string'||text.length>5*1024*1024)throw new Error('Invalid clipboard text');clipboard.writeText(text);return true;});
   register('editorOpen', () => files.open());
   register('editorSave', options => files.save(options));
   register('chooseShortcut', kind => files.chooseShortcut(kind));
