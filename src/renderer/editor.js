@@ -5,7 +5,7 @@ window.PetDockEditor = (() => {
   const languages = ['text','javascript','typescript','json','python','html','css','markdown','shell','powershell','c','cpp','csharp','vb','cmd','sql'];
   const byId = () => tabs.find(tab => tab.id === activeId);
   const label = (tag, text, className) => { const node = document.createElement(tag); node.textContent = text; if (className) node.className = className; return node; };
-  const button = (text, action, title) => { const node = label('button',text); node.type = 'button'; node.onclick = () => Promise.resolve().then(action).catch(report); if (title) { node.title = title; node.setAttribute('aria-label',title); } return node; };
+  const button = (text, action, title) => { const node = label('button',text); node.type = 'button'; node.onmousedown = event => event.preventDefault(); node.onclick = () => Promise.resolve().then(action).catch(report); if (title) { node.title = title; node.setAttribute('aria-label',title); } return node; };
   function infer(path) { const ext = path?.split('.').pop().toLowerCase(); return ({js:'javascript',mjs:'javascript',cjs:'javascript',ts:'typescript',tsx:'typescript',jsx:'javascript',json:'json',py:'python',html:'html',htm:'html',css:'css',md:'markdown',ps1:'powershell',sh:'shell',bat:'cmd',cmd:'cmd',c:'c',h:'c',cpp:'cpp',hpp:'cpp',cs:'csharp',vb:'vb',sql:'sql'})[ext] || 'text'; }
   async function flush() { clearTimeout(timer); await save({editorTabs:tabs.map(({id,name,path,language,text,dirty,framework})=>({id,name,path,language,text,dirty,framework})),activeEditorTab:activeId || ''}); }
   function schedule() { clearTimeout(timer); timer = setTimeout(() => flush().catch(report),400); }
@@ -70,10 +70,22 @@ window.PetDockEditor = (() => {
   function create() { const tab = {id:crypto.randomUUID(),name:`Untitled ${tabs.filter(t=>!t.path).length+1}`,path:'',language:'text',text:'',savedText:'',dirty:false}; tabs.push(tab); select(tab.id); }
   async function open() { const file = await api.editorOpen(); if (!file) return; const existing = tabs.find(t=>t.path === file.path); if (existing) return select(existing.id); const tab = {id:crypto.randomUUID(),name:file.name,path:file.path,text:file.text,language:infer(file.path),savedText:file.text,dirty:false}; tabs.push(tab); select(tab.id); }
   async function write(saveAs = false) { const tab = byId(); if (!tab) return; const captured = tab.text; const result = await api.editorSave({path:tab.path || undefined,text:captured,saveAs}); if (!result) return; tab.path = result.path; tab.name = result.name; tab.savedText = captured; tab.dirty = tab.text !== captured; if(tab.language === 'text') tab.language = infer(result.path); if(tab.id === activeId) select(tab.id); else renderTabs(); await flush(); }
+  async function copySelection() {
+    const text = view ? view.state.selection.ranges.map(range => view.state.sliceDoc(range.from,range.to)).join('\n') : (() => { const input=area.querySelector('textarea'); return input ? input.value.slice(input.selectionStart,input.selectionEnd) : ''; })();
+    if (text) await api.clipboardWriteText(text);
+  }
+  async function pasteText() {
+    const editor=view, tabId=activeId, input=area.querySelector('textarea');
+    const text=await api.clipboardReadText();
+    // A delayed clipboard reply must never paste into a newly selected tab.
+    if (!text || tabId!==activeId || editor!==view) return;
+    if (editor) { editor.dispatch(editor.state.replaceSelection(text)); editor.focus(); }
+    else if (input?.isConnected) { input.setRangeText(text,input.selectionStart,input.selectionEnd,'end'); updated(input.value);input.focus(); }
+  }
   function mount(container, bridge, initial, persist, onError) {
     root=container;api=bridge;settings=initial;save=persist;report=onError;currentTheme=settings.theme || 'dark';
     tabs=(Array.isArray(settings.editorTabs)?settings.editorTabs:[]).map(tab=>({...tab,language:languages.includes(tab.language)?tab.language:'text',savedText:tab.dirty ? undefined : tab.text,dirty:Boolean(tab.dirty) || (!tab.path && !!tab.text)}));
-    const controls=document.createElement('div'); controls.className='subtoolbar'; controls.append(button('＋',create,'New tab'),button('▱',open,'Open file'),button('↓',()=>write(false),'Save file (Ctrl+S)'),button('⇲',()=>write(true),'Save file as'));
+    const controls=document.createElement('div'); controls.className='subtoolbar'; controls.append(button('＋',create,'New tab'),button('▱',open,'Open file'),button('↓',()=>write(false),'Save file (Ctrl+S)'),button('⇲',()=>write(true),'Save file as'),button('⧉',copySelection,'Copy selection'),button('▣',pasteText,'Paste'));
     const spacer=document.createElement('span');spacer.className='spacer';controls.append(spacer);
     const language=document.createElement('select');language.className='editor-language';language.setAttribute('aria-label','Programming language');for(const value of languages)language.add(new Option(value,value));language.onchange=()=>{byId().language=language.value;select(activeId);};controls.append(language);
     const framework=document.createElement('select');framework.className='editor-framework';framework.setAttribute('aria-label','.NET framework profile');for(const [value,text] of [['modern','Modern .NET'],['3.5','.NET 3.5'],['4','.NET 4']])framework.add(new Option(text,value));framework.onchange=()=>{byId().framework=framework.value;updateStatus();schedule();};controls.append(framework);

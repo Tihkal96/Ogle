@@ -18,3 +18,7 @@
 .editor-surface .cm-search label:first-of-type{grid-column:1}.editor-surface .cm-search label:nth-of-type(2){grid-column:2 / 4}.editor-surface .cm-search label:nth-of-type(3){grid-column:4}
 .editor-surface .cm-search input[name=replace]{grid-row:3;grid-column:1}
 .editor-surface .cm-search button[name=replace]{grid-row:3;grid-column:2 / 4}.editor-surface .cm-search button[name=replaceAll]{grid-row:3;grid-column:4}
+/* Compact editing controls: quiet until hovered, with names in tooltips. */
+#editor-panel>.subtoolbar button{min-width:25px;height:25px;padding:2px 5px;border-color:transparent;background:transparent}
+#editor-panel>.subtoolbar button:hover{background:var(--hover);border-color:var(--border)}
+#editor-panel>.subtoolbar select{max-width:135px;height:25px}

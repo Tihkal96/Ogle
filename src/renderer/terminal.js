@@ -19,11 +19,30 @@
       const fit = new window.PetDockVendors.FitAddon(); term.loadAddon(fit);
       const view = element('div', '', 'terminal-session'); host.querySelector('.terminal-views').append(view); term.open(view);
       const tab = element('button', `${admin ? 'ADMIN · ' : ''}${shell === 'cmd' ? 'CMD' : 'PowerShell'}`); tab.type = 'button'; tab.onclick = () => select(config.id); host.querySelector('.terminal-tabs').append(tab);
+      term.attachCustomKeyEventHandler(event => {
+        if (event.type==='keydown' && (event.ctrlKey || event.metaKey) && !event.altKey) {
+          const key=event.key.toLowerCase();
+          if (key==='c' && (event.shiftKey || term.hasSelection())) { copySelection(config.id).catch(report);event.preventDefault();return false; }
+          if (key==='v') { pasteText(config.id).catch(report);event.preventDefault();return false; }
+        }
+        return true;
+      });
       term.onData(data => api.terminalWrite(config.id, data).catch(report));
       sessions.set(config.id, { ...config, term, fit, view, tab });
       if (pending.has(config.id)) { term.write(pending.get(config.id)); pending.delete(config.id); }
       select(config.id); status.textContent = admin ? 'Administrator session' : 'Terminal ready';
     } catch (error) { report(error); }
+  }
+  async function copySelection(id=active) {
+    const text=sessions.get(id)?.term.getSelection();
+    if (text) await api.clipboardWriteText(text);
+  }
+  async function pasteText(id=active) {
+    const session=sessions.get(id);if(!session)return;
+    const text=await api.clipboardReadText();
+    if (!text || sessions.get(id)!==session) return;
+    // xterm preserves the shell's bracketed-paste handling; no Enter is added.
+    session.term.paste(text);session.term.focus();
   }
   function mount(container, suppliedApi) {
     host = container; api = suppliedApi;
@@ -32,12 +51,14 @@
     const location = element('div', '', 'terminal-location'), shells = element('div', '', 'terminal-shell-actions'), commands = element('div', '', 'terminal-command-actions');
     controls.append(location, shells, commands);
     const cwd = element('input', '', 'terminal-cwd'); cwd.placeholder = 'Working folder (default: home)'; cwd.setAttribute('aria-label', 'Terminal working folder'); location.append(cwd);
-    const button = (label, fn, target = commands, title = label) => { const el = element('button', label); el.title=title; el.setAttribute('aria-label',title); el.type = 'button'; el.onclick = () => Promise.resolve().then(fn).catch(report); target.append(el); };
+    const button = (label, fn, target = commands, title = label) => { const el = element('button', label); el.title=title; el.setAttribute('aria-label',title); el.type = 'button'; el.onmousedown=event=>event.preventDefault(); el.onclick = () => Promise.resolve().then(fn).catch(report); target.append(el); };
     button('▱', async () => { const folder = await api.chooseFolder?.(); if (folder) cwd.value = folder; }, location, 'Choose working folder');
     button('+ PS', () => create('powershell'), shells, 'New PowerShell'); button('+ CMD', () => create('cmd'), shells, 'New Command Prompt'); button('♢ PS', () => create('powershell', true), shells, 'New administrator PowerShell'); button('♢ CMD', () => create('cmd', true), shells, 'New administrator Command Prompt');
     button('⌧', () => sessions.get(active)?.term.write('\x1b[2J\x1b[H'), commands, 'Clear screen');
     button('⌫', () => sessions.get(active)?.term.clear(), commands, 'Clear scrollback');
-    button('^C', () => { if (active) return api.terminalWrite(active, '\x03'); }, commands, 'Interrupt (Ctrl+C)');
+    button('⧉', () => copySelection(), commands, 'Copy selection (Ctrl+C)');
+    button('▣', () => pasteText(), commands, 'Paste (Ctrl+V)');
+    button('■', () => { if (active) return api.terminalWrite(active, '\x03'); }, commands, 'Interrupt (Ctrl+C)');
     button('↻', async () => { const s = sessions.get(active); if (!s) return; cwd.value = s.cwd; await close(); await create(s.shell, s.admin); }, commands, 'Restart session');
     button('×', close, commands, 'Close session');
     const status = element('p', 'Create a CMD or PowerShell session.', 'terminal-status'); status.setAttribute('role', 'status');

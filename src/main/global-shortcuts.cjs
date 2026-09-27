@@ -1,12 +1,12 @@
 'use strict';
-const keys=['shortcutVisibility','shortcutPanel'];
+const keys=['shortcutVisibility','shortcutPanel','shortcutBar'];
 class DockShortcuts {
   constructor(registry,actions){this.registry=registry;this.actions=actions;this.current={};}
   configure(settings){
     const next=Object.fromEntries(keys.map(key=>[key,settings[key] || '']));
     if(keys.every(key=>next[key]===this.current[key]))return;
     const active=Object.values(next).filter(Boolean);
-    if(new Set(active.map(value=>value.toLowerCase())).size!==active.length)throw new Error('Choose different shortcuts for visibility and expansion.');
+    if(new Set(active.map(value=>value.toLowerCase())).size!==active.length)throw new Error('Choose different shortcuts for each action.');
     const previous=this.current;
     this.clear();
     try {for(const key of keys)if(next[key]&&!this.registry.register(next[key],this.actions[key]))throw new Error(`Shortcut ${next[key]} is already in use. Choose another.`);this.current=next;}

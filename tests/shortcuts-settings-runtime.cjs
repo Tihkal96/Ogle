@@ -1,7 +1,7 @@
 'use strict';
 const {_electron:electron}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 (async()=>{
- const root=path.resolve(__dirname,'..'),profile=path.join(root,'artifacts',`hotkeys-${Date.now()}`);fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({compactChatTarget:'codex',autoStart:false,autoExpand:false,shortcutVisibility:'',shortcutPanel:''}));
+ const root=path.resolve(__dirname,'..'),profile=path.join(root,'artifacts',`hotkeys-${Date.now()}`);fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({compactChatTarget:'codex',autoStart:false,autoExpand:false,shortcutVisibility:'',shortcutPanel:'',shortcutBar:''}));
  const env={...process.env,PETDOCK_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch(process.env.PETDOCK_TEST_EXE?{executablePath:process.env.PETDOCK_TEST_EXE,args:[],env}:{args:[root],env});
  try{
@@ -14,6 +14,10 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Alt+F11')),true);
  await input.click();await input.press('Backspace');await input.locator('..').getByRole('button',{name:'Set',exact:true}).click();await page.evaluate(()=>saveQueue);
  assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Alt+F11')),false);
+ const bar=page.getByRole('textbox',{name:'Horizontal bar / ball shortcut',exact:true});await bar.click();await bar.press('Control+Alt+F10');await bar.locator('..').getByRole('button',{name:'Set',exact:true}).click();await page.evaluate(()=>saveQueue);
+ assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Alt+F10')),true);
+ await bar.click();await bar.press('Backspace');await bar.locator('..').getByRole('button',{name:'Set',exact:true}).click();await page.evaluate(()=>saveQueue);
+ assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Alt+F10')),false);
  console.log('Shortcut settings capture, real OS registration, conflict rollback and disable passed');
  }finally{await app.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
