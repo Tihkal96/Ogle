@@ -400,7 +400,7 @@ attempt(async () => {
   window.PetDockEditor?.mount($('editor-panel'),api,state.settings,save,error);
   window.PetDockShortcuts?.mount($('shortcuts-panel'),api,state.settings,save,error,()=>switchPanel('shortcuts'));
   window.PetDockTerminal?.mount($('terminal-panel'),api);
-  window.PetDockSettings?.mount($('settings-panel'),api,state.settings,pets,save,applySettings,error,async()=>{const fresh=await api.boot();pets=fresh.pets || [];return pets;},()=>switchPanel('chatgpt'));
+  window.PetDockSettings?.mount($('settings-panel'),api,state.settings,pets,save,applySettings,error,async()=>{pets=await api.listPets();applySettings();return pets;},()=>switchPanel('chatgpt'));
   state.threads=Array.isArray(boot.threads)?boot.threads:boot.threads?.data || [];state.cursor=boot.threads?.nextCursor;
   $('note').value=state.settings.note || '';applySettings();await setMode('idle');setConnection(boot.connection);renderProjects();renderThreads();$('load-more').hidden=!state.cursor;
   const previous=state.threads.find(t=>t.id===state.settings.lastThreadId);if(previous)await attempt(()=>selectThread(previous));

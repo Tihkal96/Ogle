@@ -85,7 +85,8 @@ app.whenReady().then(async () => {
   activityStats.configure(store.value);
   register('activityStats',()=>activityStats.snapshot());
   files = new DockFiles(win);
-  petLibrary = new PetLibrary(path.join(root,'assets/pets'),{fetcher:(...args)=>net.fetch(...args)});
+  petLibrary = new PetLibrary(path.join(root,'assets/pets'),{destination:path.join(app.getPath('userData'),'pets'),fetcher:(...args)=>net.fetch(...args)});
+  await petLibrary.refresh();
   await updatePetIcon();
   terminals = new TerminalManager({ packaged:app.isPackaged && !process.env.PETDOCK_DATA_DIR,onEvent: send, executable: process.execPath, workerArgs: app.isPackaged ? [] : [app.getAppPath()] });
   let lastInside,lastPointerX,lastPointerY;
@@ -168,6 +169,7 @@ app.whenReady().then(async () => {
     {label:'Quit Ogle',click:()=>send({type:'request-close'})}
   ]).popup({window:win});return true;});
   register('listPets',()=>pets());
+  register('refreshPets',async()=>{const result=await petLibrary.refresh();await updatePetIcon();return result;});
   register('petIcon',data=>{
     if(typeof data!=='string'||data.length>180000||!data.startsWith('data:image/png;base64,'))throw new Error('Invalid pet icon');
     const icon=nativeImage.createFromDataURL(data),size=icon.getSize();

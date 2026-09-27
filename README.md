@@ -8,7 +8,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.15](https://github.com/Tihkal96/Ogle/releases/download/v0.5.15/Ogle-0.5.15-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.16](https://github.com/Tihkal96/Ogle/releases/download/v0.5.16/Ogle-0.5.16-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -38,6 +38,12 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 ## Release checklist for maintainers and AI agents
 
 Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release.
+
+## Version 0.5.16
+
+Editor selection uses a clearer blue highlight; other matching words are underlined so they cannot be mistaken for the selected range.
+
+Pets run from Ogle’s local library. Startup and Settings → Pet → Refresh library copy available Codex pets locally, preserving them when Codex is unavailable. Pet downloads also work independently of Codex.
 
 ## Version 0.5.15
 
@@ -164,7 +170,7 @@ ChatGPT loads the real `https://chatgpt.com/` website. The `persist:petdock-chat
 
 Codex account actions use the local app-server account flow. Signing out can affect other local Codex clients and is confirmed explicitly.
 
-Pet installation accepts a slug such as `rinnegan`, `npx codex-pets add rinnegan`, or an HTTPS ZIP URL (including a pasted curl example). It extracts the download target; it does not execute pasted shell commands. Packages must contain one v2 manifest and a PNG/WebP 8-column, 11-row atlas. Only the sanitized manifest and sprite are installed, with archive size/path checks. Existing pets are never overwritten. Destination: `$CODEX_HOME/pets`, or `%USERPROFILE%/.codex/pets`; `PETDOCK_PETS_DIR` overrides it for tests.
+Pet installation accepts a slug such as `rinnegan`, `npx codex-pets add rinnegan`, or an HTTPS ZIP URL (including a pasted curl example). It extracts the download target; it does not execute pasted shell commands. Packages must contain one v2 manifest and a PNG/WebP 8-column, 11-row atlas. Only the sanitized manifest and sprite are installed, with archive size/path checks. Existing pets are never overwritten. Destination: `%APPDATA%/PetDock/pets` (or `pets` inside `PETDOCK_DATA_DIR`). Startup and Refresh library synchronize from `$CODEX_HOME/pets` or `%USERPROFILE%/.codex/pets`; `PETDOCK_PETS_DIR` overrides this source for compatibility. Runtime sprites and manifests stay local to Ogle. Missing Codex folders simply reload the local library; no Codex sign-in or connection is required.
 
 ## Data and modules
 

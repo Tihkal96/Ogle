@@ -2,6 +2,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
+const { createHash, randomUUID } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const { unzipSync } = require('fflate');
 const { imageSize } = require('image-size');
@@ -42,22 +43,79 @@ function readPackage(bytes) {
   if(!['png','webp'].includes(dimensions.type)||dimensions.width>8192||dimensions.height>11264||dimensions.width%8||dimensions.height%11)throw new Error('Sprite sheet must use the v2 8-column, 11-row atlas');
   return {config:{id:config.id,displayName:String(config.displayName||config.id).slice(0,120),description:String(config.description||'').slice(0,1000),spriteVersionNumber:2,spritesheetPath:config.spritesheetPath},sprite};
 }
+const safeId = value => typeof value === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/i.test(value);
+async function localPackage(base, id) {
+  if (!safeId(id)) throw new Error('Invalid pet folder');
+  const realBase = await fs.realpath(base);
+  const manifest = path.join(base, 'pet.json');
+  if (path.dirname(await fs.realpath(manifest)) !== realBase) throw new Error('Pet manifest must be local');
+  if ((await fs.stat(manifest)).size > 65536) throw new Error('Pet manifest is too large');
+  const config = JSON.parse(await fs.readFile(manifest, 'utf8'));
+  const name = config.spritesheetPath || 'spritesheet.webp';
+  if (config.spriteVersionNumber !== 2 || !/^[-a-zA-Z0-9_.]+\.(png|webp)$/i.test(name)) throw new Error('Invalid pet sprite');
+  const spritePath = path.join(base, name);
+  if (path.dirname(await fs.realpath(spritePath)) !== realBase) throw new Error('Pet sprite must be local');
+  if ((await fs.stat(spritePath)).size > 40 * 1024 * 1024) throw new Error('Pet sprite is too large');
+  const sprite = await fs.readFile(spritePath), dimensions = imageSize(sprite);
+  if (!['png', 'webp'].includes(dimensions.type) || !dimensions.width || !dimensions.height || dimensions.width > 8192 || dimensions.height > 11264 || dimensions.width % 8 || dimensions.height % 11) throw new Error('Invalid pet atlas');
+  const hash = createHash('sha256').update(sprite).digest('hex');
+  return { config: { id, displayName: String(config.displayName || id).slice(0,120), description: String(config.description || '').slice(0,1000), spriteVersionNumber: 2, spritesheetPath: name }, sprite, spritePath, hash };
+}
 class PetLibrary {
-  constructor(bundled,{destination=process.env.PETDOCK_PETS_DIR || path.join(process.env.CODEX_HOME || path.join(os.homedir(),'.codex'),'pets'),fetcher=fetch}={}) { Object.assign(this,{bundled,destination,fetcher}); }
+  constructor(bundled, {
+    destination = path.join(process.env.APPDATA || path.join(os.homedir(), '.config'), 'PetDock', 'pets'),
+    codexSource = process.env.PETDOCK_PETS_DIR || path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'pets'),
+    fetcher = fetch
+  } = {}) { Object.assign(this, { bundled, destination, codexSource, fetcher }); }
   async list() {
-    const result=new Map();
-    for(const folder of [this.bundled,this.destination]) {
-      let entries;try{entries=await fs.readdir(folder,{withFileTypes:true});}catch{continue;}
-      for(const entry of entries.filter(e=>e.isDirectory()&&!e.name.startsWith('.')))try{
-        const base=path.join(folder,entry.name),config=JSON.parse(await fs.readFile(path.join(base,'pet.json'),'utf8'));
-        if(config.spriteVersionNumber!==2)continue;
-        const sprite=path.resolve(base,config.spritesheetPath||'spritesheet.webp');
-        if(!sprite.startsWith(path.resolve(base)+path.sep))continue;
-        await fs.access(sprite);
-        result.set(entry.name,{id:entry.name,name:config.displayName||entry.name,config,spriteUrl:pathToFileURL(sprite).href});
-      }catch{}
+    const result = new Map();
+    for (const folder of [this.bundled, this.destination]) {
+      let entries; try { entries = await fs.readdir(folder, { withFileTypes: true }); } catch { continue; }
+      for (const entry of entries.filter(e => e.isDirectory() && safeId(e.name))) try {
+        const pet = await localPackage(path.join(folder, entry.name), entry.name);
+        const url = pathToFileURL(pet.spritePath); url.searchParams.set('v', pet.hash.slice(0,16));
+        result.set(entry.name, { id: entry.name, name: pet.config.displayName, config: pet.config, spriteUrl: url.href });
+      } catch { /* Incomplete or invalid packages must not break the rest of the library. */ }
     }
-    return [...result.values()].sort((a,b)=>(b.id==='rinne-mini')-(a.id==='rinne-mini'));
+    return [...result.values()].sort((a,b) => (b.id === 'rinne-mini') - (a.id === 'rinne-mini'));
+  }
+  refresh() {
+    // Startup and the Settings button can overlap; only one writer updates manifests.
+    if (!this.refreshing) this.refreshing = this.sync().finally(() => { this.refreshing = null; });
+    return this.refreshing;
+  }
+  async sync() {
+    let entries;
+    try { entries = await fs.readdir(this.codexSource, { withFileTypes: true }); }
+    catch { return { pets: await this.list(), source: 'local', updated: 0 }; }
+    let updated = 0;
+    if (path.resolve(this.codexSource) !== path.resolve(this.destination)) {
+      for (const entry of entries.filter(e => e.isDirectory() && safeId(e.name))) {
+        let temporary;
+        try {
+          const pet = await localPackage(path.join(this.codexSource, entry.name), entry.name);
+          const target = path.join(this.destination, entry.name);
+          await fs.mkdir(target, { recursive: true });
+          // Never follow a user-created junction outside the owned library.
+          if (path.dirname(await fs.realpath(target)) !== await fs.realpath(this.destination)) continue;
+          const spriteName = `sprite-${pet.hash.slice(0,24)}${path.extname(pet.config.spritesheetPath).toLowerCase()}`;
+          const config = { ...pet.config, spritesheetPath: spriteName };
+          const manifest = JSON.stringify(config, null, 2);
+          let current; try { current = await localPackage(target, entry.name); } catch {}
+          if (current?.hash === pet.hash && JSON.stringify(current.config) === JSON.stringify(config)) continue;
+          // Immutable sprite first, atomic manifest last. Existing renderers retain a valid atlas.
+          const spriteTarget = path.join(target, spriteName);
+          try { await fs.writeFile(spriteTarget, pet.sprite, { flag: 'wx' }); }
+          catch (error) { if (error.code !== 'EEXIST') throw error; if (!Buffer.from(await fs.readFile(spriteTarget)).equals(pet.sprite)) throw new Error('Cached sprite differs'); }
+          temporary = path.join(target, `.pet-${randomUUID()}.json`);
+          await fs.writeFile(temporary, manifest, { flag: 'wx' });
+          await fs.rename(temporary, path.join(target, 'pet.json'));
+          temporary = null; updated++;
+        } catch { /* Preserve the last good local copy if a source is incomplete or locked. */ }
+        finally { if (temporary) await fs.unlink(temporary).catch(() => {}); }
+      }
+    }
+    return { pets: await this.list(), source: 'codex', updated };
   }
   async install(input) {
     const url=sourceUrl(input);

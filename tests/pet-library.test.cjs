@@ -64,3 +64,46 @@ test('download failure leaves destination untouched', async () => {
   const library = new PetLibrary(temp, { destination, fetcher: async () => new Response('missing', { status: 404 }) });
   try { await assert.rejects(library.install('missing'), /404/); await assert.rejects(fs.access(destination), /ENOENT/); } finally { await fs.rm(temp, { recursive: true, force: true }); }
 });
+
+test('Codex refresh copies locally, updates changed sprites and preserves pets offline', async () => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'ogle-pet-sync-'));
+  const codexSource = path.join(temp, 'codex'), destination = path.join(temp, 'local');
+  const source = path.join(codexSource, config.id);
+  const library = new PetLibrary(path.join(temp, 'bundled'), { destination, codexSource });
+  try {
+    await fs.mkdir(source, { recursive: true });
+    await fs.writeFile(path.join(source, 'pet.json'), JSON.stringify(config));
+    await fs.writeFile(path.join(source, config.spritesheetPath), await sprite());
+    assert.deepEqual(await library.list(), [], 'list never reads directly from Codex');
+    const first = await library.refresh();
+    assert.equal(first.source, 'codex'); assert.equal(first.updated, 1);
+    assert.ok(require('node:url').fileURLToPath(first.pets[0].spriteUrl).startsWith(destination));
+    assert.equal((await library.refresh()).updated, 0);
+    const replacement = await fs.readFile(path.join(__dirname, '../assets/pets/rinne-mini/sprite-0ce987a74a9b.webp'));
+    await fs.writeFile(path.join(source, config.spritesheetPath), replacement);
+    const second = await library.refresh();
+    assert.equal(second.updated, 1); assert.notEqual(second.pets[0].spriteUrl, first.pets[0].spriteUrl);
+    assert.deepEqual(await fs.readFile(require('node:url').fileURLToPath(first.pets[0].spriteUrl)), await sprite(), 'active atlas remains intact');
+    await fs.writeFile(path.join(source, config.spritesheetPath), 'broken');
+    assert.equal((await library.refresh()).updated, 0);
+    assert.equal((await library.list())[0].spriteUrl, second.pets[0].spriteUrl);
+    await fs.rename(codexSource, path.join(temp, 'disconnected'));
+    const offline = await library.refresh(); assert.equal(offline.source, 'local');
+    assert.equal(offline.pets[0].spriteUrl, second.pets[0].spriteUrl);
+  } finally { await fs.rm(temp, { recursive: true, force: true }); }
+});
+
+test('refresh rejects escaping sprites and still offers independently installed pets offline', async () => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'ogle-pet-offline-'));
+  const codexSource = path.join(temp, 'codex'), source = path.join(codexSource, 'unsafe');
+  const bytes = await archive();
+  const library = new PetLibrary(path.join(temp, 'bundled'), { destination: path.join(temp, 'local'), codexSource, fetcher: async () => new Response(bytes) });
+  try {
+    await fs.mkdir(source, { recursive: true });
+    await fs.writeFile(path.join(source, 'pet.json'), JSON.stringify({ ...config, spritesheetPath: '../outside.webp' }));
+    await fs.writeFile(path.join(codexSource, 'outside.webp'), await sprite());
+    assert.equal((await library.refresh()).pets.length, 0);
+    assert.equal((await library.install('test-pet')).pet.id, config.id);
+    assert.equal((await library.refresh()).pets[0].id, config.id);
+  } finally { await fs.rm(temp, { recursive: true, force: true }); }
+});
