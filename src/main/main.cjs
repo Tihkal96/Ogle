@@ -34,6 +34,12 @@ let expanded = false;
 let layoutMode = 'idle';
 app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
 function send(payload) { if (win && !win.isDestroyed()) win.webContents.send('dock:event', payload); }
+let pendingAdminOperations=0;
+async function withAdminPrompt(action){
+  pendingAdminOperations++;send({type:'admin-prompt',pending:true});
+  try{return await action();}
+  finally{pendingAdminOperations--;send({type:'admin-prompt',pending:pendingAdminOperations>0});}
+}
 function string(value, label, max = 4096) {
   if (typeof value !== 'string' || !value.trim() || value.length > max) throw new Error(`Invalid ${label}`);
   return value;
@@ -188,14 +194,14 @@ app.whenReady().then(async () => {
   register('openWindowsTool', id => windowsTools.runTool(id));
   register('searchFiles', (query,options) => fileSearch.search(query,options));
   register('readDirectory', target => files.readDirectory(target));
-  register('terminalCreate', options => terminals.create(options));
+  register('terminalCreate', options => options?.admin?withAdminPrompt(()=>terminals.create(options)):terminals.create(options));
   register('terminalWrite', (id, data) => terminals.write(id, data));
   register('terminalResize', (id, cols, rows) => terminals.resize(id, cols, rows));
   register('terminalClose', id => terminals.close(id));
   register('terminalReleaseAdmin',()=>terminals.releaseAdmin());
   register('terminalAdminStatus',()=>terminals.adminStatus());
-  register('terminalEnableAdmin',()=>terminals.enableAdmin());
-  register('terminalDisableAdmin',()=>terminals.disableAdmin());
+  register('terminalEnableAdmin',()=>withAdminPrompt(()=>terminals.enableAdmin()));
+  register('terminalDisableAdmin',()=>withAdminPrompt(()=>terminals.disableAdmin()));
   register('windowAction', action => {
     if (action === 'close') app.quit();
     else if (action === 'minimize') win.minimize();
