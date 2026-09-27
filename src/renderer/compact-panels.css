@@ -22,3 +22,10 @@
 #editor-panel>.subtoolbar button{min-width:25px;height:25px;padding:2px 5px;border-color:transparent;background:transparent}
 #editor-panel>.subtoolbar button:hover{background:var(--hover);border-color:var(--border)}
 #editor-panel>.subtoolbar select{max-width:135px;height:25px}
+
+/* ChatGPT navigation leaves the space to the conversation. */
+#chatgpt-panel>.subtoolbar{gap:3px;padding:3px 7px;min-height:31px;box-sizing:border-box}
+#chatgpt-panel>.subtoolbar strong{font-size:10px;font-weight:500;color:var(--muted);margin-right:5px}
+#chatgpt-panel>.subtoolbar button{display:inline-flex;align-items:center;justify-content:center;width:25px;min-width:25px;height:25px;padding:0;border-color:transparent;background:transparent;font-size:15px;line-height:1}
+#chatgpt-panel>.subtoolbar button:hover{background:var(--hover);border-color:var(--border)}
+#chatgpt-panel>.subtoolbar button:focus-visible{outline:1px solid var(--accent);outline-offset:1px}

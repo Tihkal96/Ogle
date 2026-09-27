@@ -145,6 +145,7 @@ function chatgptLayout() {
   api.chatgptLayout({visible,bounds:{x:Math.round(rect.x),y:Math.round(rect.y),width:Math.max(1,Math.round(rect.width)),height:Math.max(1,Math.round(rect.height))}}).catch(error);
 }
 function switchPanel(name) {
+  if(name!=='notes')window.OgleNotesZoom?.reset();
   if(name===state.pinnedPanel)name=name==='editor'?'terminal':'editor';
   messageView.remember();
   if(name!==state.activePanel)window.PetDockShortcuts?.discardEdit();
@@ -193,6 +194,7 @@ async function flushLocal() {
 $('sidebar-toggle').onclick=()=>{save({sidebarVisible:state.settings.sidebarVisible===false});applySettings();};
 function setMode(mode) {
   if(state.pinnedPanel)mode='expand';
+  if(mode!=='expand')window.OgleNotesZoom?.reset();
   window.OglePinnedPanel.hideMenu();
   messageView.remember();
   closeChatTargetMenu();
