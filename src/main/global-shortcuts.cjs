@@ -1,5 +1,5 @@
 'use strict';
-const keys=['shortcutVisibility','shortcutPanel','shortcutBar'];
+const keys=['shortcutVisibility','shortcutPanel','shortcutBar','shortcutChatTarget'];
 class DockShortcuts {
   constructor(registry,actions){this.registry=registry;this.actions=actions;this.current={};}
   configure(settings){

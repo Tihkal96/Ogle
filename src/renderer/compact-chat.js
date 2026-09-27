@@ -42,6 +42,15 @@ function openChatTargetMenu(){
   for(const button of menu.children)button.setAttribute('aria-checked',String(button.dataset.chatTarget===(state.settings.compactChatTarget || 'codex')));
   menu.querySelector('[aria-checked="true"]').focus();
 }
+async function setCompactChatTarget(target){
+  persistDraft();await save({compactChatTarget:target});closeChatTargetMenu();applySettings();
+  if(state.mode==='picker')await setMode('reveal');
+  if(state.mode==='quick')$('prompt').focus();
+}
+async function toggleCompactChatTarget(){
+  await setCompactChatTarget(compactUsesChatGPT()?'codex':'chatgpt');
+  if(state.mode!=='quick')await setMode('reveal');
+}
 function mountChatTargetMenu(){
   $('chat-target-toggle').onclick=()=>{$('chat-target-menu').hidden?openChatTargetMenu():closeChatTargetMenu();};
   $('conversation-strip').oncontextmenu=event=>{event.preventDefault();openChatTargetMenu();};

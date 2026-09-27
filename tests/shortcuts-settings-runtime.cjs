@@ -1,7 +1,7 @@
 'use strict';
 const {_electron:electron}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 (async()=>{
- const root=path.resolve(__dirname,'..'),profile=path.join(root,'artifacts',`hotkeys-${Date.now()}`);fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({compactChatTarget:'codex',autoStart:false,autoExpand:false,shortcutVisibility:'',shortcutPanel:'',shortcutBar:''}));
+ const root=path.resolve(__dirname,'..'),profile=path.join(root,'artifacts',`hotkeys-${Date.now()}`);fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({compactChatTarget:'codex',autoStart:false,autoExpand:false,shortcutVisibility:'',shortcutPanel:'',shortcutBar:'',shortcutChatTarget:''}));
  const env={...process.env,PETDOCK_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch(process.env.PETDOCK_TEST_EXE?{executablePath:process.env.PETDOCK_TEST_EXE,args:[],env}:{args:[root],env});
  try{
@@ -18,6 +18,16 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Alt+F10')),true);
  await bar.click();await bar.press('Backspace');await bar.locator('..').getByRole('button',{name:'Set',exact:true}).click();await page.evaluate(()=>saveQueue);
  assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Alt+F10')),false);
+ await app.evaluate(({globalShortcut})=>{const register=globalShortcut.register.bind(globalShortcut);globalShortcut.register=(key,callback)=>{if(key==='Control+Alt+F9')global.targetShortcut=callback;return register(key,callback);};});
+ const target=page.getByRole('textbox',{name:'Switch Codex / ChatGPT shortcut',exact:true});await target.click();await target.press('Control+Alt+F9');await target.locator('..').getByRole('button',{name:'Set',exact:true}).click();await page.evaluate(()=>saveQueue);
+ assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Alt+F9')),true);
+ await page.evaluate(async()=>{state.selected={id:'shortcut-fixture',name:'Shortcut fixture'};await setMode('quick');});await page.locator('#prompt').fill('Codex draft');
+ await app.evaluate(()=>global.targetShortcut());await page.waitForFunction(()=>state.composerContext==='__chatgpt__');await page.locator('#prompt').fill('ChatGPT draft');
+ await app.evaluate(()=>global.targetShortcut());await page.waitForFunction(()=>state.composerContext==='shortcut-fixture');assert.equal(await page.locator('#prompt').inputValue(),'Codex draft');assert.equal(await page.locator('#prompt').evaluate(el=>el===document.activeElement),true);
+ await app.evaluate(()=>global.targetShortcut());await page.waitForFunction(()=>state.composerContext==='__chatgpt__');assert.equal(await page.locator('#prompt').inputValue(),'ChatGPT draft');
+ await page.evaluate(()=>setMode('idle'));await app.evaluate(()=>global.targetShortcut());await page.waitForFunction(()=>state.mode==='reveal'&&!DockLayoutTransition.busy);
+ assert.equal(await page.evaluate(()=>state.settings.compactChatTarget),'codex');
+ await page.evaluate(()=>switchPanel('settings'));await target.click();await target.press('Backspace');await target.locator('..').getByRole('button',{name:'Set',exact:true}).click();await page.evaluate(()=>saveQueue);assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Alt+F9')),false);
  console.log('Shortcut settings capture, real OS registration, conflict rollback and disable passed');
  }finally{await app.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

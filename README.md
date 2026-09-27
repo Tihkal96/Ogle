@@ -8,7 +8,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.13](https://github.com/Tihkal96/Ogle/releases/download/v0.5.13/Ogle-0.5.13-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.14](https://github.com/Tihkal96/Ogle/releases/download/v0.5.14/Ogle-0.5.14-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -38,6 +38,12 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 ## Release checklist for maintainers and AI agents
 
 Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release.
+
+## Version 0.5.14
+
+Ctrl+Alt+G switches the horizontal chat bar between Codex and ChatGPT. Customize or disable it in Settings → Keyboard shortcuts → Switch Codex / ChatGPT. An open prompt keeps focus and restores each destination’s draft; from other modes the shortcut reveals the horizontal bar. It never sends a message.
+
+Administrator prompts on standard Windows accounts remain once per Ogle session. Existing persistent access requires an administrator account; no unattended privilege grant is installed for standard accounts.
 
 ## Version 0.5.13
 
@@ -197,7 +203,7 @@ Custom toolbar ordering, additional widgets, and full language-server/compiler d
 Integration references: [Codex App Server](https://learn.chatgpt.com/docs/app-server), [Electron security](https://www.electronjs.org/docs/latest/tutorial/security), [Windows UAC](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/how-it-works).
 
 
-## v0.5.13: compact controls, counters and keyboard shortcuts
+## v0.5.14: compact controls, counters and keyboard shortcuts
 
 - A small white statistics block shows mouse-click and keystroke totals for the current Ogle session, plus system CPU and RAM usage. Settings → Counters & meters controls each row and places the block left, right or above the pet. Totals are not persisted. The non-elevated Windows collector counts input events only; it never reads key codes, typed text, window titles or clipboard content. Disabling both input rows stops the collector. CPU/RAM sampling runs every two seconds, with no disk index or network traffic.
 - Settings → Keyboard shortcuts records your key combination. Defaults: **Ctrl+Alt+O** shows/hides Ogle; **Ctrl+Alt+Space** expands/collapses the panel. Press Backspace in a shortcut field and Set to disable it. Conflicting shortcuts are rejected while preserving the previous binding.
