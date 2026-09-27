@@ -263,20 +263,20 @@ for(const event of ['pointermove','pointerdown','keydown','input','paste','wheel
     // Native resize/move can synthesize pointer events beneath a stationary cursor.
     // Only desktop-coordinate movement outside a transition counts as activity.
     if(!moved || window.DockLayoutTransition.busy)return;
-    if(state.suppressHoverReveal){state.suppressHoverReveal=false;if(activity.target.closest?.('#bar-orb'))pointerInside(true);}
+    if(state.suppressHoverReveal){state.suppressHoverReveal=false;if(activity.target.closest?.('#bar-orb'))pointerInside(true,true);}
   }
   resetQuickIdle();
   if(['expand','reveal'].includes(state.mode))resetPanelIdle();
 },{passive:true});
-function pointerInside(inside) {
+function pointerInside(inside,overOrb=false) {
   const changed=state.pointerInside!==inside;state.pointerInside=inside;clearTimeout(hoverTimer);
   if(state.mode==='expand' && changed)resetPanelIdle();
   if(state.settings.autoExpand===false || window.DockLayoutTransition.busy)return;
-  if(inside && state.mode==='idle') {if(!petPress && !state.suppressHoverReveal)hoverTimer=setTimeout(()=>{if(!petPress && state.mode==='idle')setMode('reveal');},120);return;}
+  if(inside && overOrb && state.mode==='idle') {if(!petPress && !state.suppressHoverReveal)hoverTimer=setTimeout(()=>{if(!petPress && state.mode==='idle')setMode('reveal');},120);return;}
   // Boundary events are often caused by the dock resizing, not by activity.
   // In compact modes they must not extend the independent collapse deadline.
 }
-$('bar-orb').addEventListener('mouseenter',()=>pointerInside(true));
+$('bar-orb').addEventListener('mouseenter',()=>pointerInside(true,true));
 $('bar-orb').addEventListener('mouseleave',()=>{if(state.mode==='idle')clearTimeout(hoverTimer);});
 document.querySelector('.toolbar').addEventListener('mouseenter',()=>pointerInside(true));
 $('conversation-strip').addEventListener('mouseenter',()=>pointerInside(true));
