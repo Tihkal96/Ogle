@@ -19,7 +19,33 @@
       const fit = new window.PetDockVendors.FitAddon(); term.loadAddon(fit);
       const view = element('div', '', 'terminal-session'); host.querySelector('.terminal-views').append(view); term.open(view);
       const tab = element('button', `${admin ? 'ADMIN · ' : ''}${shell === 'cmd' ? 'CMD' : 'PowerShell'}`); tab.type = 'button'; tab.onclick = () => select(config.id); host.querySelector('.terminal-tabs').append(tab);
+      // Select locally in xterm's rendered buffer; Shift+arrows must not reach the shell.
+      let keyboardSelection;
+      view.addEventListener('pointerdown', () => { keyboardSelection = null; });
+      term.onResize(() => { keyboardSelection = null; });
       term.attachCustomKeyEventHandler(event => {
+        const selectionKey = event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key);
+        if (selectionKey) {
+          event.preventDefault();
+          if (event.type === 'keydown') {
+            const buffer = term.buffer.active, cols = term.cols;
+            if (!term.hasSelection()) keyboardSelection = null;
+            if (!keyboardSelection) {
+              const range = term.getSelectionPosition();
+              const cursor = (buffer.baseY + buffer.cursorY) * cols + buffer.cursorX;
+              keyboardSelection = range ? {anchor:range.start.y * cols + range.start.x,head:range.end.y * cols + range.end.x} : {anchor:cursor,head:cursor};
+            }
+            const delta = {ArrowLeft:-1,ArrowRight:1,ArrowUp:-cols,ArrowDown:cols}[event.key];
+            keyboardSelection.head = Math.max(0,Math.min(buffer.length * cols,keyboardSelection.head + delta));
+            const start = Math.min(keyboardSelection.anchor,keyboardSelection.head), end = Math.max(keyboardSelection.anchor,keyboardSelection.head);
+            if (start === end) term.clearSelection(); else term.select(start % cols,Math.floor(start / cols),end - start);
+            const row = Math.min(buffer.length - 1,Math.floor(keyboardSelection.head / cols));
+            if (row < buffer.viewportY) term.scrollToLine(row);
+            else if (row >= buffer.viewportY + term.rows) term.scrollToLine(row - term.rows + 1);
+          }
+          return false;
+        }
+        if (event.type === 'keydown' && !['Shift','Control','Alt','Meta'].includes(event.key)) keyboardSelection = null;
         if (event.type==='keydown' && (event.ctrlKey || event.metaKey) && !event.altKey) {
           const key=event.key.toLowerCase();
           if (key==='c' && (event.shiftKey || term.hasSelection())) { copySelection(config.id).catch(report);event.preventDefault();return false; }

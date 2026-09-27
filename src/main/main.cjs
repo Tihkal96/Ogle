@@ -81,12 +81,13 @@ app.whenReady().then(async () => {
   petLibrary = new PetLibrary(path.join(root,'assets/pets'),{fetcher:(...args)=>net.fetch(...args)});
   await updatePetIcon();
   terminals = new TerminalManager({ packaged:app.isPackaged && !process.env.PETDOCK_DATA_DIR,onEvent: send, executable: process.execPath, workerArgs: app.isPackaged ? [] : [app.getAppPath()] });
-  let lastInside;
+  let lastInside,lastPointerX,lastPointerY;
   pointerTimer = setInterval(() => {
     if (!win || win.isDestroyed()) return;
     const p = screen.getCursorScreenPoint(), b = win.getBounds();
     const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
-    if (inside !== lastInside) { lastInside = inside; send({ type: 'pointer', inside }); }
+    const x=p.x-b.x,y=p.y-b.y;
+    if (inside !== lastInside || x!==lastPointerX || y!==lastPointerY) { lastInside=inside;lastPointerX=x;lastPointerY=y;send({type:'pointer',inside,x,y}); }
   }, 160);
   bridge = new CodexBridge();
   const desktopActivity = new Map();
@@ -184,7 +185,7 @@ app.whenReady().then(async () => {
   register('runCommand', value => windowsTools.runCommand(value));
   register('listWindowsTools', () => windowsTools.listTools());
   register('openWindowsTool', id => windowsTools.runTool(id));
-  register('searchFiles', query => fileSearch.search(query));
+  register('searchFiles', (query,options) => fileSearch.search(query,options));
   register('readDirectory', target => files.readDirectory(target));
   register('terminalCreate', options => terminals.create(options));
   register('terminalWrite', (id, data) => terminals.write(id, data));

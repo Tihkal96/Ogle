@@ -82,13 +82,14 @@ function createFileSearch({
     try { await starting; } finally { starting=null; }
   }
   return {
-    async search(query) {
+    async search(query, options = {}) {
+      if(!options || typeof options!=='object' || Array.isArray(options) || (Object.hasOwn(options,'includeFolders') && typeof options.includeFolders!=='boolean'))throw new Error('Invalid search options');
       if (typeof query !== 'string' || !query.trim() || query.length>1024 || /[\x00-\x1f]/.test(query)) throw new Error('Enter a file search of 1–1024 characters.');
       if (busy) return {status:'busy',results:[],limit:LIMIT,scope,message:'Preparing search…'};
       busy=true;
       try {
         await ensureStarted();
-        const args=['-instance',instance,'-p','-n',String(LIMIT),'-timeout','3000','-txt','-no-header','-no-footer','-no-highlight','-no-double-quote','-no-pause','-cp','65001','--',query.trim()];
+        const args=['-instance',instance,'-p','-n',String(LIMIT),'-timeout','3000','-txt','-no-header','-no-footer','-no-highlight','-no-double-quote','-no-pause','-cp','65001',...(options.includeFolders===true?[]:['/a-d']),'--',query.trim()];
         let output;
         // ES 1.1.0.38 checks EVERYTHING_IPC_IS_DB_LOADED with -timeout on
         // Everything >=1.4. Expiry exits with code 8, never success-empty.
