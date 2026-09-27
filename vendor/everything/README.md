@@ -17,11 +17,14 @@ Sources: https://www.voidtools.com/License.txt and https://github.com/voidtools/
 
 Packaging copies this directory to `resources/everything`, outside app.asar.
 Ogle starts a private named instance only on first search, with its own configuration
-and database in the Ogle user profile. It uses ordinary folder indexing of the user's
-Desktop, Documents, Downloads, Pictures, Music and Videos; no service, installer,
-administrator privileges or whole-drive scan. Folder changes are monitored in the
-native process with background IO priority. The native process closes with Ogle.
-Initial indexing can take longer for large folders. Search covers names, not contents.
+and database in the Ogle user profile. It uses native folder indexing of ready fixed
+local drives, plus Desktop, Documents, Downloads, Pictures, Music and Videos when
+redirected outside those drives. No service, installer or administrator privileges
+are required. Ogle enumerates drive roots once; it never scans files in JavaScript.
+The native engine indexes with one worker and background IO priority, and monitors
+changes. The native process closes with Ogle. Initial whole-drive indexing can take
+minutes; the visible search retries while preparing. Search covers names and paths,
+not file contents. Protected paths remain unavailable without existing read access.
 The shipped ES version's `-timeout` checks `EVERYTHING_IPC_IS_DB_LOADED` before
 querying Everything 1.4. A database-load timeout exits with code 8, which Ogle
 reports as initializing so the visible search retries instead of showing false

@@ -4,6 +4,34 @@ const assert = require('node:assert/strict');
 const { TerminalManager, options } = require('../src/main/terminal-manager.cjs');
 async function bounded(promise) { let timer; try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Terminal output timed out')), 10000); })]); } finally { clearTimeout(timer); } }
 test('validates shell and bounds dimensions', () => { assert.throws(() => options({ shell: 'cmd.exe & calc' })); assert.equal(options({ shell: 'cmd', cols: 9999 }).cols, 500); });
+
+test('packaged standard accounts use consented session elevation instead of persistent installation', async () => {
+  const { ElevatedBroker } = require('../src/main/elevated-broker.cjs');
+  const { PersistentAdminBroker } = require('../src/main/persistent-admin-broker.cjs');
+  for (const eligible of [false, true]) {
+    let constructed = 0, created = 0;
+    const manager = new TerminalManager({ packaged: true, brokerFactory(Broker) {
+      assert.equal(Broker, eligible ? PersistentAdminBroker : ElevatedBroker);
+      constructed++; return { async create() { created++; }, send() {}, dispose() {} };
+    } });
+    manager.installation = { async canPersist() { return eligible; } };
+    try {
+      await manager.create({ shell: 'powershell', admin: true });
+      await manager.create({ shell: 'cmd', admin: true });
+      assert.equal(constructed, 1); assert.equal(created, 2);
+    } finally { manager.dispose(); }
+  }
+});
+
+test('releasing administrator access during account lookup prevents late elevation', async () => {
+  let finish;
+  const manager = new TerminalManager({ brokerFactory() { throw new Error('Must not launch after cancellation'); } });
+  manager.installation = { canPersist: () => new Promise(resolve => { finish = resolve; }) };
+  const result = manager.create({ shell: 'cmd', admin: true });
+  manager.releaseAdmin(); finish(false);
+  await assert.rejects(result, /startup was cancelled/);
+  assert.equal(manager.sessions.size, 0);
+});
 test('real CMD terminal runs a command and exits', { timeout: 20000, skip: process.platform !== 'win32' }, async () => {
   let output = '', resolveOutput;
   const received = new Promise(resolve => { resolveOutput = resolve; });

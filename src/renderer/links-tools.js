@@ -24,7 +24,7 @@ window.OgleLinksTools={
     };
     if(api.listWindowsTools)api.listWindowsTools().then(items=>{for(const item of items){const option=new Option(item.label+(item.available===false?' (not installed)':''),item.id);option.disabled=item.available===false;select.add(option);}}).catch(report);
     const search=document.createElement('form');search.className='links-tool-row';
-    const query=document.createElement('input');query.id='links-file-search';query.placeholder='Search files…';query.title='Search your personal folders';query.setAttribute('aria-label','Search files');query.autocomplete='off';
+    const query=document.createElement('input');query.id='links-file-search';query.placeholder='Search files…';query.title='Search file names and paths on local drives';query.setAttribute('aria-label','Search files');query.autocomplete='off';
     const clear=document.createElement('button');clear.type='button';clear.textContent='×';clear.title='Clear search';clear.setAttribute('aria-label','Clear search');clear.hidden=true;
     const results=document.createElement('div');results.className='links-search-results';results.hidden=true;results.setAttribute('aria-label','File search results');
     let generation=0,timer,busy=false,pending=false;

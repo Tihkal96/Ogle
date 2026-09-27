@@ -112,13 +112,22 @@ class PersistentAdmin {
   }
   // This reports installed configuration. If the task is externally removed or
   // disabled, keep Remove available; start reports the repair action explicitly.
-  async status() { if (!this.packaged) return { available: false, enabled: false }; return { available: true, enabled: !!(await this.config()) }; }
+  async canPersist() {
+    if (!this.packaged) return false;
+    const result = String(await this.execute("[bool]([Security.Principal.WindowsIdentity]::GetCurrent().Groups.Value -contains 'S-1-5-32-544')")).trim().toLowerCase();
+    if (!['true', 'false'].includes(result)) throw new Error('Could not check Windows administrator account membership.');
+    return result === 'true';
+  }
+  async status() {
+    if (!this.packaged) return { available: false, enabled: false };
+    const available = await this.canPersist(), enabled = !!(await this.config());
+    return available ? { available, enabled } : { available, enabled, reason: 'standard-account' };
+  }
   async enable() {
     if (!this.packaged) throw new Error('Persistent administrator access is available in the packaged Ogle app.');
     if (await this.config()) return this.status();
     if (!this.installing) this.installing = (async () => {
-      const adminAccount = await this.execute("[bool]([Security.Principal.WindowsIdentity]::GetCurrent().Groups.Value -contains 'S-1-5-32-544')");
-      if (adminAccount.toLowerCase() !== 'true') throw new Error('Persistent administrator access requires an administrator Windows account. Sign in to that account to enable it.');
+      if (!await this.canPersist()) throw new Error('Persistent administrator access requires an administrator Windows account. Admin shells can still request Windows approval for this Ogle session.');
       return this.execute(installerScript({ sid: await this.identity(), source: path.dirname(this.executable), executable: path.basename(this.executable) }), true);
     })().finally(() => { this.installing = null; });
     await this.installing; return this.status();

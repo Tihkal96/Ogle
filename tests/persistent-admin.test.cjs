@@ -36,6 +36,21 @@ test('source builds cannot request persistent privileged installation', async ()
   assert.deepEqual(await installation.status(), { available: false, enabled: false });
   await assert.rejects(installation.enable(), /packaged/); assert.equal(calls, 0);
 });
+
+test('standard-account status explains session fallback without requesting elevation', async () => {
+  const installation = new PersistentAdmin({ packaged: true, execute: async (script, elevated) => {
+    assert.equal(elevated, undefined);
+    return 'False';
+  } });
+  installation.config = async () => null;
+  assert.deepEqual(await installation.status(), { available: false, enabled: false, reason: 'standard-account' });
+  await assert.rejects(installation.enable(), /Admin shells can still request Windows approval/);
+});
+
+test('unreadable account membership fails explicitly instead of selecting an elevation route', async () => {
+  const installation = new PersistentAdmin({ packaged: true, execute: async () => '' });
+  await assert.rejects(installation.canPersist(), /Could not check Windows/);
+});
 test('installation and removal scripts parse, use protected fixed executable and reject untrusted identifiers', { skip: process.platform !== 'win32' }, () => {
   assert.throws(() => installerScript({ sid: "bad';Remove-Item", source: 'x', executable: 'Ogle.exe' }), /Invalid/);
   assert.throws(() => installerScript({ sid, source: 'x', executable: '../Ogle.exe' }), /Invalid/);

@@ -162,11 +162,12 @@ class DesktopIpc extends EventEmitter {
 
 /** Newline-delimited app-server protocol. Never resolves approvals automatically. */
 class CodexBridge extends EventEmitter {
-  constructor({ executable, spawnProcess = spawn, timeoutMs = 30000, connectTimeoutMs = 12000, desktop = spawnProcess === spawn && process.platform === 'win32' ? new DesktopIpc() : null } = {}) {
+  constructor({ executable, spawnProcess = spawn, timeoutMs = 30000, connectTimeoutMs = 12000, connectionModes = ['shared', 'standalone'], desktop = spawnProcess === spawn && process.platform === 'win32' ? new DesktopIpc() : null } = {}) {
     super();
     Object.assign(this, { executable: executable || 'codex.exe', executableOverride: executable, spawnProcess, timeoutMs, connectTimeoutMs });
     this.pending = new Map(); this.requests = new Set(); this.resumed = new Set(); this.resuming = new Map(); this.nextId = 1;
     this.child = null; this.connected = false; this.connecting = null; this.mode = null;
+    this.connectionModes = connectionModes; this.historyReader = null; this.unsupportedHistory = new Set();
     this.desktop = desktop; this.deltas = new Map(); this.deltaTimer = null;
     desktop?.on('state', state => this.emit('notification', { method: 'petdock/threadState', params: state }));
   }
@@ -187,10 +188,10 @@ class CodexBridge extends EventEmitter {
       }
     }
     let proxyError;
-    for (const mode of ['shared', 'standalone']) {
+    for (const mode of this.connectionModes) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.5.11' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.5.12' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
@@ -289,7 +290,21 @@ class CodexBridge extends EventEmitter {
   async readThread(id) {
     await this.connect();
     if (this.desktop) { try { const owner = await this.desktop.owner(id); if (owner) { const result = await this.desktop.read(id, owner); if (result) return result; } } catch { /* Disk history remains readable when desktop closes. */ } }
-    const result = await this._rpc('thread/read', { threadId: id, includeTurns: true });
+    let result;
+    if (!this.unsupportedHistory.has(id)) {
+      try { result = await this._rpc('thread/read', { threadId: id, includeTurns: true }); }
+      catch (error) {
+        // A capability failure in some shared-server history backends. Other
+        // errors, including permissions and missing tasks, must remain visible.
+        if (!this.connectionModes.includes('shared') || !/^list_turns is not supported yet[.!]?$/i.test(error.message.trim())) throw error;
+        this.unsupportedHistory.add(id);
+      }
+    }
+    if (!result) {
+      // Only read disk history. Never resume/start or disturb the desktop writer.
+      this.historyReader ||= new CodexBridge({ executable: this.executable, spawnProcess: this.spawnProcess, timeoutMs: this.timeoutMs, connectTimeoutMs: this.connectTimeoutMs, connectionModes: ['standalone'], desktop: null });
+      result = await this.historyReader.readThread(id);
+    }
     return result.thread ? { ...result, thread: projectThread(result.thread) } : result;
   }
   async accountRead() { await this.connect(); return this._rpc('account/read', { refreshToken: false }); }
@@ -335,6 +350,7 @@ class CodexBridge extends EventEmitter {
   _dispose(error = new Error('Codex connection closed.')) {
     const child = this.child; this.child = null; this.connected = false;
     this.resumed.clear(); this.resuming.clear(); this.requests.clear();
+    this.unsupportedHistory.clear(); this.historyReader?.close(); this.historyReader = null;
     clearTimeout(this.deltaTimer); this.deltaTimer = null; this.deltas.clear();
     for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); }
     this.pending.clear();

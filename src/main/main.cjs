@@ -13,7 +13,7 @@ const { ChatGPTPanel } = require('./chatgpt-panel.cjs');
 const { sendChatGPT } = require('./chatgpt-composer.cjs');
 const { DockFiles } = require('./files.cjs');
 const windowsTools=require('./windows-tools.cjs').createWindowsTools();
-const fileSearch=require('./file-search.cjs').createFileSearch({dataDir:()=>app.getPath('userData'),roots:()=>['desktop','documents','downloads','pictures','music','videos'].map(name=>app.getPath(name))});
+const fileSearch=require('./file-search.cjs').createFileSearch({includeFixedDrives:true,dataDir:()=>app.getPath('userData'),roots:()=>['desktop','documents','downloads','pictures','music','videos'].map(name=>app.getPath(name))});
 const { TerminalManager } = require('./terminal-manager.cjs');
 const { PetLibrary } = require('./pet-library.cjs');
 const { dockBounds } = require('./window-layout.cjs');
@@ -152,6 +152,7 @@ app.whenReady().then(async () => {
   register('petMenu',()=>{Menu.buildFromTemplate([
     {label:'Open Codex',click:()=>shell.openExternal('codex://')},
     {label:expanded?'Collapse dock':'Expand dock',click:()=>send({type:'toggle-panel',expanded:!expanded})},
+    {label:'Show metrics',type:'checkbox',checked:store.value.statsVisible!==false,click:item=>{store.update({statsVisible:item.checked});activityStats.configure(store.value);send({type:'settings',settings:store.value});}},
     {label:'Settings',click:()=>send({type:'settings-open'})},
     {label:'Always on top',type:'checkbox',checked:win.isAlwaysOnTop(),click:item=>{win.setAlwaysOnTop(item.checked);store.update({alwaysOnTop:item.checked});send({type:'settings',settings:store.value});}},
     {type:'separator'},
