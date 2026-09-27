@@ -124,7 +124,11 @@ window.PetDockEditor = (() => {
       '.cm-cursor,.cm-dropCursor': { borderLeftColor:fg },
       '.cm-gutters': { backgroundColor:light ? '#f1f3f5' : midnight ? '#101e30' : '#1a1d20', color:light ? '#626b75' : '#909aa5', border:'none' },
       '.cm-activeLine,.cm-activeLineGutter': { backgroundColor:light ? '#e9edf2' : midnight ? '#1b3048' : '#24292e' },
-      '&.cm-focused .cm-selectionBackground,.cm-selectionBackground': { backgroundColor:light ? '#c9d8eb' : '#36506b' },
+      // Match One Dark's focused selector specificity so its pale fill cannot win.
+      '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground,.cm-selectionBackground': { backgroundColor:light ? '#9fc8fa' : '#245c91' },
+      '.cm-content ::selection': { backgroundColor:light ? '#9fc8fa' : '#245c91' },
+      // Other occurrences are references, not selected text. Avoid a second filled highlight.
+      '.cm-selectionMatch': { backgroundColor:'transparent', textDecoration:'underline', textDecorationColor:light ? '#5479a3' : '#7c9cbe', textUnderlineOffset:'3px' },
       '.cm-panels,.cm-tooltip': { backgroundColor:light ? '#f1f3f5' : '#1a1d20', color:fg, border:'1px solid ' + (light ? '#b8c0c8' : '#3b444d') }
     }, {dark:!light}), light ? [] : vendors.oneDark];
   }

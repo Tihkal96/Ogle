@@ -16,6 +16,19 @@ window.PetDockSettings = (() => {
     const petSection=section('Pet','Right-click your pet for window controls. Drag the pet to move the dock.');
     select(petSection,'Click action','petClickAction',[['codex','Open Codex'],['animation','Play a random animation'],['expand','Open full panel'],['reveal','Show horizontal bar'],['toggle','Toggle full panel'],['chatgpt','Open ChatGPT panel'],['none','Do nothing']], 'codex');
     const petSelect=select(petSection,'Character','petId',pets.map(p=>[p.id,p.name || p.config?.displayName || p.id]),settings.petId);
+    const libraryStatus=el('p','Pets are stored locally. Codex pets are copied at startup when available.','settings-hint');
+    const refreshLibrary=button('Refresh library',async()=>{
+      refreshLibrary.disabled=true;libraryStatus.textContent='Refreshing...';
+      try {
+        const result=await api.refreshPets();pets=await reloadPets();
+        const selected=petSelect.value;petSelect.replaceChildren();
+        for(const pet of pets)petSelect.add(new Option(pet.name || pet.id,pet.id));
+        petSelect.value=pets.some(p=>p.id===selected)?selected:(pets[0]?.id || '');
+        apply();libraryStatus.textContent=result.source==='codex'?'Library refreshed from Codex.':'Local library refreshed. Codex pets are unavailable.';
+      } catch(err){libraryStatus.textContent='Could not refresh the library. See Debug for details.';window.OgleDiagnostics.record(err,'Pet library');}
+      finally{refreshLibrary.disabled=false;}
+    });
+    petSection.append(refreshLibrary,libraryStatus);
     const sizeRow=el('label',null,'settings-row');sizeRow.append(el('span','Pet size'));const size=el('input');size.type='range';size.dataset.setting='petScale';size.min='.5';size.max='2';size.step='.1';size.value=settings.petScale || 1;const value=el('output',`${size.value}×`);size.oninput=()=>{value.textContent=`${size.value}×`;};size.onchange=()=>save({petScale:Number(size.value)}).then(apply).catch(report);sizeRow.append(size,value);petSection.append(sizeRow);
     const installRow=el('div',null,'settings-install');const source=el('input');source.placeholder='Pet name, install command, or HTTPS archive URL';source.setAttribute('aria-label','Install pet source');const installStatus=el('p',null,'settings-hint');
     installRow.append(source,button('Install pet',async()=>{if(!source.value.trim())return;installStatus.textContent='Installing…';try{const result=await api.installPet(source.value.trim());pets=result?.pets || await reloadPets();petSelect.replaceChildren();for(const pet of pets)petSelect.add(new Option(pet.name || pet.config?.displayName || pet.id,pet.id));if(result?.pet?.id){await save({petId:result.pet.id});petSelect.value=result.pet.id;}await reloadPets();apply();installStatus.textContent='Pet installed.';}catch(err){installStatus.textContent='Could not install this pet. Details are available in Settings → Debug.';window.OgleDiagnostics.record(err,'Pet installation');}}));petSection.append(installRow,installStatus);

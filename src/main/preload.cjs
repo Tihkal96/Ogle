@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('dock', Object.freeze({
   codexLogout: () => invoke('codexLogout'),
   installPet: input => invoke('installPet', input),
   listPets: () => invoke('listPets'),
+  refreshPets: () => invoke('refreshPets'),
   petIcon: data=>invoke('petIcon',data),
   clipboardReadText: () => invoke('clipboardReadText'),
   clipboardWriteText: text => invoke('clipboardWriteText', text),
