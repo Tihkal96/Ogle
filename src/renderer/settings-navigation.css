@@ -1,0 +1,8 @@
+.settings-navigation{position:sticky;top:0;z-index:2;display:flex;gap:6px;align-items:center;padding:7px 0;background:var(--panel,var(--inset,#171b1e));border-bottom:1px solid var(--border)}
+.settings-navigation input{flex:1;min-width:80px;width:0}
+.settings-navigation select{flex:0 1 160px;min-width:100px;max-width:45%}
+.settings-navigation input,.settings-navigation select,.settings-navigation button{font-size:11px;padding:5px 7px}
+.settings-navigation button{flex:none}
+.settings-search-status{font-size:11px;color:var(--muted);margin:9px 0}
+.settings-section{scroll-margin-top:46px}
+.settings-section[hidden],.settings-navigation [hidden],.settings-search-status[hidden]{display:none!important}

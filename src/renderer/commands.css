@@ -1,0 +1,10 @@
+.ogle-commands{width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 36px);padding:0;border:1px solid var(--border);border-radius:8px;background:var(--raised);color:var(--text);box-shadow:0 12px 36px #0005;overflow:hidden;-webkit-app-region:no-drag}
+.ogle-commands::backdrop{background:#0005}
+.command-header{display:flex;gap:6px;padding:10px;border-bottom:1px solid var(--border)}
+.command-header input{flex:1;min-width:0;height:32px;padding:5px 8px;font-size:13px}
+.command-header button{width:28px;padding:0;font-size:20px}
+.command-list{max-height:min(300px,calc(100vh - 150px));overflow:auto;padding:4px}
+.command-option{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;text-align:left;padding:8px 10px;border:0;background:transparent;font-size:12px;min-height:34px}
+.command-option[aria-selected=true]{background:var(--border)}
+.command-option small{color:var(--muted);font-size:10px;text-align:right}
+.ogle-commands footer{padding:7px 12px;border-top:1px solid var(--border);font-size:10px;color:var(--muted)}

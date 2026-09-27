@@ -8,9 +8,12 @@ const { pathToFileURL } = require('node:url');
 const { DockShortcuts } = require('./global-shortcuts.cjs');
 const { createActivityStats } = require('./activity-stats.cjs');
 const { SettingsStore } = require('./settings.cjs');
+const { GracefulShutdown } = require('./shutdown.cjs');
 const { CodexBridge } = require('./codex-bridge.cjs');
 const { ChatGPTPanel } = require('./chatgpt-panel.cjs');
 const { sendChatGPT } = require('./chatgpt-composer.cjs');
+const { pasteChatGPTDraft } = require('./chatgpt-draft.cjs');
+const { selectionMenuTemplate } = require('./selection-menu.cjs');
 const { DockFiles } = require('./files.cjs');
 const windowsTools=require('./windows-tools.cjs').createWindowsTools();
 const fileSearch=require('./file-search.cjs').createFileSearch({includeFixedDrives:true,dataDir:()=>app.getPath('userData'),roots:()=>['desktop','documents','downloads','pictures','music','videos'].map(name=>app.getPath(name))});
@@ -26,7 +29,7 @@ app.setName('Ogle');
 app.setAppUserModelId('PetDock.Desktop');
 app.setPath('userData', process.env.PETDOCK_DATA_DIR ? path.resolve(process.env.PETDOCK_DATA_DIR) : path.join(app.getPath('appData'), 'PetDock'));
 if (!app.requestSingleInstanceLock()) {app.quit();return;}
-let activityStats, shortcuts, win, bridge, chatgpt, store, files, terminals, petLibrary, petDragState, pointerTimer, connection = { state: 'connecting', detail: 'Connecting to Codex…' }, connectionPromise;
+let shutdown, activityStats, shortcuts, win, bridge, chatgpt, store, files, terminals, petLibrary, petDragState, pointerTimer, connection = { state: 'connecting', detail: 'Connecting to Codex…' }, connectionPromise;
 const root = path.resolve(__dirname, '../..');
 const indexPath = path.join(root, 'src/renderer/index.html');
 const indexUrl = pathToFileURL(indexPath).href;
@@ -35,6 +38,14 @@ let pinnedPanelSide = null;
 let layoutMode = 'idle';
 app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
 function send(payload) { if (win && !win.isDestroyed()) win.webContents.send('dock:event', payload); }
+function showSelectionMenu(text){
+  Menu.buildFromTemplate(selectionMenuTemplate(text,{copy:value=>clipboard.writeText(value),paste:payload=>send({type:'selection-paste',...payload})})).popup({window:win});return true;
+}
+let composerBusy=false;
+async function withChatGPTComposer(action){
+  if(composerBusy)throw new Error('A ChatGPT draft or send is already in progress.');
+  composerBusy=true;try{return await action();}finally{composerBusy=false;}
+}
 let pendingAdminOperations=0;
 async function withAdminPrompt(action){
   pendingAdminOperations++;send({type:'admin-prompt',pending:true});
@@ -72,6 +83,14 @@ app.whenReady().then(async () => {
   if(process.argv.includes('--autostart')&&!process.env.PETDOCK_DATA_DIR)ensureCodex({open:url=>shell.openExternal(url)}).catch(error=>send({type:'startup-error',message:error.message}));
   const area = screen.getPrimaryDisplay().workArea;
   win = new BrowserWindow({ title: 'Ogle', width: Math.min(600, area.width), height: Math.min(200, area.height), x: area.x + Math.max(0, area.width - 620), y: area.y + Math.max(0, area.height - 220), transparent: true, frame: false, resizable: false, backgroundColor: '#00000000', alwaysOnTop: store.value.alwaysOnTop, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  shutdown=new GracefulShutdown({window:win,
+    flush:()=>win.webContents.executeJavaScript("typeof state==='undefined' || !state.bootReady ? true : flushLocal().then(()=>true,err=>{error(err);return false;})"),
+    report:problem=>{if(!win.isDestroyed()&&!win.webContents.isDestroyed())win.webContents.executeJavaScript(`error(${JSON.stringify(problem.message)})`).catch(()=>{});}
+  });
+  win.on('close',event=>{
+    if(shutdown.ready)return;
+    event.preventDefault();shutdown.request().then(ok=>{if(ok)app.quit();});
+  });
   // Native stage dragging follows the same pet-only boundary as pet dragging.
   win.on('will-move',(event,bounds)=>{
     const scale=store.value.petScale || 1,area=screen.getDisplayNearestPoint(petCenter(bounds,scale)).workArea;
@@ -80,7 +99,7 @@ app.whenReady().then(async () => {
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== indexUrl) event.preventDefault(); });
-  chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}),onFindOpen:()=>send({type:'chat-find-open',target:'chatgpt'}),onFindResult:result=>send({type:'chatgpt-find-result',result}) });
+  chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}),onFindOpen:()=>send({type:'chat-find-open',target:'chatgpt'}),onCommandsOpen:()=>send({type:'commands-open',target:'chatgpt'}),onSelectionMenu:text=>{try{showSelectionMenu(text);}catch(error){send({type:'startup-error',message:error.message});}},onFindResult:result=>send({type:'chatgpt-find-result',result}) });
   shortcuts=new DockShortcuts(globalShortcut,{
     shortcutVisibility:()=>{if(win.isVisible()&&!win.isMinimized()){chatgpt.hide();win.hide();}else{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'dock-shown'});}},
     shortcutChatTarget:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-chat-target'});},
@@ -147,12 +166,18 @@ app.whenReady().then(async () => {
     return result.canceled ? null : result.filePaths[0];
   });
   register('openChatGPT', action => chatgpt.show(action));
-  register('chatgptSend', async payload => {
+  register('selectionMenu',text=>showSelectionMenu(text));
+  register('chatgptSend', payload => withChatGPTComposer(async () => {
     await chatgpt.show();
     const contents=chatgpt.view.webContents,deadline=Date.now()+10000;
     while(!contents.isDestroyed() && contents.isLoadingMainFrame() && Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,50));
     return sendChatGPT(contents,payload);
-  });
+  }));
+  register('chatgptPaste', text => withChatGPTComposer(async()=>{
+    await chatgpt.show();const contents=chatgpt.view.webContents,deadline=Date.now()+10000;
+    while(!contents.isDestroyed() && contents.isLoadingMainFrame() && Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,50));
+    return pasteChatGPTDraft(contents,text);
+  }));
   register('chatgptLayout', layout => chatgpt.layout(layout));
   register('chatgptFind', (query, options) => chatgpt.find(query, options));
   register('chatgptStopFind', () => chatgpt.stopFind());
@@ -177,6 +202,7 @@ app.whenReady().then(async () => {
     {label:'Open Codex',click:()=>shell.openExternal('codex://')},
     {label:expanded?'Collapse dock':'Expand dock',click:()=>send({type:'toggle-panel',expanded:!expanded})},
     {label:'Show metrics',type:'checkbox',checked:store.value.statsVisible!==false,click:item=>{store.update({statsVisible:item.checked});activityStats.configure(store.value);send({type:'settings',settings:store.value});}},
+    {label:'Commands…',accelerator:'Control+Shift+P',click:()=>send({type:'commands-open'})},
     {label:'Settings',click:()=>send({type:'settings-open'})},
     {label:'Always on top',type:'checkbox',checked:win.isAlwaysOnTop(),click:item=>{win.setAlwaysOnTop(item.checked);store.update({alwaysOnTop:item.checked});send({type:'settings',settings:store.value});}},
     {type:'separator'},
@@ -238,10 +264,14 @@ app.whenReady().then(async () => {
   resize();
   win.show();
 });
-let quitReady=false;
+let quitReady=false,quitPending=false;
 app.on('before-quit', event => {
   if(quitReady)return;
-  event.preventDefault();shortcuts?.dispose();activityStats?.dispose();clearInterval(pointerTimer);chatgpt?.close();bridge?.close();terminals?.dispose();
+  event.preventDefault();
+  if(shutdown && !shutdown.ready){shutdown.request().then(ok=>{if(ok)app.quit();});return;}
+  if(quitPending)return;quitPending=true;
+  if(win && !win.isDestroyed())win.hide();
+  shortcuts?.dispose();activityStats?.dispose();clearInterval(pointerTimer);chatgpt?.close();bridge?.close();terminals?.dispose();
   let timeout;
   Promise.race([fileSearch.dispose(),new Promise(resolve=>{timeout=setTimeout(resolve,5000);})]).catch(()=>{}).finally(()=>{clearTimeout(timeout);quitReady=true;app.quit();});
 });

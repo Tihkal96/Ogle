@@ -64,6 +64,7 @@ window.PetDockSettings = (() => {
     const debug=section('Debug','Technical diagnostics for developers and troubleshooting.');
     const debugActions=el('div',null,'settings-actions');
     debugActions.append(button('Open debug log',()=>window.OgleDiagnostics.open()));debug.append(debugActions);
+    window.OgleSettingsNavigation.mount(root);
   }
   return {mount};
 })();

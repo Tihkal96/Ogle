@@ -4,7 +4,7 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
   <title>Ogle</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="terminal.css"><link rel="stylesheet" href="shortcuts.css"><link rel="stylesheet" href="vendor/bundle.css"><link rel="stylesheet" href="compact-panels.css"><link rel="stylesheet" href="activity-stats.css"><link rel="stylesheet" href="compact-codex.css"><link rel="stylesheet" href="conversation-picker.css"><link rel="stylesheet" href="pinned-panel.css">
-<link rel="stylesheet" href="chat-find.css"></head>
+<link rel="stylesheet" href="chat-find.css"><link rel="stylesheet" href="settings-navigation.css"><link rel="stylesheet" href="commands.css"></head>
 <body class="collapsed bar-idle">
 <main id="dock">
   <header class="pet-stage">
@@ -14,12 +14,12 @@
   <section class="shell">
     <button id="bar-orb" type="button" title="Reveal dock" aria-label="Reveal dock"></button>
     <nav class="toolbar" aria-label="Dock tools">
-      <button class="tool selected" data-panel="chats" title="Codex">◈ <span>Codex</span></button>
-      <button class="tool" id="chatgpt" data-panel="chatgpt" title="ChatGPT">◎ <span>ChatGPT</span></button>
-      <button class="tool" data-panel="notes" title="Notes">▤ <span>Notes</span></button>
-      <button class="tool" data-panel="editor" title="Editor">⌘ <span>Editor</span></button>
-      <button class="tool" data-panel="terminal" title="Terminal">›_ <span>Shell</span></button>
-      <button class="tool" data-panel="shortcuts" title="Shortcuts"><svg class="tool-symbol" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 3h5l2 2h7v9H1z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>Links</span></button>
+      <button class="tool selected" aria-label="Codex" aria-controls="chats-panel" data-panel="chats" title="Codex">◈ <span>Codex</span></button>
+      <button class="tool" id="chatgpt" aria-label="ChatGPT" aria-controls="chatgpt-panel" data-panel="chatgpt" title="ChatGPT">◎ <span>ChatGPT</span></button>
+      <button class="tool" aria-label="Notes" aria-controls="notes-panel" data-panel="notes" title="Notes">▤ <span>Notes</span></button>
+      <button class="tool" aria-label="Editor" aria-controls="editor-panel" data-panel="editor" title="Editor">⌘ <span>Editor</span></button>
+      <button class="tool" aria-label="Shell" aria-controls="terminal-panel" data-panel="terminal" title="Terminal">›_ <span>Shell</span></button>
+      <button class="tool" aria-label="Links" aria-controls="shortcuts-panel" data-panel="shortcuts" title="Shortcuts"><svg class="tool-symbol" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 3h5l2 2h7v9H1z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>Links</span></button>
       <div id="pinned-links" role="group" aria-label="Pinned links"></div>
       <div class="spacer"></div><span id="status-dot" role="status" title="Connecting to Codex" aria-label="Connecting to Codex"></span><time id="clock"></time><button id="collapse" class="icon" title="Open panel" aria-label="Open panel" aria-expanded="false">⌖</button><button id="always-top" class="icon" title="Always on top" aria-label="Always on top" aria-pressed="true">◇</button><button id="panel-pin" class="icon" title="Keep expanded panel open" aria-label="Keep expanded panel open" aria-pressed="false"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 5 5-3 1-4 4v4l-2 2-3-5-5-3 2-2h4l4-4zM9 15l-6 6"/></svg></button><button id="settings-button" class="icon" data-panel="settings" title="Settings" aria-label="Settings">⚙</button>
     </nav>
@@ -43,5 +43,5 @@
   <aside id="side-panel" hidden aria-label="Pinned panel"><header><span id="side-panel-title"></span><button id="side-panel-close" aria-label="Unpin panel" title="Unpin panel">×</button></header><div id="side-panel-content"></div></aside>
   </div>
   <div id="panel-menu" role="menu" hidden><button role="menuitem" id="pin-tab">Pin</button></div>
-</main><script src="diagnostics.js"></script><script src="vendor/bundle.js"></script><script src="editor.js"></script><script src="links-tools.js"></script><script src="shortcuts.js"></script><script src="terminal.js"></script><script src="settings.js"></script><script src="attachments.js"></script><script src="layout-transition.js"></script><script src="compact-chat.js"></script><script src="conversation-picker.js"></script><script src="codex-messages.js"></script><script src="idle-animation.js"></script><script src="codex-queue.js"></script><script src="pet-actions.js"></script><script src="activity-stats.js"></script><script src="pinned-panel.js"></script><script src="notes-zoom.js"></script><script src="chat-find.js"></script><script src="app.js"></script>
+</main><script src="diagnostics.js"></script><script src="vendor/bundle.js"></script><script src="editor.js"></script><script src="links-tools.js"></script><script src="shortcuts.js"></script><script src="terminal.js"></script><script src="settings-navigation.js"></script><script src="settings.js"></script><script src="attachments.js"></script><script src="layout-transition.js"></script><script src="compact-chat.js"></script><script src="conversation-picker.js"></script><script src="codex-messages.js"></script><script src="idle-animation.js"></script><script src="codex-queue.js"></script><script src="pet-actions.js"></script><script src="activity-stats.js"></script><script src="pinned-panel.js"></script><script src="notes-zoom.js"></script><script src="chat-find.js"></script><script src="commands.js"></script><script src="dock-commands.js"></script><script src="selection-transfer.js"></script><script src="app.js"></script>
 </body></html>

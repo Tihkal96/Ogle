@@ -5,13 +5,15 @@ const { ChatGPTActivity } = require('./chatgpt-activity.cjs');
 const HOME = 'https://chatgpt.com/';
 
 class ChatGPTPanel {
-  constructor({ parent, onStatus, onActivity, onInteraction, onFindOpen, onFindResult } = {}) {
+  constructor({ parent, onStatus, onActivity, onInteraction, onFindOpen, onFindResult, onCommandsOpen, onSelectionMenu } = {}) {
     this.parent = parent;
     this.onStatus = onStatus;
     this.onActivity = onActivity;
     this.onInteraction = onInteraction;
     this.onFindOpen = onFindOpen;
     this.onFindResult = onFindResult;
+    this.onCommandsOpen = onCommandsOpen;
+    this.onSelectionMenu = onSelectionMenu;
     this.activity = null;
     this.view = null;
     this.children = new Set();
@@ -81,6 +83,7 @@ class ChatGPTPanel {
     };
     contents.on('before-input-event', (event, input) => {
       interact();
+      if(input.type==='keyDown' && input.control && input.shift && !input.alt && !input.meta && String(input.key).toLowerCase()==='p' && this.visible && this.view?.getVisible()){event.preventDefault();this.parent.webContents.focus();this.onCommandsOpen?.();return;}
       if (input.type === 'keyDown' && input.control && !input.alt && !input.meta &&
           String(input.key).toLowerCase() === 'f' && this.visible && this.view?.getVisible()) {
         event.preventDefault();
@@ -88,6 +91,7 @@ class ChatGPTPanel {
         this.onFindOpen?.();
       }
     });
+    contents.on('context-menu',(event,params)=>{if(params.selectionText && params.inputFieldType!=='password'){event.preventDefault();this.onSelectionMenu?.(params.selectionText);}});
     contents.on('found-in-page', (_event, result) => {
       if (this.visible && this.view?.getVisible()) this.onFindResult?.(result);
     });
@@ -163,6 +167,11 @@ class ChatGPTPanel {
   }
 
   async show(action = 'show') {
+    if(action==='focus') {
+      const contents=this.view?.webContents;
+      if(this.visible && this.view?.getVisible() && contents && !contents.isDestroyed())contents.focus();
+      return;
+    }
     if(action==='logout') {
       const choice=await dialog.showMessageBox(this.parent,{type:'question',message:'Sign out of ChatGPT in Ogle?',detail:'This clears only the dock’s ChatGPT browser session.',buttons:['Cancel','Sign out'],defaultId:0,cancelId:0});
       if(choice.response!==1)return {cancelled:true};

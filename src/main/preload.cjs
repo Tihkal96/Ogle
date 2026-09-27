@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('dock', Object.freeze({
   chooseFolder: () => invoke('chooseFolder'),
   openChatGPT: action => invoke('openChatGPT', action),
   chatgptSend: payload => invoke('chatgptSend', payload),
+  chatgptPaste: text => invoke('chatgptPaste',text),
+  selectionMenu: text => invoke('selectionMenu',text),
   chatgptLayout: layout => invoke('chatgptLayout', layout),
   chatgptFind: (query, options = {}) => invoke('chatgptFind', query, options),
   chatgptStopFind: () => invoke('chatgptStopFind'),

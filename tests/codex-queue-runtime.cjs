@@ -26,7 +26,7 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
       element.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));
     });
     await page.waitForFunction(()=>PetDockAttachments.hasImages()&&!PetDockAttachments.isBusy());
-    assert.equal(await page.locator('#send').isEnabled(),true);assert.match(await page.locator('#send').textContent(),/Queue/);
+    assert.equal(await page.locator('#send').isEnabled(),true);assert.match(await page.locator('#send').getAttribute('aria-label'),/Queue/);
     await page.locator('#send').evaluate(element=>element.click());
     await page.waitForFunction(()=>codexQueue.list('queue-a').length===1);
     assert.equal(await page.locator('#prompt').inputValue(),'');assert.equal(await page.evaluate(()=>PetDockAttachments.hasImages()),false);
