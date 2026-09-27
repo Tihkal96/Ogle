@@ -1,28 +1,34 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {dockBounds}=require('../src/main/window-layout.cjs');
+const {dockBounds,petBounds,clampPet,petCenter}=require('../src/main/window-layout.cjs');
+function visible(box,area,scale){const p=petBounds(box,scale);assert.ok(p.x>=area.x&&p.y>=area.y);assert.ok(p.x+p.width<=area.x+area.width&&p.y+p.height<=area.y+area.height);}
 test('compact reveal preserves pet center and top while prompt grows below',()=>{
-  const area={x:0,y:0,width:1920,height:1040},idle={x:760,y:100,width:300,height:180};
-  const reveal=dockBounds('reveal',idle,area);
-  assert.equal(reveal.x+reveal.width/2,idle.x+idle.width/2);assert.equal(reveal.y,100);
-  const quick=dockBounds('quick',reveal,area);
-  assert.equal(quick.y,reveal.y);assert.equal(reveal.height,216);assert.equal(quick.height,386);
-  assert.deepEqual(dockBounds('idle',quick,area),idle);
+ const area={x:0,y:0,width:1920,height:1040},idle={x:760,y:100,width:300,height:180};
+ const reveal=dockBounds('reveal',idle,area),quick=dockBounds('quick',reveal,area);
+ assert.deepEqual(petCenter(reveal),petCenter(idle));assert.equal(quick.y,reveal.y);
+ assert.equal(reveal.height,216);assert.equal(quick.height,386);assert.deepEqual(dockBounds('idle',quick,area),idle);
 });
-test('every layout stays on small secondary displays with scaled pets',()=>{
-  const area={x:-800,y:0,width:800,height:600};
-  for(const mode of ['idle','reveal','quick','picker','expand'])for(const scale of [.5,1,2]){
-    const box=dockBounds(mode,{x:-180,y:500,width:220,height:200},area,scale);
-    assert.ok(box.x>=area.x&&box.y>=area.y);
-    assert.ok(box.x+box.width<=area.x+area.width&&box.y+box.height<=area.height);
-  }
-});
-
-test('pinned panel layouts stay inside each display work area',()=>{
- for(const area of [{x:0,y:0,width:1920,height:1040},{x:-800,y:0,width:800,height:600}])for(const side of ['left','right','bottom']){
- const box=dockBounds('expand',{x:area.x+500,y:500,width:760,height:820},area,1,side);
- assert.ok(box.x>=area.x && box.y>=area.y);
- assert.ok(box.x+box.width<=area.x+area.width && box.y+box.height<=area.y+area.height);
+test('all layouts keep only the scaled pet inside negative-origin displays',()=>{
+ const area={x:-800,y:-600,width:800,height:600};
+ for(const mode of ['idle','reveal','quick','picker','expand'])for(const scale of [.5,1,2])for(const x of [-1000,-180,200])for(const y of [-900,-100,100]){
+  const box=dockBounds(mode,{x,y,width:300,height:200},area,scale);visible(box,area,scale);
  }
+});
+test('expansion and side panels may overhang without displacing an in-bounds pet',()=>{
+ const area={x:0,y:0,width:1920,height:1040};
+ const idle={x:1802,y:914,width:118,height:180};
+ for(const mode of ['reveal','quick','picker','expand'])for(const side of [null,'left','right','bottom']){
+  const box=dockBounds(mode,idle,area,1,side);visible(box,area,1);
+  assert.deepEqual(petCenter(box),petCenter(idle));
+  assert.ok(box.x+box.width>area.width);assert.ok(box.y+box.height>area.height);
+ }
+});
+test('drag clamps pet on all edges while allowing panel outside work area',()=>{
+ const area={x:-1920,y:100,width:1920,height:1000};
+ for(const scale of [.5,1,2])for(const x of [-3000,1000])for(const y of [-1000,2000]){
+  const box=clampPet({x,y,width:1320,height:820},area,scale);visible(box,area,scale);
+  assert.equal(box.width,1320);assert.equal(box.height,820);
+ }
+ const left=clampPet({x:-3000,y:200,width:760,height:820},area);assert.ok(left.x<area.x);
 });
