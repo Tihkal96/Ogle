@@ -31,6 +31,7 @@ const root = path.resolve(__dirname, '../..');
 const indexPath = path.join(root, 'src/renderer/index.html');
 const indexUrl = pathToFileURL(indexPath).href;
 let expanded = false;
+let pinnedPanelSide = null;
 let layoutMode = 'idle';
 app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
 function send(payload) { if (win && !win.isDestroyed()) win.webContents.send('dock:event', payload); }
@@ -61,7 +62,7 @@ function resize(mode = layoutMode) {
   const area = screen.getDisplayMatching(bounds).workArea;
   const scale = store?.value.petScale || 1;
   if (!expanded) chatgpt?.hide();
-  const next=dockBounds(mode,bounds,area,scale);
+  const next=dockBounds(mode,bounds,area,scale,pinnedPanelSide);
   if(['x','y','width','height'].some(key=>next[key]!==bounds[key]))win.setBounds(next);
 }
 async function connected() { await connectionPromise; if (connection.state === 'error') throw new Error(connection.detail); }
@@ -204,6 +205,7 @@ app.whenReady().then(async () => {
   register('terminalAdminStatus',()=>terminals.adminStatus());
   register('terminalEnableAdmin',()=>withAdminPrompt(()=>terminals.enableAdmin()));
   register('terminalDisableAdmin',()=>withAdminPrompt(()=>terminals.disableAdmin()));
+  register('setPinnedPanel',side=>{if(side!==null && !['left','right','bottom'].includes(side))throw new Error('Invalid panel position');pinnedPanelSide=side;});
   register('windowAction', action => {
     if (action === 'close') app.quit();
     else if (action === 'minimize') win.minimize();
@@ -212,7 +214,7 @@ app.whenReady().then(async () => {
     else throw new Error('Unknown window action');
     return { expanded,mode:layoutMode,bounds:win.getBounds() };
   });
-  const transition=new WindowTransition(win,bounds=>screen.getDisplayMatching(bounds).workArea,()=>store.value.petScale || 1);
+  const transition=new WindowTransition(win,bounds=>screen.getDisplayMatching(bounds).workArea,()=>store.value.petScale || 1,()=>pinnedPanelSide);
   register('windowTransition',(phase,mode,reducedMotion)=>{
     if(phase==='begin')return transition.begin(mode,Boolean(reducedMotion));
     if(phase==='finish')return transition.finish();

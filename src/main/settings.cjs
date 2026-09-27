@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'codex', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', shortcutChatTarget:'Control+Alt+G', includeSearchFolders:false, statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 10000, petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
+const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'codex', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', shortcutChatTarget:'Control+Alt+G', includeSearchFolders:false, statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 7000, pinnedPanelSide: 'left', petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
 function validatePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
   const clean = {};
@@ -10,6 +10,7 @@ function validatePatch(patch) {
     if(typeof value!=='string' || value.length>80 || (value && !/^(?:(?:Control|Ctrl|Alt|Shift|Super|CommandOrControl)\+)+(?:[A-Z0-9]|Space|F(?:[1-9]|1[0-9]|2[0-4])|Home|End|Insert|Delete|PageUp|PageDown|Up|Down|Left|Right)$/i.test(value)))throw new Error('Use a shortcut such as Control+Alt+O, or leave it empty.');
     clean[key]=value;
   }
+  if(Object.hasOwn(patch,'pinnedPanelSide')){if(!['left','right','bottom'].includes(patch.pinnedPanelSide))throw new Error('Invalid pinned panel position');clean.pinnedPanelSide=patch.pinnedPanelSide;}
   if(Object.hasOwn(patch,'statsPosition')){if(!['left','right','top'].includes(patch.statsPosition))throw new Error('Invalid stats position');clean.statsPosition=patch.statsPosition;}
 
   if(Object.hasOwn(patch,'petClickAction')){if(!['codex','animation','expand','reveal','toggle','chatgpt','none'].includes(patch.petClickAction))throw new Error('Invalid pet click action');clean.petClickAction=patch.petClickAction;}
