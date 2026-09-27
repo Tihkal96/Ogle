@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== indexUrl) event.preventDefault(); });
-  chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}) });
+  chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}),onFindOpen:()=>send({type:'chat-find-open',target:'chatgpt'}),onFindResult:result=>send({type:'chatgpt-find-result',result}) });
   shortcuts=new DockShortcuts(globalShortcut,{
     shortcutVisibility:()=>{if(win.isVisible()&&!win.isMinimized()){chatgpt.hide();win.hide();}else{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'dock-shown'});}},
     shortcutChatTarget:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-chat-target'});},
@@ -154,6 +154,8 @@ app.whenReady().then(async () => {
     return sendChatGPT(contents,payload);
   });
   register('chatgptLayout', layout => chatgpt.layout(layout));
+  register('chatgptFind', (query, options) => chatgpt.find(query, options));
+  register('chatgptStopFind', () => chatgpt.stopFind());
   register('openCodex', async id => {
     const threadId = id ? string(id, 'task ID') : null;
     await shell.openExternal(threadId ? `codex://threads/${encodeURIComponent(threadId)}` : 'codex://');
