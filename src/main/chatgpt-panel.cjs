@@ -5,11 +5,13 @@ const { ChatGPTActivity } = require('./chatgpt-activity.cjs');
 const HOME = 'https://chatgpt.com/';
 
 class ChatGPTPanel {
-  constructor({ parent, onStatus, onActivity, onInteraction } = {}) {
+  constructor({ parent, onStatus, onActivity, onInteraction, onFindOpen, onFindResult } = {}) {
     this.parent = parent;
     this.onStatus = onStatus;
     this.onActivity = onActivity;
     this.onInteraction = onInteraction;
+    this.onFindOpen = onFindOpen;
+    this.onFindResult = onFindResult;
     this.activity = null;
     this.view = null;
     this.children = new Set();
@@ -77,7 +79,18 @@ class ChatGPTPanel {
     const interact = () => {
       if (this.visible && this.view?.getVisible()) this.onInteraction?.();
     };
-    contents.on('before-input-event', interact);
+    contents.on('before-input-event', (event, input) => {
+      interact();
+      if (input.type === 'keyDown' && input.control && !input.alt && !input.meta &&
+          String(input.key).toLowerCase() === 'f' && this.visible && this.view?.getVisible()) {
+        event.preventDefault();
+        this.parent.webContents.focus();
+        this.onFindOpen?.();
+      }
+    });
+    contents.on('found-in-page', (_event, result) => {
+      if (this.visible && this.view?.getVisible()) this.onFindResult?.(result);
+    });
     contents.on('before-mouse-event', (_event, input) => {
       if (input.type === 'mouseMove') {
         const now = Date.now();
@@ -110,11 +123,33 @@ class ChatGPTPanel {
   }
 
   layout({ visible = this.visible, bounds = this.bounds } = {}) {
+    if (visible !== true) this.stopFind();
     this.visible = visible === true;
     if (bounds && ['x', 'y', 'width', 'height'].every(key => Number.isFinite(bounds[key]))) {
       this.bounds = Object.fromEntries(['x', 'y', 'width', 'height'].map(key => [key, Math.round(bounds[key])]));
     }
     this.applyLayout();
+  }
+
+  find(query, options = {}) {
+    if (typeof query !== 'string' || query.length > 500) throw new Error('Invalid search text.');
+    const keys = ['forward', 'findNext', 'matchCase'];
+    if (!options || typeof options !== 'object' || Array.isArray(options) ||
+        Object.keys(options).some(key => !keys.includes(key) || typeof options[key] !== 'boolean')) {
+      throw new Error('Invalid search options.');
+    }
+    if (!query) { this.stopFind(); return null; }
+    const contents = this.view?.webContents;
+    if (!contents || contents.isDestroyed() || !this.visible || !this.view.getVisible()) return null;
+    if (!options.findNext) contents.stopFindInPage('clearSelection');
+    // Our UI uses findNext for navigating existing results. Electron's native
+    // flag has the opposite contract: true starts a session, false continues it.
+    return contents.findInPage(query, { forward: true, matchCase: false, ...options, findNext: !options.findNext });
+  }
+
+  stopFind() {
+    const contents = this.view?.webContents;
+    if (contents && !contents.isDestroyed()) contents.stopFindInPage('clearSelection');
   }
 
   applyLayout() {
@@ -178,7 +213,7 @@ class ChatGPTPanel {
     await shell.openExternal(target);
   }
 
-  hide() { this.visible = false; this.applyLayout(); }
+  hide() { this.stopFind(); this.visible = false; this.applyLayout(); }
 
   close() {
     this.activity?.dispose(); this.activity = null;

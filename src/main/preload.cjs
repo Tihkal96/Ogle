@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('dock', Object.freeze({
   openChatGPT: action => invoke('openChatGPT', action),
   chatgptSend: payload => invoke('chatgptSend', payload),
   chatgptLayout: layout => invoke('chatgptLayout', layout),
+  chatgptFind: (query, options = {}) => invoke('chatgptFind', query, options),
+  chatgptStopFind: () => invoke('chatgptStopFind'),
   openCodex: id => invoke('openCodex', id),
   petMenu: () => invoke('petMenu'),
   petDrag: action => invoke('petDrag', action),
