@@ -2,10 +2,10 @@
 const {dockBounds}=require('./window-layout.cjs');
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 class WindowTransition {
-  constructor(win,getArea,getScale){this.win=win;this.getArea=getArea;this.getScale=getScale;this.recovery=null;}
+  constructor(win,getArea,getScale,getPinnedSide=()=>null){this.win=win;this.getArea=getArea;this.getScale=getScale;this.getPinnedSide=getPinnedSide;this.recovery=null;}
   async begin(mode,reducedMotion=false){
     const win=this.win,from=win.getBounds();
-    const target=dockBounds(mode,from,this.getArea(from),this.getScale());
+    const target=dockBounds(mode,from,this.getArea(from),this.getScale(),this.getPinnedSide());
     if(['x','y','width','height'].every(key=>target[key]===from[key]))return {unchanged:true};
     // Move the existing surface to its final pet anchor before changing size.
     // Resizing and repositioning together exposes a stale DWM frame on Windows.

@@ -35,10 +35,11 @@ window.PetDockSettings = (() => {
     const appearance=section('Appearance');select(appearance,'Theme','theme',[['dark','Graphite'],['light','Paper'],['midnight','Midnight']], 'dark');
     const clock=section('Clock & date');check(clock,'Show time','showTime',true);select(clock,'Time format','timeFormat',[['24h','24-hour'],['12h','12-hour']], '24h');check(clock,'Show date','showDate',false);select(clock,'Date format','dateFormat',[['locale','System format'],['iso','YYYY-MM-DD']], 'locale');
     const behavior=section('Dock behavior','Pin keeps only the full panel open. Collapse shows the horizontal bar first, then the ball after the same inactivity delay.');check(behavior,'Reveal toolbar on hover','autoExpand',true);check(behavior,'Show Codex task list','sidebarVisible',true);
+    select(behavior,'Pinned panel position','pinnedPanelSide',[['left','Left'],['right','Right'],['bottom','Bottom']], 'left');
     select(behavior,'Horizontal chat bar','compactChatTarget',[['codex','Codex'],['chatgpt','ChatGPT — active conversation']], 'codex');
     const delayRow=el('label',null,'settings-row');delayRow.append(el('span','Auto-collapse delay (seconds)'));
-    const delay=el('input');delay.type='number';delay.dataset.setting='autoCollapseDelay';delay.min='1';delay.max='120';delay.step='1';delay.value=String((settings.autoCollapseDelay ?? 10000)/1000);
-    delay.onchange=async()=>{try{const seconds=Number(delay.value);if(!Number.isInteger(seconds)||seconds<1||seconds>120)throw new Error('Choose an auto-collapse delay from 1 to 120 seconds.');await save({autoCollapseDelay:seconds*1000});apply();}catch(err){delay.value=String((settings.autoCollapseDelay ?? 10000)/1000);report(err);}};
+    const delay=el('input');delay.type='number';delay.dataset.setting='autoCollapseDelay';delay.min='1';delay.max='120';delay.step='1';delay.value=String((settings.autoCollapseDelay ?? 7000)/1000);
+    delay.onchange=async()=>{try{const seconds=Number(delay.value);if(!Number.isInteger(seconds)||seconds<1||seconds>120)throw new Error('Choose an auto-collapse delay from 1 to 120 seconds.');await save({autoCollapseDelay:seconds*1000});apply();}catch(err){delay.value=String((settings.autoCollapseDelay ?? 7000)/1000);report(err);}};
     delayRow.append(delay);behavior.append(delayRow);
     const stats=section('Counters & meters','Session totals only. Typed text is never recorded. CPU and RAM show system usage.');
     check(stats,'Show metrics','statsVisible',true);check(stats,'Background','statsBackground',false);

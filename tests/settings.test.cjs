@@ -38,12 +38,16 @@ test('notes, independent drafts and pins survive reopening', () => {
   const file = path.join(dir, 'settings.json');
   const store = new SettingsStore(file);
   assert.equal(store.value.petId, 'rinne-mini');
-  assert.equal(store.value.autoCollapseDelay, 10000);
+  assert.equal(store.value.autoCollapseDelay, 7000);
   store.update({ note: 'my note\nsecond line', drafts: { one: 'draft 1', two: 'draft 2' }, pinnedThreads: ['two'] });
   store.update({ petId: 'lago-cartoon' });
-  store.update({ autoCollapseDelay: 12000 });
+  assert.equal(store.value.pinnedPanelSide, 'left');
+  store.update({ autoCollapseDelay: 12000, pinnedPanelSide: 'bottom' });
   const reopened = new SettingsStore(file);
   assert.equal(reopened.value.autoCollapseDelay, 12000);
+  assert.equal(reopened.value.pinnedPanelSide, 'bottom');
+  for(const side of ['left','right','bottom'])assert.equal(validatePatch({pinnedPanelSide:side}).pinnedPanelSide,side);
+  assert.throws(()=>validatePatch({pinnedPanelSide:'top'}),/pinned panel position/);
   assert.throws(()=>validatePatch({autoCollapseDelay:999}),/autoCollapseDelay/);
   assert.throws(()=>validatePatch({autoCollapseDelay:120001}),/autoCollapseDelay/);
   assert.equal(reopened.value.note, 'my note\nsecond line');

@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
-  <title>Ogle</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="terminal.css"><link rel="stylesheet" href="shortcuts.css"><link rel="stylesheet" href="vendor/bundle.css"><link rel="stylesheet" href="compact-panels.css"><link rel="stylesheet" href="activity-stats.css"><link rel="stylesheet" href="compact-codex.css"><link rel="stylesheet" href="conversation-picker.css">
+  <title>Ogle</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="terminal.css"><link rel="stylesheet" href="shortcuts.css"><link rel="stylesheet" href="vendor/bundle.css"><link rel="stylesheet" href="compact-panels.css"><link rel="stylesheet" href="activity-stats.css"><link rel="stylesheet" href="compact-codex.css"><link rel="stylesheet" href="conversation-picker.css"><link rel="stylesheet" href="pinned-panel.css">
 </head>
 <body class="collapsed bar-idle">
 <main id="dock">
   <header class="pet-stage">
     <canvas id="pet" width="192" height="208" role="button" tabindex="0" title="Open Codex" aria-label="Open Codex"></canvas>
   </header>
+  <div id="workspace">
   <section class="shell">
     <button id="bar-orb" type="button" title="Reveal dock" aria-label="Reveal dock"></button>
     <nav class="toolbar" aria-label="Dock tools">
@@ -39,5 +40,8 @@
     <form id="composer"><div id="codex-queue" aria-label="Queued prompts" hidden></div><div class="destination"><span class="tiny-dot"></span><span id="composer-target">No task selected</span><span class="spacer"></span><span id="send-hint">Enter sends · Shift + Enter adds a line</span></div><div class="compose-row"><textarea id="prompt" rows="2" placeholder="Write a prompt…" aria-label="Prompt"></textarea><button type="button" id="stop" hidden title="Stop running turn">■</button><button type="button" id="steer" hidden title="Steer the running Codex turn" aria-label="Steer current turn">Steer</button><button id="send" type="submit" disabled title="Send prompt" aria-label="Send prompt">↑</button></div></form>
     <footer><span id="footer-status">Connecting to Codex</span></footer>
   </section>
-</main><script src="diagnostics.js"></script><script src="vendor/bundle.js"></script><script src="editor.js"></script><script src="links-tools.js"></script><script src="shortcuts.js"></script><script src="terminal.js"></script><script src="settings.js"></script><script src="attachments.js"></script><script src="layout-transition.js"></script><script src="compact-chat.js"></script><script src="conversation-picker.js"></script><script src="codex-messages.js"></script><script src="idle-animation.js"></script><script src="codex-queue.js"></script><script src="pet-actions.js"></script><script src="activity-stats.js"></script><script src="app.js"></script>
+  <aside id="side-panel" hidden aria-label="Pinned panel"><header><span id="side-panel-title"></span><button id="side-panel-close" aria-label="Unpin panel" title="Unpin panel">×</button></header><div id="side-panel-content"></div></aside>
+  </div>
+  <div id="panel-menu" role="menu" hidden><button role="menuitem" id="pin-tab">Pin</button></div>
+</main><script src="diagnostics.js"></script><script src="vendor/bundle.js"></script><script src="editor.js"></script><script src="links-tools.js"></script><script src="shortcuts.js"></script><script src="terminal.js"></script><script src="settings.js"></script><script src="attachments.js"></script><script src="layout-transition.js"></script><script src="compact-chat.js"></script><script src="conversation-picker.js"></script><script src="codex-messages.js"></script><script src="idle-animation.js"></script><script src="codex-queue.js"></script><script src="pet-actions.js"></script><script src="activity-stats.js"></script><script src="pinned-panel.js"></script><script src="app.js"></script>
 </body></html>

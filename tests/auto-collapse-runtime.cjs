@@ -16,8 +16,8 @@ const path=require('node:path');
     const click=async selector=>{await page.waitForFunction(()=>!DockLayoutTransition.busy);await page.locator(selector).evaluate(el=>el.click());await page.waitForFunction(()=>!DockLayoutTransition.busy);};
     await click('#settings-button');
     const delay=page.locator('[data-setting="autoCollapseDelay"]');
-    assert.equal(await delay.inputValue(),'10');
-    assert.equal(await page.evaluate(()=>state.settings.autoCollapseDelay),10000);
+    assert.equal(await delay.inputValue(),'7');
+    assert.equal(await page.evaluate(()=>state.settings.autoCollapseDelay),7000);
     await delay.fill('12');await delay.press('Tab');
     await page.waitForFunction(()=>state.settings.autoCollapseDelay===12000);
     assert.equal(await delay.inputValue(),'12');
@@ -31,6 +31,6 @@ const path=require('node:path');
     await page.waitForTimeout(450);assert.equal(await page.evaluate(()=>state.mode),'reveal');
     await page.waitForFunction(()=>state.mode==='idle',null,{timeout:1800});
     assert.ok(Date.now()-started>=900,'Uses the configured second, not the former 700ms delay');
-    console.log(JSON.stringify({defaultSeconds:10,settingPersisted:true,secondsDisplay:true,configuredRevealCollapse:true}));
+    console.log(JSON.stringify({defaultSeconds:7,settingPersisted:true,secondsDisplay:true,configuredRevealCollapse:true}));
   }finally{await app.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
