@@ -235,3 +235,31 @@ test('desktop steer sends supported follower payload and valid restore context',
   await DesktopIpc.prototype.request.call(ipc, method, params, owner);
   assert.equal(envelopes[0].version, 1); ipc.close();
 });
+
+test('unsupported shared history uses read-only stdio once and keeps normal tasks on shared transport', async () => {
+  const calls = [];
+  const { bridge, children } = fixture((message, child, args) => {
+    if (message.method !== 'thread/read') return;
+    const shared = args.includes('proxy'); calls.push({ shared, method: message.method, id: message.params.threadId });
+    if (shared && message.params.threadId === 'legacy') child.reply({ id: message.id, error: { message: 'list_turns is not supported yet' } });
+    else child.reply({ id: message.id, result: { thread: { id: message.params.threadId, status: { type: 'idle' }, turns: [{ id: 'turn', status: 'completed', items: [{ type: 'agentMessage', text: 'visible answer' }, { type: 'reasoning', text: 'hidden' }] }] } } });
+  });
+  for (let i = 0; i < 2; i++) {
+    const result = await bridge.readThread('legacy');
+    assert.equal(result.thread.turns[0].items[0].text, 'visible answer');
+    assert.equal(result.thread.turns[0].items.length, 1);
+  }
+  await bridge.readThread('normal');
+  assert.deepEqual(calls.map(c => [c.shared, c.id]), [[true,'legacy'],[false,'legacy'],[false,'legacy'],[true,'normal']]);
+  assert.equal(children.length, 2);
+  const reader = bridge.historyReader; bridge.close(); assert.equal(reader.connected, false); assert.equal(bridge.unsupportedHistory.size, 0);
+});
+
+test('history fallback does not swallow permission errors or recurse on unsupported stdio', async () => {
+  const { bridge, children } = fixture((message, child) => {
+    if (message.method === 'thread/read') child.reply({ id: message.id, error: { message: message.params.threadId === 'denied' ? 'Permission denied' : 'list_turns is not supported yet' } });
+  });
+  await assert.rejects(bridge.readThread('denied'), /Permission denied/); assert.equal(children.length, 1);
+  await assert.rejects(bridge.readThread('legacy'), /list_turns/); assert.equal(children.length, 2);
+  bridge.close();
+});

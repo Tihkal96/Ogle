@@ -43,3 +43,17 @@ test('concurrent queries stay bounded and failures release the query slot',async
  assert.equal((await f.search.search('second')).status,'busy');finish(new Error('unavailable'));assert.equal((await first).status,'unavailable');
  const retry=f.search.search('third');await new Promise(resolve=>setImmediate(resolve));finish(null,'');assert.equal((await retry).status,'ok');
 });
+
+test('local-drive search includes files outside personal folders without double indexing',async()=>{
+ const writes=[];let args;
+ const search=createFileSearch({dataDir:'C:\\Fixture',roots:['C:\\Users\\Example\\Documents','D:\\Shared'],includeFixedDrives:true,discoverDrives:async()=>['C:\\'],
+ io:{stat:async()=>({isDirectory:()=>true}),mkdir:async()=>{},writeFile:async(...values)=>writes.push(values)},
+ launch:()=>{const child=new EventEmitter();child.unref=()=>{};process.nextTick(()=>child.emit('spawn'));return child;},
+ run:(file,values,options,callback)=>{args=values;callback(null,'C:\\Projects\\example.txt');}});
+ const result=await search.search('Projects');
+ assert.deepEqual(result.results,['C:\\Projects\\example.txt']);
+ assert.match(result.scope,/Local drives/);assert.ok(args.includes('-p'));
+ const config=writes[0][1];assert.ok(config.includes('folders="C:\\\\","D:\\\\Shared"'));
+ assert.ok(!config.includes('Example'));assert.match(config,/max_threads=1/);
+ await search.dispose();
+});

@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'codex', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 10000, petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
+const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'codex', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 10000, petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
 function validatePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
   const clean = {};
@@ -50,11 +50,11 @@ function validatePatch(patch) {
     if (!Array.isArray(patch.toolbarOrder) || patch.toolbarOrder.some(x => typeof x !== 'string') || patch.toolbarOrder.length > 100) throw new Error('Invalid toolbar order');
     clean.toolbarOrder = [...new Set(patch.toolbarOrder)];
   }
-  for (const key of ['statsClicks','statsKeys','statsCpu','statsRam','autoStart','alwaysOnTop','autoExpand','showTime','showDate','sidebarVisible']) if (Object.hasOwn(patch,key)) {
+  for (const key of ['statsVisible','statsBackground','statsClicks','statsKeys','statsCpu','statsRam','autoStart','alwaysOnTop','autoExpand','showTime','showDate','sidebarVisible']) if (Object.hasOwn(patch,key)) {
     if (typeof patch[key] !== 'boolean') throw new Error(`Invalid ${key}`);
     clean[key] = patch[key];
   }
-  for (const [key, min, max] of [['petScale',0.5,2],['hoverDelay',500,10000],['autoCollapseDelay',1000,120000]]) if (Object.hasOwn(patch,key)) {
+  for (const [key, min, max] of [['statsTextTransparency',0,100],['statsBackgroundTransparency',0,100],['petScale',0.5,2],['hoverDelay',500,10000],['autoCollapseDelay',1000,120000]]) if (Object.hasOwn(patch,key)) {
     if (!Number.isFinite(patch[key]) || patch[key] < min || patch[key] > max) throw new Error(`Invalid ${key}`);
     clean[key] = patch[key];
   }
