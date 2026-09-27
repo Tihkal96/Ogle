@@ -16,7 +16,7 @@ const windowsTools=require('./windows-tools.cjs').createWindowsTools();
 const fileSearch=require('./file-search.cjs').createFileSearch({includeFixedDrives:true,dataDir:()=>app.getPath('userData'),roots:()=>['desktop','documents','downloads','pictures','music','videos'].map(name=>app.getPath(name))});
 const { TerminalManager } = require('./terminal-manager.cjs');
 const { PetLibrary } = require('./pet-library.cjs');
-const { dockBounds } = require('./window-layout.cjs');
+const { dockBounds, petCenter, clampPet } = require('./window-layout.cjs');
 const { WindowTransition } = require('./window-transition.cjs');
 const {configureStartup,ensureCodex}=require('./startup.cjs');
 const {idleIcon}=require('./pet-icon.cjs');
@@ -59,7 +59,7 @@ function resize(mode = layoutMode) {
   layoutMode=mode;
   expanded = mode==='expand';
   const bounds = win.getBounds();
-  const area = screen.getDisplayMatching(bounds).workArea;
+  const area = screen.getDisplayNearestPoint(petCenter(bounds,store?.value.petScale || 1)).workArea;
   const scale = store?.value.petScale || 1;
   if (!expanded) chatgpt?.hide();
   const next=dockBounds(mode,bounds,area,scale,pinnedPanelSide);
@@ -72,6 +72,12 @@ app.whenReady().then(async () => {
   if(process.argv.includes('--autostart')&&!process.env.PETDOCK_DATA_DIR)ensureCodex({open:url=>shell.openExternal(url)}).catch(error=>send({type:'startup-error',message:error.message}));
   const area = screen.getPrimaryDisplay().workArea;
   win = new BrowserWindow({ title: 'Ogle', width: Math.min(600, area.width), height: Math.min(200, area.height), x: area.x + Math.max(0, area.width - 620), y: area.y + Math.max(0, area.height - 220), transparent: true, frame: false, resizable: false, backgroundColor: '#00000000', alwaysOnTop: store.value.alwaysOnTop, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  // Native stage dragging follows the same pet-only boundary as pet dragging.
+  win.on('will-move',(event,bounds)=>{
+    const scale=store.value.petScale || 1,area=screen.getDisplayNearestPoint(petCenter(bounds,scale)).workArea;
+    const next=clampPet(bounds,area,scale);
+    if(next.x!==bounds.x || next.y!==bounds.y){event.preventDefault();win.setPosition(next.x,next.y);}
+  });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== indexUrl) event.preventDefault(); });
   chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}) });
@@ -155,7 +161,8 @@ app.whenReady().then(async () => {
     if(action==='move' && (Math.abs(dx)>3||Math.abs(dy)>3)) {
       petDragState.moved=true;const b=petDragState.bounds;
       const area=screen.getDisplayNearestPoint(p).workArea;
-      win.setPosition(Math.round(Math.max(area.x,Math.min(b.x+dx,area.x+area.width-b.width))),Math.round(Math.max(area.y,Math.min(b.y+dy,area.y+area.height-b.height))));
+      const next=clampPet({...b,x:b.x+dx,y:b.y+dy},area,store.value.petScale || 1);
+      win.setPosition(next.x,next.y);
     }
     const moved=petDragState.moved;if(action==='end')petDragState=null;return {moved};
   });
@@ -214,7 +221,7 @@ app.whenReady().then(async () => {
     else throw new Error('Unknown window action');
     return { expanded,mode:layoutMode,bounds:win.getBounds() };
   });
-  const transition=new WindowTransition(win,bounds=>screen.getDisplayMatching(bounds).workArea,()=>store.value.petScale || 1,()=>pinnedPanelSide);
+  const transition=new WindowTransition(win,bounds=>screen.getDisplayNearestPoint(petCenter(bounds,store.value.petScale || 1)).workArea,()=>store.value.petScale || 1,()=>pinnedPanelSide);
   register('windowTransition',(phase,mode,reducedMotion)=>{
     if(phase==='begin')return transition.begin(mode,Boolean(reducedMotion));
     if(phase==='finish')return transition.finish();

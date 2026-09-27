@@ -8,7 +8,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.17](https://github.com/Tihkal96/Ogle/releases/download/v0.5.17/Ogle-0.5.17-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.18](https://github.com/Tihkal96/Ogle/releases/download/v0.5.18/Ogle-0.5.18-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -38,6 +38,10 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 ## Release checklist for maintainers and AI agents
 
 Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release.
+
+## Version 0.5.18
+
+The dock toolbar and expanded panels can extend beyond screen edges and into the taskbar area. Only the pet is constrained to the visible work area, so expansion no longer moves it merely to fit the full dock. Drag the pet back to bring controls into view.
 
 ## Version 0.5.17
 
@@ -231,3 +235,9 @@ Integration references: [Codex App Server](https://learn.chatgpt.com/docs/app-se
 Before releasing, run `npm test`, the focused `tests/*-runtime.cjs` checks for changed features, `npm run package`, and the packaged smoke check. Keep the direct Windows ZIP link above synchronized with every version, and verify the published asset.
 
 `node tests/pinned-panel-runtime.cjs` checks all five side panels, placement, collapse hold, composer placement and editor preservation.
+
+## License and distribution
+
+Ogle's original source code is licensed under the [MIT License](LICENSE). This grant does not relicense bundled artwork, trademarks, third-party libraries, Electron/Chromium, or the Everything utilities. Their existing rights and notices remain in force. Pet artwork is excluded from the MIT grant unless it has its own explicit license.
+
+The [SourceForge project](https://sourceforge.net/projects/ogle-dock/) provides an additional download location. GitHub remains the source repository and issue tracker. When publishing future releases, refresh both download locations and verify the uploaded ZIP checksums.

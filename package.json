@@ -1,6 +1,6 @@
 {
   "name": "ogle",
-  "version": "0.5.17",
+  "version": "0.5.18",
   "description": "A Windows pet dock for Codex and ChatGPT",
   "private": true,
   "main": "src/main/main.cjs",
@@ -37,5 +37,6 @@
     "codemirror": "^6.0.2",
     "fflate": "^0.8.3",
     "image-size": "^2.0.4"
-  }
+  },
+  "license": "MIT"
 }
