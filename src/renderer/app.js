@@ -325,7 +325,9 @@ function animate(time) {
   const watching=state.mode==='quick' && document.activeElement===$('prompt');
   // Interaction is a temporary visual overlay; the actual work state stays intact.
   const interaction=state.petState==='waiting'?null:state.dragAnimation || (state.petHovered?{name:'waving',startedAt:state.hoverStartedAt}:null) || (watching?{name:'watching'}:null);
-  const flourish=interaction || state.clickAnimation || idleAnimation.tick(time,state.petState,animations);
+  // Completion/error signals must remain visible for their whole reaction window.
+  const reacting=['review','failed'].includes(state.petState) && time<state.reactionUntil;
+  const flourish=reacting?null:interaction || state.clickAnimation || idleAnimation.tick(time,state.petState,animations);
   const visualState=flourish?.name || state.petState;
   canvas.dataset.state=visualState;
   let [row,count,duration]=animations[visualState] || animations.idle;
