@@ -118,6 +118,18 @@ class DesktopIpc extends EventEmitter {
     if (message.type === 'response') { const pending = this.pending.get(message.requestId); if (!pending) return; this.pending.delete(message.requestId); clearTimeout(pending.timer); if (message.resultType === 'success') pending.resolve(message); else { const error = new Error(message.error || 'Desktop request failed'); error.code = message.error; pending.reject(error); } return; }
     if (message.type === 'client-discovery-request') { this._write({ type: 'client-discovery-response', requestId: message.requestId, response: { canHandle: false } }); return; }
     if (message.type !== 'broadcast' || (message.targetClientIds && !message.targetClientIds.includes(this.clientId))) return;
+    // Codex 26.924 broadcasts real read-state changes separately from fetched
+    // conversation content. Background reads must never acknowledge completion.
+    if (message.method === 'thread-read-state-changed') {
+      const params = message.params;
+      if (message.version === 3 && params?.hostId === 'local' && params.hasUnreadTurn === false && typeof params.conversationId === 'string' && params.conversationId) {
+        // Preserve completion-before-read ordering despite the stream debounce.
+        const id = params.conversationId;
+        if (this.timers.has(id)) { clearTimeout(this.timers.get(id)); this.timers.delete(id); this._emitState(id); }
+        this.emit('thread-opened', id);
+      }
+      return;
+    }
     if (message.method === 'thread-stream-following-status-requested') { if (this.followed.has(message.params?.conversationId)) this.follow(message.params.conversationId, message.sourceClientId); return; }
     if (message.method !== 'thread-stream-state-changed' || message.version !== 11 || message.params?.hostId !== 'local') return;
     const { conversationId: id, change } = message.params;
@@ -130,11 +142,14 @@ class DesktopIpc extends EventEmitter {
     const entry = this.states.get(id);
     if (change.type === 'patches' && !change.patches.some(patch => patchChangesMessages(entry.state, patch))) return;
     if (!this.timers.has(id)) this.timers.set(id, setTimeout(() => {
-      this.timers.delete(id); const latest = this.states.get(id); if (!latest) return;
-      const projected = desktopThread(latest.state), signature = JSON.stringify(projected);
-      if (this.signatures.get(id) === signature) return;
-      this.signatures.set(id, signature); this.emit('state', projected);
+      this.timers.delete(id); this._emitState(id);
     }, 120));
+  }
+  _emitState(id) {
+    const latest = this.states.get(id); if (!latest) return;
+    const projected = desktopThread(latest.state), signature = JSON.stringify(projected);
+    if (this.signatures.get(id) === signature) return;
+    this.signatures.set(id, signature); this.emit('state', projected);
   }
   async owner(id) { await this.connect(); try { const response = await this.request('thread-owner-discovery', { hostId: 'local', conversationId: id }, undefined, 2500); this.owners.set(id, response.handledByClientId); return response.handledByClientId; } catch (error) { if (error.code === 'no-client-found') { this.owners.delete(id); return null; } throw error; } }
   follow(id, owner) { this.followed.add(id); this._write({ type: 'broadcast', method: 'thread-stream-following-changed', params: { hostId: 'local', conversationId: id, following: true }, targetClientIds: owner ? [owner] : undefined, version: 1 }); }
@@ -170,6 +185,7 @@ class CodexBridge extends EventEmitter {
     this.connectionModes = connectionModes; this.historyReader = null; this.unsupportedHistory = new Set();
     this.desktop = desktop; this.deltas = new Map(); this.deltaTimer = null;
     desktop?.on('state', state => this.emit('notification', { method: 'petdock/threadState', params: state }));
+    desktop?.on('thread-opened', threadId => this.emit('thread-opened', threadId));
   }
   async connect() {
     if (this.connected) return { mode: this.mode };
@@ -191,7 +207,7 @@ class CodexBridge extends EventEmitter {
     for (const mode of this.connectionModes) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.5.23' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.5.24' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
