@@ -14,7 +14,7 @@ window.PetDockSettings = (() => {
     const accountActions=el('div',null,'settings-actions');accountActions.append(button('Sign in to Codex',async()=>{const result=await api.codexLogin();accountStatus.textContent=result?.message || 'Complete sign-in in your browser, then refresh account status.';}),button('Refresh account',refreshAccount),button('Sign out of Codex',async()=>{await api.codexLogout();await refreshAccount();}));account.append(accountActions);
     const chatActions=el('div',null,'settings-actions');chatActions.append(button('ChatGPT / sign in',async()=>{showChatGPT();await api.openChatGPT('login');}),button('Sign out of ChatGPT',async()=>{await api.openChatGPT('logout');}));account.append(chatActions);refreshAccount();
     const petSection=section('Pet','Right-click your pet for window controls. Drag the pet to move the dock.');
-    select(petSection,'Click action','petClickAction',[['codex','Open Codex'],['animation','Play a random animation'],['expand','Open full panel'],['reveal','Show horizontal bar'],['toggle','Toggle full panel'],['chatgpt','Open ChatGPT panel'],['none','Do nothing']], 'codex');
+    select(petSection,'Click action','petClickAction',[['codex','Open Codex'],['animation','Play a random animation'],['expand','Open full panel'],['reveal','Show horizontal bar'],['toggle','Toggle full panel'],['chatgpt','Open ChatGPT panel'],['none','Do nothing']], 'reveal');
     const petSelect=select(petSection,'Character','petId',pets.map(p=>[p.id,p.name || p.config?.displayName || p.id]),settings.petId);
     const libraryStatus=el('p','Pets are stored locally. Codex pets are copied at startup when available.','settings-hint');
     const refreshLibrary=button('Refresh library',async()=>{
