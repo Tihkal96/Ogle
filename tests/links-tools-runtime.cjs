@@ -11,7 +11,7 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
 
  await app.evaluate(({ipcMain})=>{
   global.linkCalls=[];
-  for(const name of ['runCommand','openWindowsTool','searchFiles','openShortcut']){ipcMain.removeHandler('dock:'+name);ipcMain.handle('dock:'+name,(_e,value)=>{global.linkCalls.push({name,value});if(name==='searchFiles')return value==='missing'?{status:'unavailable'}:{status:'ok',results:['C:\\fixture.txt']};return {launched:true};});}
+  for(const name of ['runCommand','openWindowsTool','searchFiles','openShortcut']){ipcMain.removeHandler('dock:'+name);ipcMain.handle('dock:'+name,(_e,value,options)=>{global.linkCalls.push({name,value,options});if(name==='searchFiles')return value==='missing'?{status:'unavailable'}:{status:'ok',results:['C:\\fixture.txt']};return {launched:true};});}
  });
  await page.evaluate(()=>switchPanel('shortcuts'));
  assert.equal(await page.locator('.links-root-drop').count(),0);
@@ -32,6 +32,9 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  const calls=await app.evaluate(()=>global.linkCalls);
  assert.deepEqual(calls.map(c=>c.name),['runCommand','openWindowsTool','searchFiles','openShortcut']);
  assert.equal(calls[0].value,'notepad.exe "C:\\a b.txt"');assert.equal(calls[1].value,'control-panel');
+ assert.equal(await page.getByRole('checkbox',{name:'Include folders'}).isChecked(),false);assert.equal(calls.find(c=>c.name==='searchFiles').options.includeFolders,false);
+ await page.getByRole('checkbox',{name:'Include folders'}).check();await page.evaluate(()=>saveQueue);await page.waitForFunction(()=>state.settings.includeSearchFolders===true);
+ await page.waitForTimeout(400);assert.equal((await app.evaluate(()=>global.linkCalls)).filter(c=>c.name==='searchFiles').at(-1).options.includeFolders,true);
  await page.locator('#links-file-search').fill('missing');
  await page.waitForFunction(()=>document.querySelector('.links-tool-status').textContent==='Search is preparing.');
  await page.locator('.links-tools').getByRole('button',{name:'Clear search',exact:true}).evaluate(el=>el.click());

@@ -25,3 +25,5 @@
 .links-icons .links-group-more{min-height:102px;align-self:stretch;border:0;background:transparent;font-size:32px;color:var(--muted);padding:0}
 .links-icons .links-group-more:hover{background:var(--hover)}
 .links-icons .links-group-frame>.links-row .links-entry-actions{top:0}
+
+.links-search-folders{display:flex;align-items:center;gap:3px;flex:none;font-size:10px;cursor:pointer}.links-tools-controls .links-search-folders input{width:12px;height:12px;padding:0;margin:0;flex:none}

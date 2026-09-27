@@ -29,7 +29,7 @@ function updateComposer() {
   codexQueue.render($('codex-queue'),gpt?'__chatgpt__':state.selected?.id);
   $('send-hint').textContent=!gpt && running?'Enter queues · Steer updates current turn':'Enter sends · Shift + Enter adds a line';
   $('composer-target').textContent=gpt?'ChatGPT · active conversation':state.selected?title(state.selected):'No task selected';
-  $('conversation-name').textContent=compactUsesChatGPT()?'Write prompt…':state.selected?title(state.selected):'Choose a conversation';
+  $('conversation-name').textContent=compactUsesChatGPT()?'Write a prompt to ChatGPT...':state.selected?title(state.selected):'Choose a conversation';
   $('conversation-name').title=compactUsesChatGPT()?'Message the active ChatGPT conversation, or start a new one':state.selected?`Write to ${title(state.selected)}`:'Choose a conversation';
   $('conversation-picker-toggle').hidden=compactUsesChatGPT();
   $('prompt').placeholder=gpt?'Message ChatGPT…':state.selected?`Message ${title(state.selected).slice(0,38)}…`:'Choose a Codex task…';
@@ -49,7 +49,7 @@ function updatePetState() {
       state.reaction=state.pendingReaction;state.pendingReaction=null;
       state.reactionUntil=performance.now()+5000;restart=true;
     }
-    next=state.reactionUntil>performance.now()?state.reaction:state.petHovered?'waving':'idle';
+    next=state.reactionUntil>performance.now()?state.reaction:'idle';
   }
   if(next!==state.petState || restart) {
     state.petState=next;state.animationStartedAt=performance.now();state.animationGeneration++;
@@ -160,14 +160,18 @@ window.addEventListener('resize', () => { chatgptLayout(); window.PetDockTermina
 let petPress = null, draggedPet = false;
 $('pet').addEventListener('pointerdown', event => {
   if (event.button !== 0 || window.DockLayoutTransition.busy) return;
-  petPress = {x:event.screenX,y:event.screenY}; draggedPet = false;
+  petPress = {x:event.screenX,y:event.screenY,lastX:event.screenX}; draggedPet = false;
   $('pet').setPointerCapture(event.pointerId);
   api.petDrag('start').catch(error);
 });
 $('pet').addEventListener('pointermove', event => {
   if (!petPress) return;
   if (Math.hypot(event.screenX-petPress.x,event.screenY-petPress.y)>5) draggedPet=true;
-  if (draggedPet) { clearTimeout(hoverTimer); api.petDrag('move').catch(error); }
+  if (draggedPet) {
+    const dx=event.screenX-petPress.lastX;petPress.lastX=event.screenX;
+    if(dx){const name=dx<0?'running-left':'running-right',now=performance.now();state.dragAnimation={name,startedAt:state.dragAnimation?.name===name?state.dragAnimation.startedAt:now,until:now+450};}
+    clearTimeout(hoverTimer); api.petDrag('move').catch(error);
+  }
 });
 $('pet').addEventListener('pointerup', event => {
   if (!petPress) return;
@@ -178,7 +182,7 @@ $('pet').addEventListener('pointercancel',()=>{petPress=null;draggedPet=true;api
 $('pet').onclick = event => { if(event.detail===0 && !draggedPet) attempt(runPetClickAction); };
 $('pet').oncontextmenu = event => { event.preventDefault(); attempt(() => api.petMenu()); };
 $('pet').onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); draggedPet=false; $('pet').click(); } };
-$('pet').addEventListener('mouseenter',()=>{state.petHovered=true;updateComposer();});
+$('pet').addEventListener('mouseenter',()=>{state.petHovered=true;state.hoverStartedAt=performance.now();updateComposer();});
 $('pet').addEventListener('mouseleave',()=>{state.petHovered=false;updateComposer();});
 async function flushLocal() {
   clearTimeout(noteTimer); clearTimeout(draftTimer);
@@ -228,9 +232,9 @@ let hoverTimer,panelIdleTimer,quickIdleTimer,lastPointerPosition;
 function autoCollapseDelay() { const value=Number(state.settings.autoCollapseDelay);return Number.isFinite(value)&&value>=1000&&value<=120000?value:10000; }
 function resetPanelIdle() {
   clearTimeout(panelIdleTimer);
-  if(state.settings.autoExpand===false || window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.panelPinned && state.mode==='expand'))return;
+  if(state.settings.autoExpand===false || window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.mode==='expand' && (state.panelPinned || state.pointerInside || state.nativePointerInside)))return;
   panelIdleTimer=setTimeout(()=>{
-    if(window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.panelPinned && state.mode==='expand'))return;
+    if(window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.mode==='expand' && (state.panelPinned || state.pointerInside || state.nativePointerInside)))return;
     if(document.querySelector('dialog[open]') || state.chatgptSending || document.querySelector('.approval') || window.PetDockAttachments?.isBusy()){resetPanelIdle();return;}
     state.suppressHoverReveal=true;
     setMode(state.mode==='expand'?'reveal':'idle');
@@ -247,6 +251,7 @@ function resetQuickIdle() {
 }
 for(const event of ['pointermove','pointerdown','keydown','input','paste','wheel'])document.addEventListener(event,activity=>{
   if(activity.type==='pointermove'){
+    state.petPointer={x:activity.clientX,y:activity.clientY};
     const position={x:activity.screenX,y:activity.screenY};
     const moved=lastPointerPosition && (position.x!==lastPointerPosition.x || position.y!==lastPointerPosition.y);
     lastPointerPosition=position;
@@ -259,11 +264,12 @@ for(const event of ['pointermove','pointerdown','keydown','input','paste','wheel
   if(['expand','reveal'].includes(state.mode))resetPanelIdle();
 },{passive:true});
 function pointerInside(inside) {
-  state.pointerInside=inside;clearTimeout(hoverTimer);
+  const changed=state.pointerInside!==inside;state.pointerInside=inside;clearTimeout(hoverTimer);
+  if(state.mode==='expand' && changed)resetPanelIdle();
   if(state.settings.autoExpand===false || window.DockLayoutTransition.busy)return;
   if(inside && state.mode==='idle') {if(!petPress && !state.suppressHoverReveal)hoverTimer=setTimeout(()=>{if(!petPress && state.mode==='idle')setMode('reveal');},120);return;}
   // Boundary events are often caused by the dock resizing, not by activity.
-  // They must neither cancel nor extend the independent collapse deadline.
+  // In compact modes they must not extend the independent collapse deadline.
 }
 $('bar-orb').addEventListener('mouseenter',()=>pointerInside(true));
 $('bar-orb').addEventListener('mouseleave',()=>{if(state.mode==='idle')clearTimeout(hoverTimer);});
@@ -271,6 +277,7 @@ document.querySelector('.toolbar').addEventListener('mouseenter',()=>pointerInsi
 $('conversation-strip').addEventListener('mouseenter',()=>pointerInside(true));
 $('conversation-strip').addEventListener('mouseleave',()=>{if(state.mode==='reveal')pointerInside(false);});
 document.querySelector('.toolbar').addEventListener('mouseleave',()=>{if(state.mode==='reveal')pointerInside(false);});
+$('dock').addEventListener('mouseenter',()=>pointerInside(true));
 $('dock').addEventListener('mouseleave',()=>{if(state.nativePointerInside!==true)pointerInside(false);});
 function approval(event) { const box = document.createElement('div'); box.className = 'approval'; const heading = document.createElement('strong'); heading.textContent = 'Codex needs your approval'; const description = document.createElement('p'); description.textContent = event.params?.reason || event.params?.command || event.method; const detail = document.createElement('p'); detail.textContent = `Task: ${title(state.threads.find(t => t.id === event.params?.threadId))} (${event.params?.threadId || 'unknown'})\n${event.params?.cwd || ''}`; box.append(heading,description,detail); const supported = ['item/commandExecution/requestApproval','item/fileChange/requestApproval'].includes(event.method); if (supported) for (const [label,decision] of [['Approve','accept'],['Decline','decline']]) { const button = document.createElement('button'); button.textContent = label; button.className = decision; button.onclick = () => attempt(async () => { await api.respond(event.id,{decision}); box.remove(); updateComposer(); }); box.append(button); } else { const text = document.createElement('p'); text.textContent = 'This request requires a response type not yet supported by the dock.'; box.append(text); } $('approvals').append(box); if (state.collapsed) collapse(false); updateComposer(); }
 function setRuntime(threadId,runtime,outcome='completed',completedTurnId) {
@@ -297,21 +304,33 @@ function desktopThread(params) {
   updateComposer();
 }
 $('desktop-approval').onclick=()=>attempt(()=>api.openCodex(state.selected?.id));
-function onEvent(event) { if(event.type==='toggle-bar')return setMode(state.mode==='reveal'?'idle':'reveal'); if(event.type==='dock-shown'){resetPanelIdle();chatgptLayout();return;} if(event.type==='startup-error'){window.OgleDiagnostics.record(event.message,'Startup');return;} if(event.type==='chatgpt-interaction')return resetPanelIdle(); if(event.type==='chatgpt-activity') {state.chatgptWorking=event.state==='working';if(event.state==='done'||event.state==='failed')queueReaction(event.state==='failed'?'failed':'review');updateComposer();return;} if(event.type==='toggle-panel')return collapse(!event.expanded); if (event.type === 'request-close') return attempt(async()=>{await flushLocal();await api.windowAction('close');}); if(event.type==='settings-open') return switchPanel('settings'); if(event.type==='window/action') {if(event.action==='collapse')return collapse(true);if(event.action==='expand')return collapse(false);if(event.action==='settings')return switchPanel('settings');} if(event.type==='settings') {Object.assign(state.settings,event.settings || {});applySettings();return;} if (event.type === 'pointer') { state.nativePointerInside = event.inside; if(!event.inside)pointerInside(false); return; } if (event.type === 'connection') return setConnection(event.state,event.detail); if (event.type === 'request') return approval(event); if (event.type !== 'codex') return; if(/reasoning|commandExecution.*delta|tool.*delta/i.test(event.method || ''))return; if(event.method==='petdock/threadState') return desktopThread(event.params || {}); const p = event.params || {}, method = event.method; const threadId = p.threadId || p.thread?.id; if (method === 'turn/started') {state.running.set(threadId,p.turn?.id);codexQueue.runtime(threadId,{running:true,turnId:p.turn?.id});} if (method === 'turn/completed') { const active=state.running.get(threadId);if(p.turn?.id && active && !['pending','desktop'].includes(active) && active!==p.turn.id)return;state.running.delete(threadId); queueReaction(p.turn?.status==='failed'?'failed':'review');codexQueue.runtime(threadId,{running:false},{completed:!p.turn?.id,completedTurnId:p.turn?.id}); } if (threadId && threadId !== state.selected?.id) { updateComposer(); return; } if (method === 'item/agentMessage/delta') { const old = messageView.text(p.itemId); addMessage(p.itemId,'assistant',old + (p.delta || '')); } else if (method === 'item/started' || method === 'item/completed') { if (p.item) renderItem(p.item); } else if (method === 'turn/started') $('activity').textContent = 'Codex is working…'; else if (method === 'turn/completed') { $('activity').textContent = state.running.has(threadId)?'Codex is working…':p.turn?.status === 'failed' ? 'Turn failed' : p.turn?.status === 'interrupted' ? 'Stopped' : 'Ready for your next prompt'; if (p.turn?.error) {if(state.mode==='expand' && state.activePanel==='chats')error(p.turn.error);else window.OgleDiagnostics.record(p.turn.error,'Codex turn');} } else if (method === 'error') {const issue=p.error || p.message || 'Codex reported an error';if(state.mode==='expand' && state.activePanel==='chats')error(issue);else window.OgleDiagnostics.record(issue,'Codex');} updateComposer(); }
+function onEvent(event) { if(event.type==='toggle-bar')return setMode(state.mode==='reveal'?'idle':'reveal'); if(event.type==='dock-shown'){resetPanelIdle();chatgptLayout();return;} if(event.type==='startup-error'){window.OgleDiagnostics.record(event.message,'Startup');return;} if(event.type==='chatgpt-interaction')return resetPanelIdle(); if(event.type==='chatgpt-activity') {state.chatgptWorking=event.state==='working';if(event.state==='done'||event.state==='failed')queueReaction(event.state==='failed'?'failed':'review');updateComposer();return;} if(event.type==='toggle-panel')return collapse(!event.expanded); if (event.type === 'request-close') return attempt(async()=>{await flushLocal();await api.windowAction('close');}); if(event.type==='settings-open') return switchPanel('settings'); if(event.type==='window/action') {if(event.action==='collapse')return collapse(true);if(event.action==='expand')return collapse(false);if(event.action==='settings')return switchPanel('settings');} if(event.type==='settings') {Object.assign(state.settings,event.settings || {});applySettings();return;} if (event.type === 'pointer') { state.nativePointerInside = event.inside;if(Number.isFinite(event.x)&&Number.isFinite(event.y))state.petPointer={x:event.x,y:event.y};if(state.mode==='expand' || !event.inside)pointerInside(event.inside); return; } if (event.type === 'connection') return setConnection(event.state,event.detail); if (event.type === 'request') return approval(event); if (event.type !== 'codex') return; if(/reasoning|commandExecution.*delta|tool.*delta/i.test(event.method || ''))return; if(event.method==='petdock/threadState') return desktopThread(event.params || {}); const p = event.params || {}, method = event.method; const threadId = p.threadId || p.thread?.id; if (method === 'turn/started') {state.running.set(threadId,p.turn?.id);codexQueue.runtime(threadId,{running:true,turnId:p.turn?.id});} if (method === 'turn/completed') { const active=state.running.get(threadId);if(p.turn?.id && active && !['pending','desktop'].includes(active) && active!==p.turn.id)return;state.running.delete(threadId); queueReaction(p.turn?.status==='failed'?'failed':'review');codexQueue.runtime(threadId,{running:false},{completed:!p.turn?.id,completedTurnId:p.turn?.id}); } if (threadId && threadId !== state.selected?.id) { updateComposer(); return; } if (method === 'item/agentMessage/delta') { const old = messageView.text(p.itemId); addMessage(p.itemId,'assistant',old + (p.delta || '')); } else if (method === 'item/started' || method === 'item/completed') { if (p.item) renderItem(p.item); } else if (method === 'turn/started') $('activity').textContent = 'Codex is working…'; else if (method === 'turn/completed') { $('activity').textContent = state.running.has(threadId)?'Codex is working…':p.turn?.status === 'failed' ? 'Turn failed' : p.turn?.status === 'interrupted' ? 'Stopped' : 'Ready for your next prompt'; if (p.turn?.error) {if(state.mode==='expand' && state.activePanel==='chats')error(p.turn.error);else window.OgleDiagnostics.record(p.turn.error,'Codex turn');} } else if (method === 'error') {const issue=p.error || p.message || 'Codex reported an error';if(state.mode==='expand' && state.activePanel==='chats')error(issue);else window.OgleDiagnostics.record(issue,'Codex');} updateComposer(); }
 const petImage = new Image(), canvas = $('pet'), context = canvas.getContext('2d');
 function loadPet(pet) { if (!pet) return; petImage.src = pet.spriteUrl; save({petId:pet.id}); }
 let pets = [];
-const animations = {idle:[0,6,190],running:[7,6,140],waiting:[6,6,220],failed:[5,8,180],waving:[3,4,170],review:[8,6,190]};
+const animations = {idle:[0,6,190],'running-right':[1,8,100],'running-left':[2,8,100],running:[7,6,140],waiting:[6,6,220],failed:[5,8,180],waving:[3,4,170],review:[8,6,190]};
 const idleAnimation=new window.OgleIdleAnimation();
 let lastFrame=-1,lastGeneration=-1;
 function animate(time) {
   if(state.reactionUntil && time>=state.reactionUntil && ['review','failed'].includes(state.petState))updatePetState();
   if(state.clickAnimation && (time>=state.clickAnimation.until || ['waiting','failed'].includes(state.petState)))state.clickAnimation=null;
-  const flourish=state.clickAnimation || idleAnimation.tick(time,state.petState,animations);
+  if(state.dragAnimation && time>=state.dragAnimation.until)state.dragAnimation=null;
+  const watching=state.mode==='quick' && document.activeElement===$('prompt');
+  // Interaction is a temporary visual overlay; the actual work state stays intact.
+  const interaction=state.petState==='waiting'?null:state.dragAnimation || (state.petHovered?{name:'waving',startedAt:state.hoverStartedAt}:null) || (watching?{name:'watching'}:null);
+  const flourish=interaction || state.clickAnimation || idleAnimation.tick(time,state.petState,animations);
   const visualState=flourish?.name || state.petState;
   canvas.dataset.state=visualState;
-  const [row,count,duration]=animations[visualState] || animations.idle;
-  const frame=Math.floor(Math.max(0,time-(flourish?.startedAt ?? state.animationStartedAt))/duration)%count,key=row*8+frame;
+  let [row,count,duration]=animations[visualState] || animations.idle;
+  let frame=Math.floor(Math.max(0,time-(flourish?.startedAt ?? state.animationStartedAt))/duration)%count;
+  if(visualState==='watching') {
+    const rect=canvas.getBoundingClientRect(),prompt=$('prompt').getBoundingClientRect();
+    const pointer=state.petPointer || {x:prompt.x+prompt.width/2,y:prompt.y+prompt.height/2};
+    const angle=(Math.atan2(pointer.x-(rect.x+rect.width/2),-(pointer.y-(rect.y+rect.height/2)))+Math.PI*2)%(Math.PI*2);
+    const direction=Math.round(angle/(Math.PI/8))%16;
+    row=9+Math.floor(direction/8);frame=direction%8;
+  }
+  const key=row*8+frame;
   canvas.dataset.frame=String(frame);canvas.dataset.generation=String(state.animationGeneration);
   if(petImage.complete && petImage.naturalWidth && (key!==lastFrame || lastGeneration!==state.animationGeneration)) {
     context.clearRect(0,0,192,208);const cellW=petImage.naturalWidth/8,cellH=petImage.naturalHeight/11;

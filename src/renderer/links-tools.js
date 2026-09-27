@@ -1,6 +1,6 @@
 'use strict';
 window.OgleLinksTools={
-  mount(root,api,report){
+  mount(root,api,report,settings={},save=patch=>api.saveSettings(patch)){
     const tools=document.createElement('section');tools.className='links-tools';tools.setAttribute('aria-label','Run, Windows tools and search');
     const controls=document.createElement('div');controls.className='links-tools-controls';
     const status=document.createElement('p');status.className='links-tool-status';status.setAttribute('role','status');status.hidden=true;
@@ -26,6 +26,7 @@ window.OgleLinksTools={
     const search=document.createElement('form');search.className='links-tool-row';
     const query=document.createElement('input');query.id='links-file-search';query.placeholder='Search files…';query.title='Search file names and paths on local drives';query.setAttribute('aria-label','Search files');query.autocomplete='off';
     const clear=document.createElement('button');clear.type='button';clear.textContent='×';clear.title='Clear search';clear.setAttribute('aria-label','Clear search');clear.hidden=true;
+    const folderLabel=document.createElement('label');folderLabel.className='links-search-folders';folderLabel.title='Include folders in search results';const folders=document.createElement('input');folders.type='checkbox';folders.checked=settings.includeSearchFolders===true;folders.setAttribute('aria-label','Include folders');folderLabel.append(folders,document.createTextNode('Folders'));
     const results=document.createElement('div');results.className='links-search-results';results.hidden=true;results.setAttribute('aria-label','File search results');
     let generation=0,timer,busy=false,pending=false;
     const visible=()=>!root.hidden&&!document.body.classList.contains('collapsed');
@@ -36,7 +37,7 @@ window.OgleLinksTools={
       if(busy){pending=true;return;}
       busy=true;pending=false;const value=query.value.trim();show('Searching…');
       try{
-        const result=await api.searchFiles(value);if(revision!==generation)return;
+        const result=await api.searchFiles(value,{includeFolders:folders.checked});if(revision!==generation)return;
         results.replaceChildren();results.hidden=false;
         if(result.status!=='ok'){
           show(result.message || 'Search is preparing.');
@@ -53,6 +54,7 @@ window.OgleLinksTools={
     search.onsubmit=event=>{event.preventDefault();clearTimeout(timer);searchNow(generation);};
     const visibilityObserver=new MutationObserver(()=>{if(!visible())clearTimeout(timer);else if(query.value.trim()){clearTimeout(timer);timer=setTimeout(()=>searchNow(generation),300);}});
     visibilityObserver.observe(root,{attributes:true,attributeFilter:['hidden']});visibilityObserver.observe(document.body,{attributes:true,attributeFilter:['class']});
-    search.append(query,clear);controls.append(run,select,search);tools.append(controls,status,results);root.append(tools);
+    folders.onchange=()=>{save({includeSearchFolders:folders.checked}).catch(report);reset();if(query.value.trim())timer=setTimeout(()=>searchNow(generation),0);};
+    search.append(query,clear,folderLabel);controls.append(run,select,search);tools.append(controls,status,results);root.append(tools);
   }
 };

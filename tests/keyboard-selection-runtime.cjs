@@ -1,0 +1,45 @@
+'use strict';
+const {_electron:electron}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+(async()=>{
+ const root=path.resolve(__dirname,'..'),profile=path.join(root,'artifacts',`keyboard-selection-${Date.now()}`);fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({autoStart:false,autoExpand:false,compactChatTarget:'codex',shortcutVisibility:'',shortcutPanel:'',shortcutBar:''}));
+ const env={...process.env,PETDOCK_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+ const app=await electron.launch(process.env.PETDOCK_TEST_EXE?{executablePath:process.env.PETDOCK_TEST_EXE,args:[],env}:{args:[root],env});
+ try{
+ const page=await app.firstWindow();await app.evaluate(({BrowserWindow,screen})=>{const w=BrowserWindow.getAllWindows()[0];w.webContents.setBackgroundThrottling(false);w.hide();screen.getCursorScreenPoint=()=>({x:-9999,y:-9999});});await page.waitForFunction(()=>typeof messageView!=='undefined'&&state.settings.autoExpand===false&&!DockLayoutTransition.busy);
+ await app.evaluate(({ipcMain})=>{global.testClipboard='';global.testWrites=[];for(const [name,fn]of Object.entries({clipboardReadText:()=>global.testClipboard,clipboardWriteText:(_event,text)=>{global.testClipboard=text;},terminalCreate:()=>({id:'test-terminal',shell:'cmd',cwd:'C:\\'}),terminalWrite:(_event,id,text)=>{global.testWrites.push(text);},terminalResize:()=>{},terminalClose:()=>{},editorOpen:()=>({path:'C:\\example.cs',name:'example.cs',text:'abcdef'})})){ipcMain.removeHandler('dock:'+name);ipcMain.handle('dock:'+name,fn);}});
+ await page.evaluate(()=>switchPanel('editor'));await page.waitForFunction(()=>!DockLayoutTransition.busy);
+ const content=page.locator('#editor-panel .cm-content');await content.click();await page.keyboard.insertText('clipboard sample');await page.keyboard.press('Control+a');
+ await page.getByRole('button',{name:'Copy selection',exact:true}).click();assert.equal(await app.evaluate(()=>global.testClipboard),'clipboard sample');
+ await app.evaluate(()=>{global.testClipboard='plain replacement';});await page.getByRole('button',{name:'Paste',exact:true}).click();assert.equal(await content.innerText(),'plain replacement');
+ await page.getByRole('combobox',{name:'Programming language',exact:true}).selectOption('csharp');
+ assert.equal(await content.evaluate(el=>el===document.activeElement),true,'Language returns focus to editor');
+ await page.getByRole('combobox',{name:'.NET framework profile',exact:true}).selectOption('3.5');
+ assert.equal(await content.evaluate(el=>el===document.activeElement),true,'Framework returns focus to editor');
+ await page.getByRole('button',{name:'New tab',exact:true}).click();assert.equal(await content.evaluate(el=>el===document.activeElement),true,'New tab focuses editor');
+ await page.getByRole('button',{name:'Open file',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#editor-panel .cm-content')?.textContent==='abcdef');
+ assert.equal(await content.evaluate(el=>el===document.activeElement),true,'Open file focuses editor');
+ await page.keyboard.press('Control+End');await page.keyboard.press('Shift+ArrowLeft');await page.keyboard.press('Shift+ArrowLeft');
+ await page.getByRole('button',{name:'Copy selection',exact:true}).click();assert.equal(await app.evaluate(()=>global.testClipboard),'ef');
+ await page.evaluate(()=>{const Original=PetDockVendors.Terminal;PetDockVendors.Terminal=class extends Original{constructor(...args){super(...args);window.clipboardTestTerm=this;}};switchPanel('terminal');});await page.waitForFunction(()=>!DockLayoutTransition.busy);
+ await page.getByRole('button',{name:'New Command Prompt',exact:true}).click();await page.waitForFunction(()=>!!window.clipboardTestTerm);
+ await page.evaluate(()=>new Promise(resolve=>clipboardTestTerm.write('terminal selection',resolve)));await page.evaluate(()=>clipboardTestTerm.select(0,0,18));
+ await page.getByRole('button',{name:'Copy selection (Ctrl+C)',exact:true}).click();assert.equal(await app.evaluate(()=>global.testClipboard),'terminal selection');assert.deepEqual(await app.evaluate(()=>global.testWrites),[]);
+ await app.evaluate(()=>{global.testClipboard='echo pasted';});await page.getByRole('button',{name:'Paste (Ctrl+V)',exact:true}).click();await page.waitForTimeout(50);assert.deepEqual(await app.evaluate(()=>global.testWrites),['echo pasted']);
+ await page.getByRole('button',{name:'Interrupt (Ctrl+C)',exact:true}).click();assert.deepEqual(await app.evaluate(()=>global.testWrites),['echo pasted','\x03']);
+ await page.evaluate(()=>clipboardTestTerm.select(0,0,18));await page.locator('#terminal-panel .xterm-helper-textarea').press('Control+c');await page.waitForTimeout(50);assert.deepEqual(await app.evaluate(()=>global.testWrites),['echo pasted','\x03']);
+ await page.evaluate(()=>{clipboardTestTerm.clearSelection();clipboardTestTerm.focus();});
+ const input=page.locator('#terminal-panel .xterm-helper-textarea');
+ await input.press('Shift+ArrowLeft');await input.press('Shift+ArrowLeft');
+ assert.equal(await page.evaluate(()=>clipboardTestTerm.getSelection()),'on');
+ await input.press('Shift+ArrowRight');assert.equal(await page.evaluate(()=>clipboardTestTerm.getSelection()),'n');
+ await input.press('Shift+ArrowRight');assert.equal(await page.evaluate(()=>clipboardTestTerm.hasSelection()),false);
+ await page.evaluate(()=>new Promise(resolve=>clipboardTestTerm.write('\r\nsecond row',resolve)));
+ await input.press('Shift+ArrowUp');assert.match(await page.evaluate(()=>clipboardTestTerm.getSelection()),/second row/);
+ await input.press('Shift+ArrowDown');assert.equal(await page.evaluate(()=>clipboardTestTerm.hasSelection()),false,'Down contracts the upward selection');
+ await input.press('Shift+ArrowUp');
+ await input.press('Control+c');assert.match(await app.evaluate(()=>global.testClipboard),/second row/);
+ assert.deepEqual(await app.evaluate(()=>global.testWrites),['echo pasted','\x03'],'Selecting never sends escape sequences or interrupts');
+ await input.press('ArrowLeft');await page.waitForTimeout(50);assert.equal((await app.evaluate(()=>global.testWrites)).at(-1),'\x1b[D','Normal arrows still reach shell');
+ console.log('Editor language/framework/new/open focus and Shift+arrow selection; shell local selection, copy and normal arrows passed.');
+ }finally{await app.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

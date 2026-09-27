@@ -52,6 +52,7 @@ window.PetDockEditor = (() => {
     if (!tabs.length) create(); else if (id === activeId) select(tabs[0].id); else renderTabs();
     schedule();
   }
+  function focusEditor() { if (!root.hidden) { if (view) view.focus(); else area.querySelector("textarea")?.focus(); } }
   function select(id) {
     activeId = id; const tab = byId(); if (!tab) return;
     loading = true; view?.destroy(); view = null; area.replaceChildren();
@@ -65,7 +66,7 @@ window.PetDockEditor = (() => {
     } else {
       const textarea = document.createElement('textarea'); textarea.className = 'editor-fallback'; textarea.value = tab.text; textarea.spellcheck = false; textarea.setAttribute('aria-label','Code editor'); textarea.oninput = () => updated(textarea.value); area.append(textarea);
     }
-    root.querySelector('.editor-language').value = tab.language; root.querySelector('.editor-framework').value=tab.framework || 'modern'; root.querySelector('.editor-framework').hidden=!['csharp','vb'].includes(tab.language); loading = false; renderTabs(); updateStatus(); schedule();
+    root.querySelector('.editor-language').value = tab.language; root.querySelector('.editor-framework').value=tab.framework || 'modern'; root.querySelector('.editor-framework').hidden=!['csharp','vb'].includes(tab.language); loading = false; renderTabs(); updateStatus(); schedule(); focusEditor();
   }
   function create() { const tab = {id:crypto.randomUUID(),name:`Untitled ${tabs.filter(t=>!t.path).length+1}`,path:'',language:'text',text:'',savedText:'',dirty:false}; tabs.push(tab); select(tab.id); }
   async function open() { const file = await api.editorOpen(); if (!file) return; const existing = tabs.find(t=>t.path === file.path); if (existing) return select(existing.id); const tab = {id:crypto.randomUUID(),name:file.name,path:file.path,text:file.text,language:infer(file.path),savedText:file.text,dirty:false}; tabs.push(tab); select(tab.id); }
@@ -88,7 +89,7 @@ window.PetDockEditor = (() => {
     const controls=document.createElement('div'); controls.className='subtoolbar'; controls.append(button('＋',create,'New tab'),button('▱',open,'Open file'),button('↓',()=>write(false),'Save file (Ctrl+S)'),button('⇲',()=>write(true),'Save file as'),button('⧉',copySelection,'Copy selection'),button('▣',pasteText,'Paste'));
     const spacer=document.createElement('span');spacer.className='spacer';controls.append(spacer);
     const language=document.createElement('select');language.className='editor-language';language.setAttribute('aria-label','Programming language');for(const value of languages)language.add(new Option(value,value));language.onchange=()=>{byId().language=language.value;select(activeId);};controls.append(language);
-    const framework=document.createElement('select');framework.className='editor-framework';framework.setAttribute('aria-label','.NET framework profile');for(const [value,text] of [['modern','Modern .NET'],['3.5','.NET 3.5'],['4','.NET 4']])framework.add(new Option(text,value));framework.onchange=()=>{byId().framework=framework.value;updateStatus();schedule();};controls.append(framework);
+    const framework=document.createElement('select');framework.className='editor-framework';framework.setAttribute('aria-label','.NET framework profile');for(const [value,text] of [['modern','Modern .NET'],['3.5','.NET 3.5'],['4','.NET 4']])framework.add(new Option(text,value));framework.onchange=()=>{byId().framework=framework.value;updateStatus();schedule();focusEditor();};controls.append(framework);
     const strip=document.createElement('div');strip.className='editor-tabs';area=document.createElement('div');area.className='editor-surface';status=document.createElement('div');status.className='editor-status';const hints=document.createElement('div');hints.className='editor-hints';hints.hidden=true;root.append(controls,strip,area,hints,status);
     root.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();write(event.shiftKey).catch(report);}});
     installSearchDialog();

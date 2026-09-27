@@ -37,7 +37,7 @@ contextBridge.exposeInMainWorld('dock', Object.freeze({
   runCommand: text => invoke('runCommand', text),
   listWindowsTools: () => invoke('listWindowsTools'),
   openWindowsTool: id => invoke('openWindowsTool', id),
-  searchFiles: query => invoke('searchFiles', query),
+  searchFiles: (query,options) => invoke('searchFiles', query,options),
   readDirectory: path => invoke('readDirectory', path),
   terminalCreate: options => invoke('terminalCreate', options),
   terminalWrite: (id, data) => invoke('terminalWrite', id, data),

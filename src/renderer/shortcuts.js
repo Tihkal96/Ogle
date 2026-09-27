@@ -281,7 +281,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     }
     dropTarget(content, () => currentGroup);
     root.addEventListener('keydown', event => { if (event.key === 'Escape' && (currentGroup || folderNavigation.length) && !event.target.matches('input,select,textarea')) { event.preventDefault(); goBack(); } });
-    root.append(toolbar);window.OgleLinksTools?.mount(root,api,report);root.append(pinStatus, form, navigation, content, removal); render(); refreshIcons().catch(report);
+    root.append(toolbar);window.OgleLinksTools?.mount(root,api,report,settings,save);root.append(pinStatus, form, navigation, content, removal); render(); refreshIcons().catch(report);
   }
   return { mount, discardEdit: () => discardCurrentEdit() };
 })();

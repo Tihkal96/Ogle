@@ -57,3 +57,5 @@ test('local-drive search includes files outside personal folders without double 
  assert.ok(!config.includes('Example'));assert.match(config,/max_threads=1/);
  await search.dispose();
 });
+
+test('folder results are excluded by default and included only explicitly',async()=>{let args;const f=fixture((file,a,options,callback)=>{args=a;callback(null,'');});await f.search.search('report');assert.ok(args.includes('/a-d'));await f.search.search('report',{includeFolders:true});assert.ok(!args.includes('/a-d'));await assert.rejects(f.search.search('report',{includeFolders:'yes'}),/Invalid search options/);await f.search.dispose();});
