@@ -244,4 +244,4 @@ Before releasing, run `npm test`, the focused `tests/*-runtime.cjs` checks for c
 
 Ogle's original source code is licensed under the [MIT License](LICENSE). This grant does not relicense bundled artwork, trademarks, third-party libraries, Electron/Chromium, or the Everything utilities. Their existing rights and notices remain in force. Pet artwork is excluded from the MIT grant unless it has its own explicit license.
 
-The [SourceForge project](https://sourceforge.net/projects/ogle-dock/) provides an additional download location. GitHub remains the source repository and issue tracker. When publishing future releases, refresh both download locations and verify the uploaded ZIP checksums.
+The [SourceForge project](https://sourceforge.net/projects/ogle-dock/) directs downloads to the [latest GitHub release](https://github.com/Tihkal96/Ogle/releases/latest). Do not upload release files to SourceForge. Keep its download link pointed at `/releases/latest` so it follows future releases automatically. GitHub hosts the release ZIPs and checksums, source repository and issue tracker.
