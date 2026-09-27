@@ -374,7 +374,7 @@ function applySettings() {
   window.OglePinnedPanel.configure();
   clock();
   const clickLabels={codex:'Open Codex',animation:'Play random animation',expand:'Open full panel',reveal:'Show horizontal bar',toggle:'Toggle full panel',chatgpt:'Open ChatGPT panel',none:'Drag to move'};
-  $('pet').title=clickLabels[state.settings.petClickAction] || clickLabels.codex;$('pet').setAttribute('aria-label',$('pet').title);
+  $('pet').title=clickLabels[state.settings.petClickAction] || clickLabels.reveal;$('pet').setAttribute('aria-label',$('pet').title);
   syncComposerContext();updateComposer();
   const nextDelay=autoCollapseDelay(),delayChanged=state.lastAutoCollapseDelay!==undefined && state.lastAutoCollapseDelay!==nextDelay;state.lastAutoCollapseDelay=nextDelay;
   const autoChanged=state.lastAutoExpand!==state.settings.autoExpand;state.lastAutoExpand=state.settings.autoExpand;

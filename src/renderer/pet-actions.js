@@ -1,6 +1,6 @@
 'use strict';
 function runPetClickAction(){
-  switch(state.settings.petClickAction || 'codex'){
+  switch(state.settings.petClickAction || 'reveal'){
     case 'none':return;
     case 'animation':{
       const name=['waving','review'][Math.floor(Math.random()*2)],now=performance.now();
