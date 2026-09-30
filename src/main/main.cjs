@@ -5,7 +5,7 @@ if (process.argv.includes('--terminal-worker')) { require('./terminal-worker.cjs
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { DockShortcuts } = require('./global-shortcuts.cjs');
+const { DockShortcuts, shortcutKeys } = require('./global-shortcuts.cjs');
 const { createActivityStats } = require('./activity-stats.cjs');
 const { SettingsStore } = require('./settings.cjs');
 const { GracefulShutdown } = require('./shutdown.cjs');
@@ -18,11 +18,11 @@ const { DockFiles } = require('./files.cjs');
 const windowsTools=require('./windows-tools.cjs').createWindowsTools();
 const fileSearch=require('./file-search.cjs').createFileSearch({includeFixedDrives:true,dataDir:()=>app.getPath('userData'),roots:()=>['desktop','documents','downloads','pictures','music','videos'].map(name=>app.getPath(name))});
 const { TerminalManager } = require('./terminal-manager.cjs');
-const { PetLibrary } = require('./pet-library.cjs');
+const { PetLibrary, recommendedPets } = require('./pet-library.cjs');
 const { dockBounds, petCenter, clampPet } = require('./window-layout.cjs');
 const { WindowTransition } = require('./window-transition.cjs');
 const {configureStartup,ensureCodex}=require('./startup.cjs');
-const {idleIcon}=require('./pet-icon.cjs');
+
 
 app.setName('Ogle');
 // Preserve existing profiles, browser sign-ins and the single Windows startup entry.
@@ -33,6 +33,8 @@ let shutdown, activityStats, shortcuts, win, bridge, chatgpt, store, files, term
 const root = path.resolve(__dirname, '../..');
 const indexPath = path.join(root, 'src/renderer/index.html');
 const indexUrl = pathToFileURL(indexPath).href;
+const {normalizeRegions,containsPoint}=require('./window-shape.cjs');
+let inputRegions=null;
 let expanded = false;
 let pinnedPanelSide = null;
 let layoutMode = 'idle';
@@ -63,7 +65,7 @@ function register(name, handler) {
   });
 }
 function pets() { return petLibrary.list(); }
-async function updatePetIcon(){const library=await pets();const pet=library.find(p=>p.id===store.value.petId)||library[0];const icon=idleIcon(nativeImage,pet);if(icon&&!win.isDestroyed())win.setIcon(icon);}
+async function updatePetIcon(){const icon=nativeImage.createFromPath(path.join(root,'assets/ogle.png'));if(!icon.isEmpty()&&!win.isDestroyed())win.setIcon(icon);}
 function resize(mode = layoutMode) {
   if(typeof mode==='boolean')mode=mode?'expand':'idle';
   if(mode==='collapse')mode='idle';
@@ -100,7 +102,11 @@ app.whenReady().then(async () => {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== indexUrl) event.preventDefault(); });
   chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}),onFindOpen:()=>send({type:'chat-find-open',target:'chatgpt'}),onCommandsOpen:()=>send({type:'commands-open',target:'chatgpt'}),onSelectionMenu:text=>{try{showSelectionMenu(text);}catch(error){send({type:'startup-error',message:error.message});}},onFindResult:result=>send({type:'chatgpt-find-result',result}) });
+  register('windowShape',rects=>{const b=win.getBounds();inputRegions=normalizeRegions(rects,b.width,b.height);if(inputRegions.length)win.setShape(inputRegions);return true;});
+  const openShortcutPanel=panel=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'open-panel-shortcut',panel});};
   shortcuts=new DockShortcuts(globalShortcut,{
+    shortcutCodex:()=>openShortcutPanel('chats'),shortcutGpt:()=>openShortcutPanel('chatgpt'),shortcutEditor:()=>openShortcutPanel('editor'),shortcutShell:()=>openShortcutPanel('terminal'),shortcutLinks:()=>openShortcutPanel('shortcuts'),
+    shortcutPrompt:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'focus-prompt-shortcut'});},
     shortcutVisibility:()=>{if(win.isVisible()&&!win.isMinimized()){chatgpt.hide();win.hide();}else{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'dock-shown'});}},
     shortcutChatTarget:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-chat-target'});},
     shortcutBar:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-bar'});},
@@ -109,6 +115,7 @@ app.whenReady().then(async () => {
   try{shortcuts.configure(store.value);}catch(error){send({type:'startup-error',message:error.message});}
   activityStats=createActivityStats({onUpdate:data=>send({type:'activity-stats',...data}),onError:error=>send({type:'startup-error',message:error.message})});
   activityStats.configure(store.value);
+  register('recommendedPets',()=>recommendedPets);
   register('activityStats',()=>activityStats.snapshot());
   files = new DockFiles(win);
   petLibrary = new PetLibrary(path.join(root,'assets/pets'),{destination:path.join(app.getPath('userData'),'pets'),fetcher:(...args)=>net.fetch(...args)});
@@ -119,7 +126,7 @@ app.whenReady().then(async () => {
   pointerTimer = setInterval(() => {
     if (!win || win.isDestroyed()) return;
     const p = screen.getCursorScreenPoint(), b = win.getBounds();
-    const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
+    const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height && (!inputRegions || containsPoint(inputRegions,p.x-b.x,p.y-b.y));
     const x=p.x-b.x,y=p.y-b.y;
     if (inside !== lastInside || x!==lastPointerX || y!==lastPointerY) { lastInside=inside;lastPointerX=x;lastPointerY=y;send({type:'pointer',inside,x,y}); }
   }, 160);
@@ -160,7 +167,7 @@ app.whenReady().then(async () => {
   register('steerTurn', async(id,text,images=[],expectedTurnId)=>{await connected();if(typeof text!=='string'||text.length>200000)throw new Error('Invalid prompt');return bridge.steerTurn(string(id,'task ID'),text,images,expectedTurnId);});
   register('interrupt', (id, turnId) => bridge.interrupt(string(id, 'task ID'), string(turnId, 'turn ID')));
   register('respond', (id, result) => bridge.respond(id, result));
-  register('saveSettings', async patch => { const previous=store.value,changedShortcuts=['shortcutVisibility','shortcutPanel','shortcutBar','shortcutChatTarget'].some(key=>Object.hasOwn(patch,key));if(changedShortcuts)shortcuts.configure({...previous,...patch});let result;try{result=store.update(patch);}catch(error){if(changedShortcuts)shortcuts.configure(previous);throw error;}activityStats.configure(result);if(Object.hasOwn(patch,'petScale'))resize();if(Object.hasOwn(patch,'alwaysOnTop'))win.setAlwaysOnTop(result.alwaysOnTop);if(Object.hasOwn(patch,'autoStart'))configureStartup(app,result.autoStart);if(Object.hasOwn(patch,'petId'))await updatePetIcon();return result; });
+  register('saveSettings', async patch => { const previous=store.value,changedShortcuts=shortcutKeys.some(key=>Object.hasOwn(patch,key));if(changedShortcuts)shortcuts.configure({...previous,...patch});let result;try{result=store.update(patch);}catch(error){if(changedShortcuts)shortcuts.configure(previous);throw error;}activityStats.configure(result);if(Object.hasOwn(patch,'petScale'))resize();if(Object.hasOwn(patch,'alwaysOnTop'))win.setAlwaysOnTop(result.alwaysOnTop);if(Object.hasOwn(patch,'autoStart'))configureStartup(app,result.autoStart);if(Object.hasOwn(patch,'petId'))await updatePetIcon();return result; });
   register('chooseFolder', async () => {
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: 'Choose a Codex project folder' });
     return result.canceled ? null : result.filePaths[0];
@@ -215,7 +222,7 @@ app.whenReady().then(async () => {
     if(typeof data!=='string'||data.length>180000||!data.startsWith('data:image/png;base64,'))throw new Error('Invalid pet icon');
     const icon=nativeImage.createFromDataURL(data),size=icon.getSize();
     if(icon.isEmpty()||size.width>256||size.height>256)throw new Error('Invalid pet icon dimensions');
-    win.setIcon(icon);return true;
+    return false; // Retained IPC compatibility; the application uses its own fixed icon.
   });
   register('installPet',input=>petLibrary.install(input));
   register('codexAccount',()=>bridge.accountRead());

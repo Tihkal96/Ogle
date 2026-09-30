@@ -142,7 +142,9 @@ window.PetDockEditor = (() => {
       '.cm-content': { caretColor:fg },
       '.cm-cursor,.cm-dropCursor': { borderLeftColor:fg },
       '.cm-gutters': { backgroundColor:light ? '#f1f3f5' : midnight ? '#101e30' : '#1a1d20', color:light ? '#626b75' : '#909aa5', border:'none' },
-      '.cm-activeLine,.cm-activeLineGutter': { backgroundColor:light ? '#e9edf2' : midnight ? '#1b3048' : '#24292e' },
+      // Selection is drawn behind content: an opaque active row hides the selected range.
+      '.cm-activeLine': { backgroundColor:'transparent', boxShadow:`inset 2px 0 ${light ? '#c4ccd6' : '#394a5c'}` },
+      '.cm-activeLineGutter': { backgroundColor:light ? '#e9edf2' : midnight ? '#1b3048' : '#24292e' },
       // Match One Dark's focused selector specificity so its pale fill cannot win.
       '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground,.cm-selectionBackground': { backgroundColor:light ? '#9fc8fa' : '#245c91' },
       '.cm-content ::selection': { backgroundColor:light ? '#9fc8fa' : '#245c91' },

@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const invoke = (name, ...args) => ipcRenderer.invoke(`dock:${name}`, ...args);
 contextBridge.exposeInMainWorld('dock', Object.freeze({
   setPinnedPanel: side => invoke('setPinnedPanel',side),
+  windowShape: rects => invoke('windowShape',rects),
   activityStats: () => invoke('activityStats'),
   boot: () => invoke('boot'),
   listThreads: filters => invoke('listThreads', filters),
@@ -28,6 +29,7 @@ contextBridge.exposeInMainWorld('dock', Object.freeze({
   codexLogin: () => invoke('codexLogin'),
   codexLogout: () => invoke('codexLogout'),
   installPet: input => invoke('installPet', input),
+  recommendedPets: () => invoke('recommendedPets'),
   listPets: () => invoke('listPets'),
   refreshPets: () => invoke('refreshPets'),
   petIcon: data=>invoke('petIcon',data),

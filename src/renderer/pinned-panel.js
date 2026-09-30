@@ -1,6 +1,6 @@
 "use strict";
 window.OglePinnedPanel=(()=>{
-  const names={chats:'Codex',chatgpt:'ChatGPT',editor:'Editor',terminal:'Shell',shortcuts:'Links'};
+  const names={chats:'Codex',chatgpt:'ChatGPT',editor:'Editor',terminal:'Shell',shortcuts:'Shortcuts'};
   let state,api,open,refresh,report,menuTarget,appliedSide=null,queue=Promise.resolve();
   const el=id=>document.getElementById(id);
   function visible(name){return state.activePanel===name || state.pinnedPanel===name;}
@@ -25,13 +25,13 @@ window.OglePinnedPanel=(()=>{
   function enqueue(action){const next=queue.then(action);queue=next.catch(report);return next;}
   function pin(name){return enqueue(async()=>{
     if(!names[name])return;
-    const old=state.pinnedPanel;
+    const old=state.pinnedPanel,previous=state.activePanel;
     await api.setPinnedPanel(state.settings.pinnedPanelSide || 'left');
     if(old)el('expanded').append(el(old+'-panel'));
     state.pinnedPanel=name;appliedSide=state.settings.pinnedPanelSide || 'left';
     el('side-panel-content').append(el(name+'-panel'));
     el('side-panel-title').textContent=names[name];hideMenu();
-    await open(name==='editor'?'terminal':'editor');
+    await open(previous===name?(name==='editor'?'terminal':'editor'):previous);
     if(name==='chatgpt')await api.openChatGPT('show');
     refresh();
   });}

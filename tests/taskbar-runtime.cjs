@@ -16,8 +16,8 @@ const {_electron:electron}=require('playwright');const fs=require('node:fs');con
     const lago=await waitIcon();await app.evaluate(()=>{global.__icons=[];});
     await page.selectOption('[data-setting="petId"]','rinne-mini');
     await page.waitForFunction(()=>petImage.src.includes('rinne-mini')&&petImage.complete);
-    const rinne=await waitIcon();assert.notEqual(lago.data,rinne.data);assert.deepEqual(errors,[]);
+    const rinne=await waitIcon();assert.equal(lago.data,rinne.data);assert.deepEqual(errors,[]);
     fs.writeFileSync(path.join(root,'artifacts/taskbar-idle-icon.png'),Buffer.from(rinne.data.split(',')[1],'base64'));
-    console.log(JSON.stringify({nativeSetIcon:true,updatesWithSelectedPet:true,size:rinne.size,rendererErrors:errors}));
+    console.log(JSON.stringify({nativeSetIcon:true,fixedApplicationIcon:true,size:rinne.size,rendererErrors:errors}));
   }finally{await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

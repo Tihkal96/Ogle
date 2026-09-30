@@ -1,4 +1,4 @@
-# Release readiness — Ogle 0.6.0
+# Release readiness — Ogle 0.6.1
 
 This release improves reliability and everyday use on the current Windows PC. It remains pre-1.0: a second-PC installation/upgrade trial and sustained daily use of live Codex and ChatGPT are still required. Automated local fixtures cannot establish those results.
 
@@ -45,3 +45,7 @@ node scripts/package-smoke.cjs
 - Validate administrator-shell behavior on both administrator and standard Windows accounts. Windows consent policy is unchanged.
 
 Known scope limits: undo history is retained within a session, not persisted across restarts; find searches loaded content; unsupported file encodings require conversion; counters contain session totals only. Graceful shutdown cannot save renderer edits after a process crash or forced termination. Large no-match searches within one enormous text node still perform that node's literal regex scan synchronously.
+
+## 0.6.1 workflow checks
+
+Additional regressions cover independent hover/collapse, preserved main tab when pinning another panel, caret watching, fixed native application icon, permanent shell drafts, actual editor selection visibility, configurable group persistence, Windows shortcut source icons, local Codex pet installation, and continued Notes use after a real Codex bridge disconnect. Closing the actual Codex desktop process while Ogle runs is still a manual check; disconnect simulation does not prove launch process independence.

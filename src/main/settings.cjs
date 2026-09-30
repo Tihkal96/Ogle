@@ -2,11 +2,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'reveal', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', shortcutChatTarget:'Control+Alt+G', includeSearchFolders:false, statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 7000, pinnedPanelSide: 'left', petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
+const { shortcutKeys } = require('./global-shortcuts.cjs');
+const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'reveal', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', shortcutChatTarget:'Control+Alt+T', shortcutCodex:'Control+Alt+C', shortcutGpt:'Control+Alt+G', shortcutEditor:'Control+Alt+E', shortcutShell:'Control+Alt+X', shortcutLinks:'Control+Alt+S', shortcutPrompt:'Control+Alt+P', includeSearchFolders:false, statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoCollapse: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 7000, pinnedPanelSide: 'left', petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
 function validatePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
   const clean = {};
-  for(const key of ['shortcutVisibility','shortcutPanel','shortcutBar','shortcutChatTarget']) if(Object.hasOwn(patch,key)) {
+  for(const key of shortcutKeys) if(Object.hasOwn(patch,key)) {
     const value=patch[key];
     if(typeof value!=='string' || value.length>80 || (value && !/^(?:(?:Control|Ctrl|Alt|Shift|Super|CommandOrControl)\+)+(?:[A-Z0-9]|Space|F(?:[1-9]|1[0-9]|2[0-4])|Home|End|Insert|Delete|PageUp|PageDown|Up|Down|Left|Right)$/i.test(value)))throw new Error('Use a shortcut such as Control+Alt+O, or leave it empty.');
     clean[key]=value;
@@ -29,7 +30,7 @@ function validatePatch(patch) {
   }
   for (const [key, fields] of Object.entries({ editorTabs: ['id','name','path','language','text','framework'], shortcuts: ['id','name','path','parentId','alias','icon'], terminalCommands: ['id','name','command'] })) {
     if (!Object.hasOwn(patch, key)) continue;
-    if (!Array.isArray(patch[key]) || patch[key].length > 200) throw new Error(`Invalid ${key}`);
+    if (!Array.isArray(patch[key]) || (key!=='shortcuts' && patch[key].length > 200)) throw new Error(`Invalid ${key}`);
     clean[key] = patch[key].map(item => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`Invalid ${key} entry`);
       const result = {};
@@ -43,6 +44,15 @@ function validatePatch(patch) {
         result.kind = ['group','folder','file','url'].includes(item.kind) ? item.kind : 'file';
         if(Object.hasOwn(item,'pinned') && typeof item.pinned!=='boolean')throw new Error('Invalid shortcut pin');
         result.pinned = item.pinned === true;
+        if(result.kind==='group') {
+          for(const [field,fallback] of [['columns',2],['rows',1]]) {
+            const value=item[field] ?? fallback;
+            if(!Number.isInteger(value)||value<1||value>16)throw new Error('Group '+field+' must be from 1 to 16.');
+            result[field]=value;
+          }
+          result.layoutFlow=item.layoutFlow ?? 'rows';
+          if(!['rows','columns'].includes(result.layoutFlow))throw new Error('Invalid group layout direction');
+        }
       }
       return result;
     });
@@ -52,7 +62,7 @@ function validatePatch(patch) {
     if (!Array.isArray(patch.toolbarOrder) || patch.toolbarOrder.some(x => typeof x !== 'string') || patch.toolbarOrder.length > 100) throw new Error('Invalid toolbar order');
     clean.toolbarOrder = [...new Set(patch.toolbarOrder)];
   }
-  for (const key of ['includeSearchFolders','statsVisible','statsBackground','statsClicks','statsKeys','statsCpu','statsRam','autoStart','alwaysOnTop','autoExpand','showTime','showDate','sidebarVisible']) if (Object.hasOwn(patch,key)) {
+  for (const key of ['includeSearchFolders','statsVisible','statsBackground','statsClicks','statsKeys','statsCpu','statsRam','autoStart','alwaysOnTop','autoExpand','autoCollapse','showTime','showDate','sidebarVisible']) if (Object.hasOwn(patch,key)) {
     if (typeof patch[key] !== 'boolean') throw new Error(`Invalid ${key}`);
     clean[key] = patch[key];
   }
@@ -86,6 +96,12 @@ class SettingsStore {
       original = fs.readFileSync(file);
       const parsed = JSON.parse(original.toString('utf8'));
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid settings');
+      // Reserve the newly requested Ctrl+Alt+G for ChatGPT, moving only the old default.
+      if(!Object.hasOwn(parsed,'shortcutGpt') && /^(?:Control|Ctrl)\+Alt\+G$/i.test(parsed.shortcutChatTarget || '')) parsed.shortcutChatTarget='Control+Alt+T';
+      // Existing custom accelerators win over new defaults instead of disabling every shortcut.
+      const occupied=new Set(Object.entries(parsed).filter(([key,value])=>shortcutKeys.includes(key)&&typeof value==='string'&&value).map(([,value])=>value.toLowerCase().replace(/^ctrl\+/,'control+')));
+      for(const key of shortcutKeys) if(!Object.hasOwn(parsed,key) && occupied.has(this.value[key].toLowerCase())) this.value[key]='';
+      if(!Object.hasOwn(parsed,'autoCollapse'))this.value.autoCollapse=parsed.autoExpand!==false;
       const errors = [];
       // A damaged preference must not discard unrelated notes, drafts or tabs.
       for (const [key, value] of Object.entries(parsed)) {
@@ -100,7 +116,7 @@ class SettingsStore {
         else this.loadReadFailed = true;
       }
     }
-    if(this.value.linksLayoutVersion!==2){this.value.shortcutsView='icons';this.value.linksLayoutVersion=2;}
+    if(this.value.linksLayoutVersion!==2){this.value.linksLayoutVersion=2;}
   }
   update(patch) {
     const next = { ...this.value, ...validatePatch(patch) };

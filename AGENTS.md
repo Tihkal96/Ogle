@@ -9,3 +9,4 @@
 - Give parallel writing agents separate file ownership and coordinate shared interfaces.
 
 - On every release, update the README direct Windows ZIP link (label, tag and filename) to the new package version and verify the published asset. Packaging runs scripts/check-release-link.cjs to reject stale links.
+- Follow docs/PUBLISHING.md on every release: after the GitHub asset is public and verified, update the version label and direct ZIP URL in existing owner-authored Reddit announcements/comments. Preserve their prose and discussion context; edit existing entries instead of reposting. Record any unavailable or non-editable entry honestly.

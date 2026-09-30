@@ -9,6 +9,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  });
  const stage=(shell,admin,text)=>page.evaluate(request=>PetDockTerminal.stageText(request),{shell,admin,text});
  const input=page.getByRole('textbox',{name:'Command draft',exact:true}),run=page.getByRole('button',{name:'Run command draft'});
+ await page.getByRole('button',{name:'New Command Prompt',exact:true}).click();assert.equal(await input.isVisible(),true);assert.equal(await input.inputValue(),'');assert.equal(await run.isDisabled(),true);await input.fill('typed before paste');assert.deepEqual(await page.evaluate(()=>writes),[]);await page.getByRole('button',{name:'Discard command draft'}).click();
  const text='echo first\n  echo second\n';assert.equal(await stage('cmd',false,text),true);assert.equal(await input.inputValue(),text);assert.equal(await input.evaluate(el=>el===document.activeElement),true);assert.deepEqual(await page.evaluate(()=>writes),[]);
  await stage('cmd',false,'changed');assert.equal(await page.evaluate(()=>created.length),1,'Reuse matching active');
  await stage('powershell',true,'admin draft');assert.equal(await page.evaluate(()=>created.at(-1).admin),true);assert.equal(await page.evaluate(()=>created.at(-1).shell),'powershell');
@@ -16,11 +17,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  await page.getByRole('button',{name:'ADMIN · PowerShell',exact:true}).click();assert.equal(await input.inputValue(),'admin draft');
  await stage('cmd',false,text);assert.equal(await input.inputValue(),text+'changed\n'+text);assert.equal(await page.evaluate(()=>created.length),2,'Reuse matching inactive');
  await input.fill('reviewed command');await page.evaluate(()=>{holdWrite=true;});await run.click();await page.waitForFunction(()=>writes.length===1);assert.equal(await run.isDisabled(),true);
- await run.evaluate(el=>el.click());assert.equal(await page.evaluate(()=>writes.length),1,'No double send');await page.evaluate(()=>{holdWrite=false;releaseWrite();});await page.waitForFunction(()=>document.querySelector('.terminal-draft').hidden);
+ await run.evaluate(el=>el.click());assert.equal(await page.evaluate(()=>writes.length),1,'No double send');await page.evaluate(()=>{holdWrite=false;releaseWrite();});await page.waitForFunction(()=>document.querySelector('#terminal-command-draft').value==='');assert.equal(await input.isVisible(),true);
  assert.deepEqual(await page.evaluate(()=>writes),[{id:'s1',text:'reviewed command\r'}]);
  await stage('powershell',false,'normal PS');await stage('cmd',true,'admin CMD');assert.deepEqual(await page.evaluate(()=>created.map(x=>[x.shell,x.admin])),[['cmd',false],['powershell',true],['powershell',false],['cmd',true]]);
  await page.evaluate(()=>new Promise(resolve=>lastTerm.write('selectable',resolve)));await page.evaluate(()=>lastTerm.select(0,0,10));assert.equal(await page.evaluate(()=>PetDockTerminal.getSelection()),'selectable');
- await page.getByRole('button',{name:'Discard command draft'}).click();assert.equal(await input.isVisible(),false);
+ await page.getByRole('button',{name:'Discard command draft'}).click();assert.equal(await input.isVisible(),true);assert.equal(await input.inputValue(),'');
  await page.evaluate(()=>terminalEvent({type:'terminal',id:'s4',event:'exit'}));await page.evaluate(()=>{failCreate=true;});assert.equal(await stage('cmd',true,'preserved after denial'),false);assert.equal(await input.inputValue(),'preserved after denial');assert.equal(await page.evaluate(()=>writes.length),1);
  await stage('cmd',true,'append after denial');assert.equal(await input.inputValue(),'preserved after denial\nappend after denial');
  await page.evaluate(()=>{failCreate=false;});await run.click();await page.waitForFunction(()=>writes.length===2);assert.equal(await page.evaluate(()=>writes.at(-1).text),'preserved after denial\nappend after denial\r');assert.equal(await page.evaluate(()=>created.length),5,'Ended sessions not reused');

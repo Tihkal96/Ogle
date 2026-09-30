@@ -12,3 +12,13 @@ test('shortcut changes invoke actions, roll back conflicts and release registrat
  shortcuts.configure({shortcutVisibility:'',shortcutPanel:'Control+Alt+Space'});assert.equal(registered.size,1);
  shortcuts.dispose();assert.equal(registered.size,0);
 });
+
+test('direct tab and prompt shortcuts register distinct callbacks',()=>{
+ const registered=new Map(),calls=[];
+ const registry={register(key,fn){registered.set(key,fn);return true},unregister(key){registered.delete(key)}};
+ const values={shortcutCodex:'Control+Alt+C',shortcutGpt:'Control+Alt+G',shortcutEditor:'Control+Alt+E',shortcutShell:'Control+Alt+X',shortcutLinks:'Control+Alt+S',shortcutPrompt:'Control+Alt+P'};
+ const manager=new DockShortcuts(registry,Object.fromEntries(Object.keys(values).map(key=>[key,()=>calls.push(key)])));
+ manager.configure(values);
+ for(const accelerator of Object.values(values))registered.get(accelerator)();
+ assert.deepEqual(calls,Object.keys(values));manager.dispose();assert.equal(registered.size,0);
+});

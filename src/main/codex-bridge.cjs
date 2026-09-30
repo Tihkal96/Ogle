@@ -207,7 +207,7 @@ class CodexBridge extends EventEmitter {
     for (const mode of this.connectionModes) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.6.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.6.1' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
@@ -301,7 +301,19 @@ class CodexBridge extends EventEmitter {
   }
   async listThreads({ cursor, searchTerm, cwd } = {}) {
     await this.connect();
-    return this._rpc('thread/list', { cursor, searchTerm, cwd, limit: 60, sortKey: 'updated_at', archived: false });
+    const result = await this._rpc('thread/list', { cursor, searchTerm, cwd, limit: 60, sortKey: 'updated_at', archived: false });
+    // Codex's disk-backed listing can emit one row for each rollout file even
+    // when old resume files share one session_meta ID. Consolidate at the data
+    // boundary, before any UI work; never alter or delete conversation archives.
+    // Keep server ordering and pagination, and keep distinct same-title tasks.
+    const unique = rows => { const seen = new Set(); return rows.filter(row => {
+      if (!row || typeof row.id !== 'string' || !row.id || seen.has(row.id)) return false;
+      seen.add(row.id); return true;
+    }); };
+    if (Array.isArray(result)) return unique(result);
+    if (Array.isArray(result?.data)) return { ...result, data: unique(result.data) };
+    if (Array.isArray(result?.threads)) return { ...result, threads: unique(result.threads) };
+    return result;
   }
   async readThread(id) {
     await this.connect();
