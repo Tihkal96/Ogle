@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { shortcutKeys } = require('./global-shortcuts.cjs');
-const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'reveal', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', shortcutChatTarget:'Control+Alt+T', shortcutCodex:'Control+Alt+C', shortcutGpt:'Control+Alt+G', shortcutEditor:'Control+Alt+E', shortcutShell:'Control+Alt+S', shortcutLinks:'Control+Alt+L', shortcutMappingVersion:2, shortcutPrompt:'Control+Alt+P', includeSearchFolders:false, statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoCollapse: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 7000, pinnedPanelSide: 'left', petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
+const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'reveal', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', shortcutChatTarget:'Control+Alt+T', shortcutCodex:'Control+Alt+C', shortcutGpt:'Control+Alt+G', shortcutEditor:'Control+Alt+E', shortcutShell:'Control+Alt+S', shortcutLinks:'Control+Alt+L', shortcutMappingVersion:2, shortcutPrompt:'Control+Alt+P', includeSearchFolders:false, statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsCpuTemp:false, statsGpu:false, statsGpuClock:false, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoCollapse: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 7000, pinnedPanelSide: 'left', petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
 function validatePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
   const clean = {};
@@ -63,7 +63,7 @@ function validatePatch(patch) {
     if (!Array.isArray(patch.toolbarOrder) || patch.toolbarOrder.some(x => typeof x !== 'string') || patch.toolbarOrder.length > 100) throw new Error('Invalid toolbar order');
     clean.toolbarOrder = [...new Set(patch.toolbarOrder)];
   }
-  for (const key of ['includeSearchFolders','statsVisible','statsBackground','statsClicks','statsKeys','statsCpu','statsRam','autoStart','alwaysOnTop','autoExpand','autoCollapse','showTime','showDate','sidebarVisible']) if (Object.hasOwn(patch,key)) {
+  for (const key of ['includeSearchFolders','statsVisible','statsBackground','statsClicks','statsKeys','statsCpu','statsRam','statsCpuTemp','statsGpu','statsGpuClock','autoStart','alwaysOnTop','autoExpand','autoCollapse','showTime','showDate','sidebarVisible']) if (Object.hasOwn(patch,key)) {
     if (typeof patch[key] !== 'boolean') throw new Error(`Invalid ${key}`);
     clean[key] = patch[key];
   }

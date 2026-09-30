@@ -119,7 +119,7 @@ app.whenReady().then(async () => {
     shortcutPanel:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-panel',expanded:!expanded});}
   });
   try{shortcuts.configure(store.value);}catch(error){send({type:'startup-error',message:error.message});}
-  activityStats=createActivityStats({onUpdate:data=>send({type:'activity-stats',...data}),onError:error=>send({type:'startup-error',message:error.message})});
+  activityStats=createActivityStats({dataDir:app.getPath('userData'),onUpdate:data=>send({type:'activity-stats',...data}),onError:error=>send({type:'startup-error',message:error.message})});
   activityStats.configure(store.value);
   register('recommendedPets',()=>recommendedPets);
   register('activityStats',()=>activityStats.snapshot());
@@ -291,8 +291,8 @@ app.on('before-quit', event => {
   if(shutdown && !shutdown.ready){shutdown.request().then(ok=>{if(ok)app.quit();});return;}
   if(quitPending)return;quitPending=true;
   if(win && !win.isDestroyed())win.hide();
-  shortcuts?.dispose();activityStats?.dispose();clearInterval(pointerTimer);chatgpt?.close();bridge?.close();terminals?.dispose();
+  shortcuts?.dispose();const statsDisposal=activityStats?.dispose();clearInterval(pointerTimer);chatgpt?.close();bridge?.close();terminals?.dispose();
   let timeout;
-  Promise.race([fileSearch.dispose(),new Promise(resolve=>{timeout=setTimeout(resolve,5000);})]).catch(()=>{}).finally(()=>{clearTimeout(timeout);quitReady=true;app.quit();});
+  Promise.race([Promise.all([fileSearch.dispose(),statsDisposal]),new Promise(resolve=>{timeout=setTimeout(resolve,5000);})]).catch(()=>{}).finally(()=>{clearTimeout(timeout);quitReady=true;app.quit();});
 });
 app.on('window-all-closed', () => app.quit());

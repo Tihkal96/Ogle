@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { dialog, shell, app, net, nativeImage } = require('electron');
 const crypto = require('node:crypto');
+const { shellShortcutIcon } = require('./shortcut-icons.cjs');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const executeFile = promisify(execFile);
@@ -55,6 +56,7 @@ class DockFiles {
             if(/^https?:\/\//i.test(source.target)) { const fetched=await this.shortcutIcons([source.target]); if(fetched[source.target])icon=nativeImage.createFromDataURL(fetched[source.target]); }
             else try{icon=await app.getFileIcon(localPath(expandEnvironment(source.target)),{size:'large'});}catch{}
           }
+          if((!icon || icon.isEmpty()) && path.extname(file).toLowerCase()==='.lnk')try{icon=await shellShortcutIcon(file,nativeImage);}catch{}
           if(!icon || icon.isEmpty())icon=await app.getFileIcon(file,{size:'large'});
         }
         if(icon&&!icon.isEmpty()){const encoded=icon.resize({width:48,height:48,quality:'best'}).toDataURL();this.icons.set(target,encoded);result[target]=encoded;}

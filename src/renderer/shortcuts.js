@@ -128,7 +128,21 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     }
     function field(label, value = '') { const wrapper = document.createElement('label'); wrapper.textContent = label; const input = document.createElement('input'); input.value = value; input.setAttribute('aria-label', label); wrapper.append(input); form.append(wrapper); return input; }
     function startForm() { discardEdit(); form.hidden = false; }
-    function finishForm(handler, label = 'Save') { const submit = button(label, () => {}); submit.type = 'submit'; submit.onclick = null; submit.dataset.submit = 'true'; form.append(submit, button('Cancel', discardEdit)); form.onsubmit = e => { e.preventDefault(); invoke(handler); }; }
+    function finishForm(handler, label = 'Save') {
+      const submit = button(label, () => {}); submit.type = 'submit'; submit.onclick = null; submit.dataset.submit = 'true';
+      form.append(submit, button('Cancel', discardEdit));
+      let saving = false;
+      form.onsubmit = e => {
+        e.preventDefault(); if (saving) return;
+        saving = true; submit.disabled = true;
+        invoke(async () => { try { await handler(); } finally { saving = false; submit.disabled = false; } });
+      };
+      form.onkeydown = e => {
+        if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229 || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+        if (!e.target.matches('input, select')) return;
+        e.preventDefault(); if (!saving) form.requestSubmit(submit);
+      };
+    }
     async function imported(payload, parentId = currentGroup || null) {
       const result = await api.importShortcuts(payload);
       if (!Array.isArray(result)) throw new Error('Could not import these links.');

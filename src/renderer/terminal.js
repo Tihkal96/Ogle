@@ -15,7 +15,16 @@
   function resize() { const session = sessions.get(active); if (session && host.getBoundingClientRect().width > 0 && host.getBoundingClientRect().height > 0) { try { session.fit.fit(); api.terminalResize(session.id, session.term.cols, session.term.rows).catch(() => {}); } catch {} } }
   function updateStatus() { const session = sessions.get(active); host.querySelector('.terminal-status').textContent = !session ? 'Create a CMD or PowerShell session.' : session.ended ? 'Session ended' : session.admin ? 'Administrator session' : 'Terminal ready'; }
   function select(id) { active = id; if(sessions.has(id))sessions.get(id).selectedAt=++selectionOrder; for (const session of sessions.values()) { session.view.hidden = session.id !== id; session.tab.classList.toggle('active', session.id === id); } updateStatus(); renderDraft(); requestAnimationFrame(() => { resize(); if (draftRow.hidden) sessions.get(id)?.term.focus(); else draftInput.focus(); }); }
+  let adminStarting = false;
+  function setAdminStarting(value) {
+    adminStarting = value;
+    for (const button of host.querySelectorAll('[data-admin-create]')) {
+      button.disabled = value; button.setAttribute('aria-busy', String(value));
+    }
+  }
   async function create(shell, admin = false) {
+    if (admin && adminStarting) return;
+    if (admin) setAdminStarting(true);
     const status = host.querySelector('.terminal-status'); status.textContent = admin ? 'Starting administrator terminal (Windows approval if needed)…' : 'Starting terminal…';
     try {
       const cwd = host.querySelector('.terminal-cwd').value.trim();
@@ -64,6 +73,7 @@
       select(config.id);
       return sessions.get(config.id);
     } catch (error) { report(error); }
+    finally { if (admin) setAdminStarting(false); }
   }
   async function copySelection(id=active) {
     const text=sessions.get(id)?.term.getSelection();
@@ -135,9 +145,9 @@
     const location = element('div', '', 'terminal-location'), shells = element('div', '', 'terminal-shell-actions'), commands = element('div', '', 'terminal-command-actions');
     controls.append(location, shells, commands);
     const cwd = element('input', '', 'terminal-cwd'); cwd.placeholder = 'Working folder (default: home)'; cwd.setAttribute('aria-label', 'Terminal working folder'); location.append(cwd);
-    const button = (label, fn, target = commands, title = label) => { const el = element('button', label); el.title=title; el.setAttribute('aria-label',title); el.type = 'button'; el.onmousedown=event=>event.preventDefault(); el.onclick = () => Promise.resolve().then(fn).catch(report); target.append(el); };
+    const button = (label, fn, target = commands, title = label) => { const el = element('button', label); el.title=title; el.setAttribute('aria-label',title); el.type = 'button'; el.onmousedown=event=>event.preventDefault(); el.onclick = () => Promise.resolve().then(fn).catch(report); target.append(el); return el; };
     button('▱', async () => { const folder = await api.chooseFolder?.(); if (folder) cwd.value = folder; }, location, 'Choose working folder');
-    button('+ PS', () => create('powershell'), shells, 'New PowerShell'); button('+ CMD', () => create('cmd'), shells, 'New Command Prompt'); button('♢ PS', () => create('powershell', true), shells, 'New administrator PowerShell'); button('♢ CMD', () => create('cmd', true), shells, 'New administrator Command Prompt');
+    button('+ PS', () => create('powershell'), shells, 'New PowerShell'); button('+ CMD', () => create('cmd'), shells, 'New Command Prompt'); button('♢ PS', () => create('powershell', true), shells, 'New administrator PowerShell').dataset.adminCreate='true'; button('♢ CMD', () => create('cmd', true), shells, 'New administrator Command Prompt').dataset.adminCreate='true';
     button('⌧', () => sessions.get(active)?.term.write('\x1b[2J\x1b[H'), commands, 'Clear screen');
     button('⌫', () => sessions.get(active)?.term.clear(), commands, 'Clear scrollback');
     button('⧉', () => copySelection(), commands, 'Copy selection (Ctrl+C)');
