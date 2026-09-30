@@ -145,10 +145,9 @@ function renderCompactThreads() { window.OgleConversationPicker.render(); }
 window.OgleConversationPicker.mount();
 async function refresh(more = false) { const result = await api.listThreads(more ? {cursor:state.cursor} : {}); const threads = Array.isArray(result) ? result : result.data || result.threads || []; state.threads = more ? [...new Map([...state.threads,...threads].map(t=>[t.id,t])).values()] : threads; state.cursor = result.nextCursor; $('load-more').hidden = !state.cursor; renderProjects(); renderThreads(); }
 function contentText(item) { if (typeof item.text === 'string') return item.text; if (Array.isArray(item.content)) return item.content.map(c => c.text || (c.type?.toLowerCase().includes('image') ? '[Image]' : '')).filter(Boolean).join('\n'); return item.aggregatedOutput || item.command || item.output || ''; }
-function nearBottom() { const node = $('messages'); return node.scrollHeight-node.scrollTop-node.clientHeight < 70; }
 function scrollBottom() { messageView.toBottom(); }
 $('go-bottom').onclick = scrollBottom;
-const messageView=new window.OgleMessages($('messages'),state.messages,()=>state.mode==='expand' && (state.activePanel==='chats' || state.pinnedPanel==='chats') && !window.DockLayoutTransition.busy);
+const messageView=new window.OgleMessages($('messages'),state.messages,()=>state.mode==='expand' && (state.activePanel==='chats' || state.pinnedPanel==='chats') && !window.DockLayoutTransition.busy,atBottom=>{$('go-bottom').hidden=atBottom;});
 function addMessage(id,role,text){messageView.set(id,role,text);}
 function renderItem(item) { const type=item.type?.toLowerCase();if(type==='usermessage')addMessage(item.id,'user',contentText(item));else if(type==='agentmessage')addMessage(item.id,'assistant',contentText(item)); }
 
@@ -492,7 +491,7 @@ attempt(async () => {
   window.PetDockShortcuts?.mount($('shortcuts-panel'),api,state.settings,save,error,()=>switchPanel('shortcuts'));
   window.PetDockTerminal?.mount($('terminal-panel'),api);
   window.PetDockSettings?.mount($('settings-panel'),api,state.settings,pets,save,applySettings,error,async()=>{pets=await api.listPets();applySettings();return pets;},()=>switchPanel('chatgpt'));
-  window.OglePanelView.init({state,api,report:error,layout:chatgptLayout,idle:resetPanelIdle});
+  window.OglePanelView.init({state,api,report:error,layout:chatgptLayout,chatLayout:()=>messageView.layoutChanged(),idle:resetPanelIdle});
   state.threads=Array.isArray(boot.threads)?boot.threads:boot.threads?.data || [];state.cursor=boot.threads?.nextCursor;
   $('note').value=state.settings.note || '';state.bootReady=true;applySettings();await setMode('idle');if(restoreBootConnection(boot.connection,bootConnectionRevision))restoreBootActivity(boot.activity);renderProjects();renderThreads();$('load-more').hidden=!state.cursor;
   const previous=state.threads.find(t=>t.id===state.settings.lastThreadId);if(previous)await attempt(()=>selectThread(previous));
