@@ -95,6 +95,8 @@ app.whenReady().then(async () => {
   const area = screen.getPrimaryDisplay().workArea;
   win = new BrowserWindow({ title: 'Ogle', width: Math.min(600, area.width), height: Math.min(200, area.height), x: area.x + Math.max(0, area.width - 620), y: area.y + Math.max(0, area.height - 220), transparent: true, frame: false, resizable: false, skipTaskbar: true, backgroundColor: '#00000000', alwaysOnTop: store.value.alwaysOnTop, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
   win.on('minimize', hideDock);
+  win.on('hide',()=>send({type:'dock-visibility',visible:false}));
+  win.on('show',()=>send({type:'dock-visibility',visible:true}));
   topmost=new TopmostController(win,{enabled:store.value.alwaysOnTop,children:()=>[...(chatgpt?.children||[])]});
   shutdown=new GracefulShutdown({window:win,
     flush:()=>win.webContents.executeJavaScript("typeof state==='undefined' || !state.bootReady ? true : flushLocal().then(()=>true,err=>{error(err);return false;})"),

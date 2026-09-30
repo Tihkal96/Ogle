@@ -126,7 +126,7 @@ Ctrl+F opens conversation search in Codex and ChatGPT, including when typing ins
 
 ## Version 0.5.24
 
-Codex completion loops the review animation until that task is opened in Ogle’s Codex panel or marked read in Codex. Opening an unrelated task does not clear it. Work and approval states retain priority; unread completion resumes afterward.
+Codex completion loops the review animation until that task is opened in Ogle’s Codex panel or marked read in Codex. Opening an unrelated task does not clear it. Expanding the existing Codex panel also acknowledges its selected task, and completion arriving while that task is visible is acknowledged immediately (including a pinned Codex panel). Hidden or covered panels keep their notifications. Work and approval states retain priority; unread completion resumes afterward.
 
 ## Version 0.5.23
 
