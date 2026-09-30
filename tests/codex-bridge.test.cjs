@@ -263,3 +263,22 @@ test('history fallback does not swallow permission errors or recurse on unsuppor
   await assert.rejects(bridge.readThread('legacy'), /list_turns/); assert.equal(children.length, 2);
   bridge.close();
 });
+
+test('thread list removes repeated IDs without merging separate same-title tasks', async () => {
+  const { bridge } = fixture((message, child) => {
+    if (message.method === 'thread/list') child.reply({ id: message.id, result: { data: [{ id: 'a', name: 'Same' }, { id: 'a', name: 'Same' }, { id: 'b', name: 'Same' }], nextCursor: 'page2' } });
+  });
+  try { const result = await bridge.listThreads(); assert.deepEqual(result.data.map(t => t.id), ['a', 'b']); assert.equal(result.nextCursor, 'page2'); } finally { bridge.close(); }
+});
+
+test('Codex server exit leaves bridge reusable for another connection', async () => {
+  const { bridge, children } = fixture((message, child) => {
+    if (message.method === 'thread/list') child.reply({ id: message.id, result: { data: [] } });
+  });
+  try {
+    await bridge.connect(); children[0].emit('exit', 0);
+    assert.equal(bridge.connected, false);
+    assert.deepEqual(await bridge.listThreads(), { data: [] });
+    assert.equal(children.length, 2);
+  } finally { bridge.close(); }
+});

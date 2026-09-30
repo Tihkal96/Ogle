@@ -11,7 +11,7 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  for(const name of ['settings-navigation.js','settings.js'])await page.addScriptTag({path:path.join(root,'src/renderer',name)});
  await page.evaluate(()=>{
  window.OgleDiagnostics={record(){},open(){}};window.saved=[];
- const api=new Proxy({codexAccount:async()=>null,terminalAdminStatus:async()=>({available:false})},{get:(o,k)=>o[k]||(()=>{throw new Error('Unexpected API: '+k);})});
+ const api=new Proxy({codexAccount:async()=>null,recommendedPets:async()=>[],terminalAdminStatus:async()=>({available:false})},{get:(o,k)=>o[k]||(()=>{throw new Error('Unexpected API: '+k);})});
  PetDockSettings.mount(document.querySelector('#settings'),api,{autoCollapseDelay:7000},[],p=>saved.push(p),()=>{},e=>{throw e;},async()=>[],()=>{});
  });
  const search=page.getByRole('searchbox',{name:'Search settings'}),sections=page.locator('.settings-section'),count=await sections.count();

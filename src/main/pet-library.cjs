@@ -7,6 +7,19 @@ const { pathToFileURL } = require('node:url');
 const { unzipSync } = require('fflate');
 const { imageSize } = require('image-size');
 const MAX_ARCHIVE = 25*1024*1024;
+const recommendedPets = require('../../assets/pet-catalog.json');
+const bundledAuthors = new Map(['rinne','rinne-mini','lago-realistic'].map(id => [id, 'tihkal96']));
+function attribution(config) {
+  const known = recommendedPets.find(pet => pet.id === config.id);
+  const author = known?.author || bundledAuthors.get(config.id) || (typeof config.author === 'string' ? config.author.trim().slice(0,120) : '');
+  const result = author ? { author } : {};
+  const candidate = known?.sourceUrl || config.sourceUrl;
+  if (typeof candidate === 'string' && candidate.length <= 2048) try {
+    const url = new URL(candidate);
+    if (url.protocol === 'https:' && !url.username && !url.password) result.sourceUrl = url.href;
+  } catch {}
+  return result;
+}
 function sourceUrl(input) {
   if (typeof input !== 'string' || input.length > 12000) throw new Error('Enter a pet name, install command, or HTTPS ZIP URL');
   const text = input.trim().replace(/^\$\s*/, '');
@@ -41,7 +54,7 @@ function readPackage(bytes) {
   if(!sprite)throw new Error('Sprite sheet is missing from ZIP');
   const dimensions=imageSize(sprite);
   if(!['png','webp'].includes(dimensions.type)||dimensions.width>8192||dimensions.height>11264||dimensions.width%8||dimensions.height%11)throw new Error('Sprite sheet must use the v2 8-column, 11-row atlas');
-  return {config:{id:config.id,displayName:String(config.displayName||config.id).slice(0,120),description:String(config.description||'').slice(0,1000),spriteVersionNumber:2,spritesheetPath:config.spritesheetPath},sprite};
+  return {config:{...attribution(config),id:config.id,displayName:String(config.displayName||config.id).slice(0,120),description:String(config.description||'').slice(0,1000),spriteVersionNumber:2,spritesheetPath:config.spritesheetPath},sprite};
 }
 const safeId = value => typeof value === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/i.test(value);
 async function localPackage(base, id) {
@@ -59,7 +72,7 @@ async function localPackage(base, id) {
   const sprite = await fs.readFile(spritePath), dimensions = imageSize(sprite);
   if (!['png', 'webp'].includes(dimensions.type) || !dimensions.width || !dimensions.height || dimensions.width > 8192 || dimensions.height > 11264 || dimensions.width % 8 || dimensions.height % 11) throw new Error('Invalid pet atlas');
   const hash = createHash('sha256').update(sprite).digest('hex');
-  return { config: { id, displayName: String(config.displayName || id).slice(0,120), description: String(config.description || '').slice(0,1000), spriteVersionNumber: 2, spritesheetPath: name }, sprite, spritePath, hash };
+  return { config: { ...attribution({ ...config, id }), id, displayName: String(config.displayName || id).slice(0,120), description: String(config.description || '').slice(0,1000), spriteVersionNumber: 2, spritesheetPath: name }, sprite, spritePath, hash };
 }
 class PetLibrary {
   constructor(bundled, {
@@ -117,6 +130,35 @@ class PetLibrary {
     }
     return { pets: await this.list(), source: 'codex', updated };
   }
+  async installInCodex(config, sprite) {
+    // A Codex profile (or configured pets folder) must already exist. Never replace a pet.
+    const target = path.join(this.codexSource, config.id);
+    let created = false;
+    try {
+      try { await fs.stat(this.codexSource); }
+      catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        try { if (!(await fs.stat(path.dirname(this.codexSource))).isDirectory()) return {status:'unavailable'}; }
+        catch (parentError) { if (parentError.code === 'ENOENT') return {status:'unavailable'}; throw parentError; }
+        await fs.mkdir(this.codexSource).catch(error => { if (error.code !== 'EEXIST') throw error; });
+      }
+      if (path.resolve(this.codexSource) === path.resolve(this.destination)) return {status:'installed'};
+      try { await fs.mkdir(target); created = true; }
+      catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+        let existing; try { existing = await localPackage(target, config.id); } catch {}
+        if (existing && Buffer.from(existing.sprite).equals(Buffer.from(sprite)) && existing.config.displayName === config.displayName) return {status:'existing'};
+        return {status:'skipped',warning:'Installed in Ogle. Codex already has a different pet with this ID; its files were preserved.'};
+      }
+      if (path.dirname(await fs.realpath(target)) !== await fs.realpath(this.codexSource)) throw new Error('Codex pet folder is outside its library');
+      await fs.writeFile(path.join(target, config.spritesheetPath), sprite, {flag:'wx'});
+      await fs.writeFile(path.join(target, 'pet.json'), JSON.stringify(config, null, 2), {flag:'wx'});
+      return {status:'installed'};
+    } catch (error) {
+      if (created && path.dirname(path.resolve(target)) === path.resolve(this.codexSource)) await fs.rm(target, {recursive:true,force:true}).catch(() => {});
+      return {status:'failed',warning:`Installed in Ogle, but copying to Codex failed: ${error.message}`};
+    }
+  }
   async install(input) {
     const url=sourceUrl(input);
     const response=await this.fetcher(url,{signal:AbortSignal.timeout(45000)});
@@ -136,7 +178,8 @@ class PetLibrary {
       if(path.dirname(path.resolve(target))===path.resolve(this.destination))await fs.rm(target,{recursive:true,force:true});
       throw error;
     }
-    const pets=await this.list();return {pets,pet:pets.find(p=>p.id===config.id)};
+    const codex = await this.installInCodex(config, sprite);
+    const pets=await this.list();return {pets,pet:pets.find(p=>p.id===config.id),codex};
   }
 }
-module.exports={PetLibrary,sourceUrl,readPackage};
+module.exports={PetLibrary,sourceUrl,readPackage,recommendedPets};

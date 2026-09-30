@@ -1,7 +1,7 @@
 'use strict';
 const {_electron:electron}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 (async()=>{
- const root=path.resolve(__dirname,'..'),profile=path.join(root,'artifacts',`hotkeys-${Date.now()}`);fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({compactChatTarget:'codex',autoStart:false,autoExpand:false,shortcutVisibility:'',shortcutPanel:'',shortcutBar:'',shortcutChatTarget:''}));
+ const root=path.resolve(__dirname,'..'),profile=path.join(root,'artifacts',`hotkeys-${Date.now()}`);fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({compactChatTarget:'codex',autoStart:false,autoExpand:false,shortcutVisibility:'',shortcutPanel:'',shortcutBar:'',shortcutChatTarget:'',shortcutCodex:'',shortcutGpt:'',shortcutEditor:'',shortcutShell:'',shortcutLinks:'',shortcutPrompt:''}));
  const env={...process.env,PETDOCK_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch(process.env.PETDOCK_TEST_EXE?{executablePath:process.env.PETDOCK_TEST_EXE,args:[],env}:{args:[root],env});
  try{
@@ -28,6 +28,17 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  await page.evaluate(()=>setMode('idle'));await app.evaluate(()=>global.targetShortcut());await page.waitForFunction(()=>state.mode==='reveal'&&!DockLayoutTransition.busy);
  assert.equal(await page.evaluate(()=>state.settings.compactChatTarget),'codex');
  await page.evaluate(()=>switchPanel('settings'));await target.click();await target.press('Backspace');await target.locator('..').getByRole('button',{name:'Set',exact:true}).click();await page.evaluate(()=>saveQueue);assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Alt+F9')),false);
+ // Capture real callbacks at registration, then exercise the same callback used by Windows.
+ const direct=[['shortcutCodex','Open Codex','chats'],['shortcutGpt','Open ChatGPT','chatgpt'],['shortcutEditor','Open Editor','editor'],['shortcutShell','Open Shell','terminal'],['shortcutLinks','Open Shortcuts','shortcuts'],['shortcutPrompt','Write a prompt',null]];
+ await app.evaluate(({globalShortcut})=>{const register=globalShortcut.register.bind(globalShortcut);global.directCallbacks={};globalShortcut.register=(key,callback)=>{global.directCallbacks[key]=callback;return register(key,callback)};});
+ for(const [index,[key,label,panelName]] of direct.entries()){
+  await page.evaluate(()=>switchPanel('settings'));
+  const field=page.getByRole('textbox',{name:label+' shortcut',exact:true});const accelerator='Control+Alt+F'+(index+1);
+  await field.click();await field.press(accelerator);await field.locator('..').getByRole('button',{name:'Set',exact:true}).click();await page.evaluate(()=>saveQueue);
+  await page.evaluate(()=>setMode('idle'));await app.evaluate((_electron,key)=>global.directCallbacks[key](),accelerator);
+  if(panelName)await page.waitForFunction(name=>state.activePanel===name&&state.mode==='expand',panelName);
+  else await page.waitForFunction(()=>state.mode==='quick'&&document.activeElement===document.querySelector('#prompt'));
+ }
  console.log('Shortcut settings capture, real OS registration, conflict rollback and disable passed');
  }finally{await app.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

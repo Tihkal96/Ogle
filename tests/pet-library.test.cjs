@@ -46,7 +46,7 @@ test('fake download installs only validated files and preserves an existing inst
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'petdock-library-test-'));
   const destination = path.join(temp, 'pets'), bundled = path.join(temp, 'bundled'), bytes = await archive(config, { 'launch.exe': strToU8('ignored') });
   const calls = [];
-  const library = new PetLibrary(bundled, { destination, fetcher: async (url, options) => { calls.push({ url, signal: options.signal }); return new Response(bytes, { status: 200 }); } });
+  const library = new PetLibrary(bundled, { destination, codexSource:path.join(temp,'missing-profile','pets'), fetcher: async (url, options) => { calls.push({ url, signal: options.signal }); return new Response(bytes, { status: 200 }); } });
   try {
     const installed = await library.install('test-pet');
     assert.equal(installed.pet.id, 'test-pet'); assert.equal(calls.length, 1); assert.ok(calls[0].signal instanceof AbortSignal);
@@ -61,7 +61,7 @@ test('fake download installs only validated files and preserves an existing inst
 test('download failure leaves destination untouched', async () => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'petdock-library-test-'));
   const destination = path.join(temp, 'pets');
-  const library = new PetLibrary(temp, { destination, fetcher: async () => new Response('missing', { status: 404 }) });
+  const library = new PetLibrary(temp, { destination, codexSource:path.join(temp,'missing-profile','pets'), fetcher: async () => new Response('missing', { status: 404 }) });
   try { await assert.rejects(library.install('missing'), /404/); await assert.rejects(fs.access(destination), /ENOENT/); } finally { await fs.rm(temp, { recursive: true, force: true }); }
 });
 
@@ -79,7 +79,8 @@ test('Codex refresh copies locally, updates changed sprites and preserves pets o
     assert.equal(first.source, 'codex'); assert.equal(first.updated, 1);
     assert.ok(require('node:url').fileURLToPath(first.pets[0].spriteUrl).startsWith(destination));
     assert.equal((await library.refresh()).updated, 0);
-    const replacement = await fs.readFile(path.join(__dirname, '../assets/pets/rinne-mini/sprite-0ce987a74a9b.webp'));
+    const replacementConfig=JSON.parse(await fs.readFile(path.join(__dirname,'../assets/pets/rinne-mini/pet.json'),'utf8'));
+    const replacement = await fs.readFile(path.join(__dirname, '../assets/pets/rinne-mini', replacementConfig.spritesheetPath));
     await fs.writeFile(path.join(source, config.spritesheetPath), replacement);
     const second = await library.refresh();
     assert.equal(second.updated, 1); assert.notEqual(second.pets[0].spriteUrl, first.pets[0].spriteUrl);
@@ -106,4 +107,47 @@ test('refresh rejects escaping sprites and still offers independently installed 
     assert.equal((await library.install('test-pet')).pet.id, config.id);
     assert.equal((await library.refresh()).pets[0].id, config.id);
   } finally { await fs.rm(temp, { recursive: true, force: true }); }
+});
+
+
+test('install mirrors to available Codex profile without replacing existing pets, and tolerates failure', async () => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'ogle-pet-install-codex-'));
+  const bytes = await archive();
+  try {
+    const codexHome=path.join(temp,'codex'); await fs.mkdir(codexHome);
+    const codexSource=path.join(codexHome,'pets');
+    const make = suffix => new PetLibrary(path.join(temp,'bundled'), {destination:path.join(temp,suffix),codexSource,fetcher:async()=>new Response(bytes)});
+    assert.equal((await make('local1').install('test-pet')).codex.status,'installed');
+    assert.deepEqual(await fs.readFile(path.join(codexSource,config.id,config.spritesheetPath)),await sprite());
+    assert.equal((await make('local2').install('test-pet')).codex.status,'existing');
+    await fs.writeFile(path.join(codexSource,config.id,'pet.json'),'preserve existing user file');
+    const conflict=await make('local3').install('test-pet');
+    assert.equal(conflict.codex.status,'skipped'); assert.equal(conflict.pet.id,config.id);
+    assert.equal(await fs.readFile(path.join(codexSource,config.id,'pet.json'),'utf8'),'preserve existing user file');
+    const blocked=path.join(temp,'blocked'); await fs.writeFile(blocked,'not a directory');
+    const failed=new PetLibrary(temp,{destination:path.join(temp,'local4'),codexSource:blocked,fetcher:async()=>new Response(bytes)});
+    const result=await failed.install('test-pet'); assert.equal(result.pet.id,config.id);assert.equal(result.codex.status,'failed');assert.match(result.codex.warning,/Installed in Ogle/);
+  } finally { await fs.rm(temp,{recursive:true,force:true}); }
+});
+
+test('creator credits survive download, Codex mirroring and local refresh', async () => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'ogle-pet-credits-'));
+  try {
+    const codexSource = path.join(temp, 'codex', 'pets');
+    await fs.mkdir(codexSource, { recursive:true });
+    const bytes = await archive({ ...config, author:'Example Artist', sourceUrl:'https://example.com/pet' });
+    const library = new PetLibrary(path.join(temp,'bundled'), {destination:path.join(temp,'local'),codexSource,fetcher:async()=>new Response(bytes)});
+    const result = await library.install('test-pet');
+    assert.equal(result.pet.config.author,'Example Artist');
+    assert.equal(result.pet.config.sourceUrl,'https://example.com/pet');
+    const mirrored=JSON.parse(await fs.readFile(path.join(codexSource,'test-pet','pet.json'),'utf8'));
+    assert.equal(mirrored.author,'Example Artist');
+    await library.refresh();
+    assert.equal((await library.list())[0].config.author,'Example Artist');
+    const unsafe=readPackage(await archive({...config,author:{bad:true},sourceUrl:'javascript:alert(1)'}));
+    assert.equal(unsafe.config.author,undefined);
+    assert.equal(unsafe.config.sourceUrl,undefined);
+    const known=readPackage(await archive({...config,id:'fern'}));
+    assert.equal(known.config.author,'pixel');
+  } finally { await fs.rm(temp,{recursive:true,force:true}); }
 });

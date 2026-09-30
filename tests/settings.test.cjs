@@ -24,11 +24,11 @@ test('up to seven shortcut pins persist and excess pins are rejected atomically'
     assert.throws(()=>validatePatch({shortcuts:[{id:'x',pinned:'true'}]}),/shortcut pin/);
   }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
-test('icon-layout migration is once-only and startup defaults on',()=>{
+test('layout migration preserves an explicit view and startup defaults on',()=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'petdock-migrate-')),file=path.join(dir,'settings.json');
   try {
     fs.writeFileSync(file,JSON.stringify({shortcutsView:'details',shortcuts:[{id:'g',kind:'group',name:'Tools'}]}));
-    const old=new SettingsStore(file);assert.equal(old.value.shortcutsView,'icons');assert.equal(old.value.autoStart,true);assert.equal(old.value.shortcuts[0].name,'Tools');
+    const old=new SettingsStore(file);assert.equal(old.value.shortcutsView,'details');assert.equal(old.value.autoStart,true);assert.equal(old.value.shortcuts[0].name,'Tools');
     old.update({shortcutsView:'details',autoStart:false});
     const reopened=new SettingsStore(file);assert.equal(reopened.value.shortcutsView,'details');assert.equal(reopened.value.autoStart,false);
   } finally {fs.rmSync(dir,{recursive:true,force:true});}
@@ -65,4 +65,28 @@ test('invalid settings cannot overwrite saved content', () => {
 test('pet click actions validate and preserve a chosen behavior',()=>{
  for(const value of ['codex','animation','expand','reveal','toggle','chatgpt','none'])assert.equal(validatePatch({petClickAction:value}).petClickAction,value);
  assert.throws(()=>validatePatch({petClickAction:'execute script'}),/pet click action/);
+});
+
+test('hover and automatic collapse migrate together then persist independently',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ogle-behavior-')),file=path.join(dir,'settings.json');
+ try{fs.writeFileSync(file,JSON.stringify({autoExpand:false}));const store=new SettingsStore(file);assert.equal(store.value.autoCollapse,false);store.update({autoCollapse:true});const reopened=new SettingsStore(file);assert.equal(reopened.value.autoExpand,false);assert.equal(reopened.value.autoCollapse,true);assert.throws(()=>validatePatch({autoCollapse:'yes'}));}finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+test('group shape and sibling order survive a profile restart',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ogle-groups-')),file=path.join(dir,'settings.json');
+ try{const store=new SettingsStore(file);store.update({shortcuts:[{id:'b',kind:'group',rows:3,columns:2,layoutFlow:'columns'},{id:'a',kind:'group',rows:1,columns:6}]});const groups=new SettingsStore(file).value.shortcuts;assert.deepEqual(groups.map(g=>g.id),['b','a']);assert.equal(groups[0].rows,3);assert.equal(groups[0].columns,2);assert.equal(groups[0].layoutFlow,'columns');for(const rows of [0,17,1.2])assert.throws(()=>validatePatch({shortcuts:[{kind:'group',rows}]}));}finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('new direct shortcuts migrate old target switch without overwriting custom shortcuts',()=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'ogle-keys-'));
+ try {
+  const file=path.join(directory,'settings.json');
+  fs.writeFileSync(file,JSON.stringify({shortcutChatTarget:'Control+Alt+G'}));
+  const settings=new SettingsStore(file).value;
+  assert.equal(settings.shortcutChatTarget,'Control+Alt+T');assert.equal(settings.shortcutGpt,'Control+Alt+G');
+  assert.equal(settings.shortcutCodex,'Control+Alt+C');assert.equal(settings.shortcutEditor,'Control+Alt+E');assert.equal(settings.shortcutShell,'Control+Alt+X');assert.equal(settings.shortcutLinks,'Control+Alt+S');assert.equal(settings.shortcutPrompt,'Control+Alt+P');
+  fs.writeFileSync(file,JSON.stringify({shortcutChatTarget:'Control+Alt+F8',shortcutVisibility:'Control+Alt+C'}));
+  const custom=new SettingsStore(file).value;
+  assert.equal(custom.shortcutChatTarget,'Control+Alt+F8');assert.equal(custom.shortcutVisibility,'Control+Alt+C');assert.equal(custom.shortcutCodex,'');
+  assert.deepEqual(validatePatch({shortcutPrompt:'',shortcutEditor:'Control+Alt+E'}),{shortcutEditor:'Control+Alt+E',shortcutPrompt:''});
+ } finally {fs.rmSync(directory,{recursive:true,force:true});}
 });

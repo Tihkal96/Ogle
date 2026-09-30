@@ -27,3 +27,12 @@
 .links-icons .links-group-frame>.links-row .links-entry-actions{top:0}
 
 .links-search-folders{display:flex;align-items:center;gap:3px;flex:none;font-size:10px;cursor:pointer}.links-tools-controls .links-search-folders input{width:12px;height:12px;padding:0;margin:0;flex:none}
+
+/* Configurable group frames keep full-size tiles and grow without hiding members. */
+.links-icons{display:flex;flex-wrap:wrap;align-items:flex-start;align-content:flex-start;gap:8px}
+.links-icons>.links-entry:not(.links-group-frame){width:88px;flex:0 0 88px}
+.links-icons .links-group-frame{flex:0 0 auto;width:max-content;max-width:none}
+.links-icons .links-group-frame>.links-children{grid-template-columns:repeat(var(--group-columns,2),88px);grid-auto-rows:minmax(102px,auto);gap:4px;align-items:start}
+.links-icons .links-group-frame>.links-children>.links-entry:not(.links-group-frame){width:88px}
+.links-icons .links-group-frame>.links-children>.links-group-frame{grid-column:auto}
+.links-icons .links-group-frame>.links-row>.links-open{width:100%;flex-basis:auto}

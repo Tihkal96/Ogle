@@ -1,5 +1,5 @@
 'use strict';
-const keys=['shortcutVisibility','shortcutPanel','shortcutBar','shortcutChatTarget'];
+const keys=['shortcutVisibility','shortcutPanel','shortcutBar','shortcutChatTarget','shortcutCodex','shortcutGpt','shortcutEditor','shortcutShell','shortcutLinks','shortcutPrompt'];
 class DockShortcuts {
   constructor(registry,actions){this.registry=registry;this.actions=actions;this.current={};}
   configure(settings){
@@ -15,4 +15,4 @@ class DockShortcuts {
   clear(){for(const value of Object.values(this.current))if(value)this.registry.unregister(value);}
   dispose(){this.clear();this.current={};}
 }
-module.exports={DockShortcuts};
+module.exports={DockShortcuts,shortcutKeys:keys};

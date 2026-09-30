@@ -13,7 +13,7 @@
   function report(error) { window.OgleDiagnostics.record(error,'Terminal');host.querySelector('.terminal-status').textContent='Terminal action failed. Details are in Settings → Debug.'; }
   function resize() { const session = sessions.get(active); if (session && host.getBoundingClientRect().width > 0 && host.getBoundingClientRect().height > 0) { try { session.fit.fit(); api.terminalResize(session.id, session.term.cols, session.term.rows).catch(() => {}); } catch {} } }
   function updateStatus() { const session = sessions.get(active); host.querySelector('.terminal-status').textContent = !session ? 'Create a CMD or PowerShell session.' : session.ended ? 'Session ended' : session.admin ? 'Administrator session' : 'Terminal ready'; }
-  function select(id) { active = id; if(sessions.has(id))sessions.get(id).selectedAt=++selectionOrder; for (const session of sessions.values()) { session.view.hidden = session.id !== id; session.tab.classList.toggle('active', session.id === id); } updateStatus(); renderDraft(); requestAnimationFrame(() => { resize(); if (draftRow.hidden) sessions.get(id)?.term.focus(); }); }
+  function select(id) { active = id; if(sessions.has(id))sessions.get(id).selectedAt=++selectionOrder; for (const session of sessions.values()) { session.view.hidden = session.id !== id; session.tab.classList.toggle('active', session.id === id); } updateStatus(); renderDraft(); requestAnimationFrame(() => { resize(); if (draftRow.hidden) sessions.get(id)?.term.focus(); else draftInput.focus(); }); }
   async function create(shell, admin = false) {
     const status = host.querySelector('.terminal-status'); status.textContent = admin ? 'Starting administrator terminal (Windows approval if needed)…' : 'Starting terminal…';
     try {
@@ -75,7 +75,12 @@
     // xterm preserves the shell's bracketed-paste handling; no Enter is added.
     session.term.paste(text);session.term.focus();
   }
-  function currentDraft() { return pendingDraft || sessions.get(active)?.draft; }
+  function currentDraft() {
+    if (pendingDraft) return pendingDraft;
+    const session = sessions.get(active);
+    if (!session) return null;
+    return session.draft ||= {shell:session.shell,admin:session.admin,text:'',sending:false};
+  }
   function renderDraft() {
     if (!draftRow) return;
     const draft = currentDraft(); draftRow.hidden = !draft;

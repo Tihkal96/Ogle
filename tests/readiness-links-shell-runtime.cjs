@@ -13,7 +13,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
    window.savedLinks=items;
    PetDockShortcuts.mount(document.querySelector('#links'),{openShortcut:async()=>{}},{shortcuts:items,shortcutsView:'icons'},async patch=>{savedLinks=patch.shortcuts;commits++;},e=>failures.push(e.message));
   });
-  assert.equal(await page.locator('[data-id="nested"]').count(),0,'Collapsed parent initially hides fourth item');
+  assert.equal(await page.locator('[data-id="nested"]').count(),1,'Group members remain visible without an expansion tile');
   await page.getByRole('button',{name:'Open Nested',exact:true}).click();
   assert.equal(await page.locator('[data-id="nested"]').isVisible(),true);
   assert.equal(await page.locator('[data-id="child"]').isVisible(),true);

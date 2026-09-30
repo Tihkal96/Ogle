@@ -11,13 +11,9 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
   assert.equal(await page.locator('#conversation-name').textContent(),'Write a prompt to ChatGPT...');
   await page.locator('#prompt').focus();
   await page.waitForFunction(()=>$('pet').dataset.state==='watching');
-  await page.evaluate(()=>{const r=$('pet').getBoundingClientRect();onEvent({type:'pointer',inside:true,x:r.x+r.width/2+100,y:r.y+r.height/2});});
-  await page.waitForFunction(()=>$('pet').dataset.frame==='4');
-  await page.evaluate(()=>{const r=$('pet').getBoundingClientRect();onEvent({type:'pointer',inside:true,x:r.x+r.width/2,y:r.y+r.height/2-100});});
-  await page.waitForFunction(()=>$('pet').dataset.frame==='0');
-  await page.evaluate(()=>{const r=$('pet').getBoundingClientRect();onEvent({type:'pointer',inside:false,x:-1000,y:r.y+r.height/2});});
-  await page.waitForFunction(()=>$('pet').dataset.frame==='4');
-  assert.equal(await page.locator('#pet').getAttribute('data-state'),'watching','Pointer following continues outside the native window');
+  const direction=await page.locator('#pet').getAttribute('data-frame');
+  await page.evaluate(()=>onEvent({type:'pointer',inside:false,x:-99999,y:-99999}));
+  await page.waitForTimeout(60);assert.equal(await page.locator('#pet').getAttribute('data-frame'),direction,'Typing follows caret, not mouse');
   await page.evaluate(()=>{$('prompt').blur();$('pet').dispatchEvent(new MouseEvent('mouseenter'));});
   await page.waitForFunction(()=>$('pet').dataset.state==='waving');
   await page.evaluate(()=>$('pet').dispatchEvent(new MouseEvent('mouseleave')));
@@ -28,7 +24,7 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
    await page.waitForFunction(expected=>$('pet').dataset.state===expected,expected);
    await page.waitForFunction(()=>$('pet').dataset.state==='running');
   }
-  await page.evaluate(async()=>{state.settings.autoExpand=true;state.settings.autoCollapseDelay=1000;state.panelPinned=false;await setMode('expand');onEvent({type:'pointer',inside:true,x:20,y:20});});
+  await page.evaluate(async()=>{state.settings.autoExpand=true;state.settings.autoCollapse=true;state.settings.autoCollapseDelay=1000;state.panelPinned=false;await setMode('expand');onEvent({type:'pointer',inside:true,x:20,y:20});});
   await page.waitForTimeout(1300);assert.equal(await page.evaluate(()=>state.mode),'expand','Expanded panel stays open under a stationary pointer (including native child view)');
   await page.evaluate(()=>onEvent({type:'pointer',inside:false,x:-1,y:-1}));
   await page.waitForTimeout(600);assert.equal(await page.evaluate(()=>state.mode),'expand','Exit starts a fresh full delay');

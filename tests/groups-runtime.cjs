@@ -11,20 +11,20 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  const shortcuts=[{id:'g',name:'Tools',kind:'group',parentId:null},...Array.from({length:6},(_,i)=>({id:'c'+i,name:'Child '+i,kind:'url',path:'https://example.com/'+i,parentId:'g'})),{id:'outside',name:'Outside',kind:'url',path:'https://example.com',parentId:null},{id:'g2',name:'Other',kind:'group',parentId:null}];
  PetDockShortcuts.mount(fixture,{openShortcut:async()=>{}},{shortcuts,shortcutsView:'icons'},async v=>{window.savedLinks=v.shortcuts},e=>window.groupErrors.push(e.message));});
  const g=page.locator('#group-fixture [data-id="g"]');
- assert.equal(await g.locator(':scope > .links-children > .links-entry').count(),3);
+ assert.equal(await g.locator(':scope > .links-children > .links-entry').count(),6);
  const size=await page.locator('#group-fixture [data-id="c0"] .links-icon').boundingBox(),outside=await page.locator('#group-fixture [data-id="outside"] .links-icon').boundingBox();assert.equal(size.width,outside.width);assert.equal(size.height,outside.height);
- await g.getByRole('button',{name:'Show all 6 links',exact:true}).click();assert.equal(await g.locator(':scope > .links-children > .links-entry').count(),6);
+ assert.equal(await g.locator('.links-group-more').count(),0);
  const geometry=await g.evaluate(el=>{const b=el.getBoundingClientRect();return [...el.querySelectorAll('.links-children .links-icon')].every(n=>{const r=n.getBoundingClientRect();return r.left>=b.left&&r.right<=b.right&&r.top>=b.top&&r.bottom<=b.bottom})});assert.equal(geometry,true);
- const expandedBox=await g.boundingBox(),following=await page.locator('#group-fixture [data-id="outside"]').boundingBox();assert.ok(following.y>=expandedBox.y+expandedBox.height,'Expanded group displaces following tiles');
- await g.getByRole('button',{name:'Collapse group',exact:true}).click();
+ const expandedBox=await g.boundingBox(),following=await page.locator('#group-fixture [data-id="outside"]').boundingBox();assert.ok(following.x>=expandedBox.x+expandedBox.width || following.y>=expandedBox.y+expandedBox.height,'Group frame displaces following tiles without overlap');
+
  // Pointer-driven native HTML dragging from the labels, not synthetic drop events.
  await page.locator('#group-fixture [data-id="c2"] .links-label').dragTo(page.locator('#group-fixture [data-id="c0"] > .links-row'));
- await page.waitForFunction(()=>savedLinks?.filter(x=>x.parentId==='g')[0]?.id==='c2');
+ await page.waitForFunction(()=>savedLinks?.filter(x=>x.parentId==='g')[0]?.id==='c2' && document.querySelector('#group-fixture [data-id="g"] > .links-children').firstElementChild.dataset.id==='c2');
  await page.locator('#group-fixture [data-id="outside"] .links-label').dragTo(page.locator('#group-fixture [data-id="g2"] > .links-children'));
- await page.waitForFunction(()=>savedLinks?.find(x=>x.id==='outside')?.parentId==='g2');
+ await page.waitForFunction(()=>savedLinks?.find(x=>x.id==='outside')?.parentId==='g2').catch(async e=>{await page.screenshot({path:path.join(root,'artifacts/group-drop-failure.png')});console.log(await page.evaluate(()=>({savedLinks,groupErrors})));throw e;});
  await page.locator('#group-fixture [data-id="g2"] > .links-row .links-label').dragTo(page.locator('#group-fixture [data-id="g"] > .links-row'));
  await page.waitForFunction(()=>savedLinks?.filter(x=>!x.parentId)[0]?.id==='g2');
  assert.deepEqual(await page.evaluate(()=>groupErrors),[]);
- await page.screenshot({path:path.join(root,'artifacts/groups-v11.png')});console.log('Inline group icon geometry, expansion and label drag/drop/reordering passed');
+ await page.screenshot({path:path.join(root,'artifacts/groups-v11.png')});console.log('Inline group icon geometry, all-visible members and label drag/drop/reordering passed');
  }finally{await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});
