@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'reveal', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', shortcutChatTarget:'Control+Alt+G', includeSearchFolders:false, statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 7000, pinnedPanelSide: 'left', petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
 function validatePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
@@ -78,13 +79,39 @@ class SettingsStore {
     this.file = file;
     this.value = defaults();
     this.loadError = null;
-    try { this.value = { ...this.value, ...validatePatch(JSON.parse(fs.readFileSync(file, 'utf8'))) }; }
-    catch (error) { if (error.code !== 'ENOENT') this.loadError = error.message; }
+    this.recoveryOriginal = null;
+    this.loadReadFailed = false;
+    let original;
+    try {
+      original = fs.readFileSync(file);
+      const parsed = JSON.parse(original.toString('utf8'));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid settings');
+      const errors = [];
+      // A damaged preference must not discard unrelated notes, drafts or tabs.
+      for (const [key, value] of Object.entries(parsed)) {
+        try { Object.assign(this.value, validatePatch({ [key]: value })); }
+        catch (error) { errors.push(error.message); }
+      }
+      if (errors.length) { this.loadError = errors.join('; '); this.recoveryOriginal = original; }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        this.loadError = error.message;
+        if (original) this.recoveryOriginal = original;
+        else this.loadReadFailed = true;
+      }
+    }
     if(this.value.linksLayoutVersion!==2){this.value.shortcutsView='icons';this.value.linksLayoutVersion=2;}
   }
   update(patch) {
     const next = { ...this.value, ...validatePatch(patch) };
+    if (this.loadReadFailed) throw new Error('Settings could not be read. Restart after restoring access before saving changes.');
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    if (this.recoveryOriginal !== null) {
+      // Preserve the exact damaged input before the first successful replacement.
+      const recovery = `${this.file}.recovery-${Date.now()}-${randomUUID()}.json`;
+      fs.writeFileSync(recovery, this.recoveryOriginal, { flag: 'wx' });
+      this.recoveryOriginal = null;
+    }
     const temporary = `${this.file}.tmp`;
     fs.writeFileSync(temporary, JSON.stringify(next, null, 2), 'utf8');
     fs.renameSync(temporary, this.file);

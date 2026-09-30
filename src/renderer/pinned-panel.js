@@ -13,6 +13,7 @@ window.OglePinnedPanel=(()=>{
     for(const button of document.querySelectorAll('[data-panel]')){
       button.classList.toggle('selected',button.dataset.panel===state.activePanel);
       button.classList.toggle('tab-pinned',button.dataset.panel===pinned);
+      button.setAttribute('aria-pressed',String(state.mode==='expand' && visible(button.dataset.panel)));
     }
     const composer=el('composer');
     if(pinned==='chats')el('side-panel-content').append(composer);

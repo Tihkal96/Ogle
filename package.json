@@ -1,6 +1,6 @@
 {
   "name": "ogle",
-  "version": "0.5.25",
+  "version": "0.6.0",
   "description": "A Windows pet dock for Codex and ChatGPT",
   "private": true,
   "main": "src/main/main.cjs",
@@ -12,7 +12,8 @@
     "build": "node scripts/build-vendor.cjs",
     "prestart": "npm run build",
     "prepackage": "npm run build",
-    "test:layout": "node tests/layout-runtime.cjs"
+    "test:layout": "node tests/layout-runtime.cjs",
+    "test:readiness": "node scripts/test-readiness.cjs"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",

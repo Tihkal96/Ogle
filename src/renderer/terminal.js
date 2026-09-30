@@ -1,5 +1,8 @@
 (() => {
   let api, host, active, sessions = new Map(), pending = new Map();
+  let draftRow, draftInput, draftRun, draftTitle, pendingDraft = null, staging = Promise.resolve(), selectionOrder = 0;
+  const failedDrafts = new Map();
+  const draftKey = draft => `${draft.shell}:${draft.admin}`;
   let currentTheme = document.documentElement.dataset.theme || 'dark';
   function terminalTheme(theme) {
     const light=theme==='light', midnight=theme==='midnight';
@@ -9,7 +12,8 @@
   const element = (tag, text, className) => { const el = document.createElement(tag); if (text) el.textContent = text; if (className) el.className = className; return el; };
   function report(error) { window.OgleDiagnostics.record(error,'Terminal');host.querySelector('.terminal-status').textContent='Terminal action failed. Details are in Settings → Debug.'; }
   function resize() { const session = sessions.get(active); if (session && host.getBoundingClientRect().width > 0 && host.getBoundingClientRect().height > 0) { try { session.fit.fit(); api.terminalResize(session.id, session.term.cols, session.term.rows).catch(() => {}); } catch {} } }
-  function select(id) { active = id; for (const session of sessions.values()) { session.view.hidden = session.id !== id; session.tab.classList.toggle('active', session.id === id); } requestAnimationFrame(() => { resize(); sessions.get(id)?.term.focus(); }); }
+  function updateStatus() { const session = sessions.get(active); host.querySelector('.terminal-status').textContent = !session ? 'Create a CMD or PowerShell session.' : session.ended ? 'Session ended' : session.admin ? 'Administrator session' : 'Terminal ready'; }
+  function select(id) { active = id; if(sessions.has(id))sessions.get(id).selectedAt=++selectionOrder; for (const session of sessions.values()) { session.view.hidden = session.id !== id; session.tab.classList.toggle('active', session.id === id); } updateStatus(); renderDraft(); requestAnimationFrame(() => { resize(); if (draftRow.hidden) sessions.get(id)?.term.focus(); }); }
   async function create(shell, admin = false) {
     const status = host.querySelector('.terminal-status'); status.textContent = admin ? 'Starting administrator terminal (Windows approval if needed)…' : 'Starting terminal…';
     try {
@@ -54,9 +58,10 @@
         return true;
       });
       term.onData(data => api.terminalWrite(config.id, data).catch(report));
-      sessions.set(config.id, { ...config, term, fit, view, tab });
+      sessions.set(config.id, { ...config, shell: config.shell || shell, admin: config.admin ?? admin, term, fit, view, tab, ended: false, draft: null });
       if (pending.has(config.id)) { term.write(pending.get(config.id)); pending.delete(config.id); }
-      select(config.id); status.textContent = admin ? 'Administrator session' : 'Terminal ready';
+      select(config.id);
+      return sessions.get(config.id);
     } catch (error) { report(error); }
   }
   async function copySelection(id=active) {
@@ -69,6 +74,53 @@
     if (!text || sessions.get(id)!==session) return;
     // xterm preserves the shell's bracketed-paste handling; no Enter is added.
     session.term.paste(text);session.term.focus();
+  }
+  function currentDraft() { return pendingDraft || sessions.get(active)?.draft; }
+  function renderDraft() {
+    if (!draftRow) return;
+    const draft = currentDraft(); draftRow.hidden = !draft;
+    if (!draft) return;
+    draftInput.value = draft.text;
+    draftTitle.textContent = `Command draft · ${draft.admin ? 'Admin ' : ''}${draft.shell === 'cmd' ? 'CMD' : 'PowerShell'}${pendingDraft ? ' · session unavailable; Run retries' : ''}`;
+    draftRun.disabled = Boolean(draft.sending) || !draft.text;
+  }
+  function stageText(request) {
+    if (!request || !['cmd','powershell'].includes(request.shell) || typeof request.admin !== 'boolean' || typeof request.text !== 'string' || request.text.length > 100000) return Promise.reject(new Error('Choose a shell and up to 100,000 characters of text.'));
+    const requested = {shell:request.shell,admin:request.admin,text:request.text,sending:false};
+    const next = staging.then(async () => {
+      const draft = {...requested};
+      const matches = session => session && !session.ended && session.shell === draft.shell && session.admin === draft.admin;
+      let session = matches(sessions.get(active)) ? sessions.get(active) : [...sessions.values()].filter(matches).sort((a,b)=>b.selectedAt-a.selectedAt)[0];
+      const prior = [...new Set([session?.draft,failedDrafts.get(draftKey(draft))])].filter(item=>item && !item.sending && item.text);
+      draft.text = [...prior.map(item=>item.text),draft.text].reduce((text,next)=>text && next ? text + (/[\r\n]$/.test(text)?'':'\n') + next : text || next,'');
+      if(draft.text.length>100000)throw new Error('The combined command draft exceeds 100,000 characters. Run or discard the existing draft first.');
+      if (!session) session = await create(draft.shell,draft.admin);
+      if (session) { failedDrafts.delete(draftKey(draft)); pendingDraft = null; session.draft = draft; select(session.id); }
+      else { failedDrafts.set(draftKey(draft),draft); pendingDraft = draft; renderDraft(); }
+      draftInput.focus(); resize();
+      return Boolean(session);
+    });
+    staging = next.catch(() => {}); return next;
+  }
+  async function runDraft() {
+    const draft = currentDraft(); if (!draft || draft.sending || !draft.text) return;
+    if (draft.text.length > 100000) throw new Error('Command drafts support up to 100,000 characters.');
+    draft.sending = true; renderDraft();
+    let session = sessions.get(active);
+    try {
+      if (pendingDraft === draft || !session || session.ended) {
+        const previousSession = session;
+        session = await create(draft.shell,draft.admin);
+        if (!session) return;
+        if (previousSession?.draft === draft) previousSession.draft = null;
+        if (pendingDraft === draft) pendingDraft = null;
+        if(failedDrafts.get(draftKey(draft))===draft)failedDrafts.delete(draftKey(draft));
+        session.draft = draft; select(session.id);
+      }
+      const text = draft.text;
+      await api.terminalWrite(session.id, /[\r\n]$/.test(text) ? text : text + '\r');
+      if (session.draft === draft && draft.text === text) session.draft = null;
+    } finally { draft.sending = false; renderDraft(); resize(); }
   }
   function mount(container, suppliedApi) {
     host = container; api = suppliedApi;
@@ -89,7 +141,14 @@
     button('×', close, commands, 'Close session');
     const status = element('p', 'Create a CMD or PowerShell session.', 'terminal-status'); status.setAttribute('role', 'status');
     const adminHint = element('p', '', 'terminal-admin-hint'); adminHint.hidden=true;
-    host.append(controls, element('div', '', 'terminal-tabs'), element('div', '', 'terminal-views'), status, adminHint);
+    draftRow = element('div','','terminal-draft'); draftRow.hidden = true;
+    draftTitle = element('label','','terminal-draft-title'); draftTitle.htmlFor = 'terminal-command-draft';
+    draftInput = element('textarea'); draftInput.id = 'terminal-command-draft'; draftInput.maxLength = 100000; draftInput.rows = 3; draftInput.spellcheck = false; draftInput.setAttribute('aria-label','Command draft');
+    draftInput.oninput = () => { const draft=currentDraft(); if(draft){draft.text=draftInput.value;draftRun.disabled=draft.sending || !draft.text;} };
+    draftRun = element('button','Run'); draftRun.type = 'button'; draftRun.setAttribute('aria-label','Run command draft'); draftRun.onclick = () => runDraft().catch(report);
+    const discard = element('button','×'); discard.type='button';discard.title='Discard command draft';discard.setAttribute('aria-label','Discard command draft');discard.onclick=()=>{if(pendingDraft){failedDrafts.delete(draftKey(pendingDraft));pendingDraft=null;}else if(sessions.has(active))sessions.get(active).draft=null;renderDraft();resize();};
+    draftRow.append(draftTitle,draftInput,draftRun,discard);
+    host.append(controls, element('div', '', 'terminal-tabs'), draftRow, element('div', '', 'terminal-views'), status, adminHint);
     api.onEvent(event => {
       if (event.type !== 'terminal') return;
       const s = sessions.get(event.id); if (!s) {
@@ -100,11 +159,11 @@
         return;
       }
       if (event.event === 'data') s.term.write(event.data);
-      else if (event.event === 'exit') { s.term.write('\r\n[Session ended]\r\n'); s.tab.textContent += ' · ended'; }
+      else if (event.event === 'exit') { s.ended = true; if (active === s.id) updateStatus(); s.term.write('\r\n[Session ended]\r\n'); s.tab.textContent += ' · ended'; }
       else if (event.event === 'error') report(event.data);
     });
     new ResizeObserver(() => resize()).observe(host);
   }
-  async function close() { const s = sessions.get(active); if (!s) return; await api.terminalClose(s.id); s.term.dispose(); s.view.remove(); s.tab.remove(); sessions.delete(s.id); active = sessions.keys().next().value; if (active) select(active); }
-  window.PetDockTerminal = { mount, resize, create, applyTheme };
+  async function close() { const s = sessions.get(active); if (!s) return; await api.terminalClose(s.id); s.term.dispose(); s.view.remove(); s.tab.remove(); sessions.delete(s.id); active = sessions.keys().next().value; if (active) select(active); else { updateStatus(); renderDraft(); } }
+  window.PetDockTerminal = { mount, resize, create, applyTheme, getSelection: () => sessions.get(active)?.term.getSelection() || '', stageText };
 })();

@@ -18,7 +18,24 @@ try{
  await field.fill('needle');await page.waitForFunction(()=>document.querySelector('#chatgpt-panel .chat-find output').textContent==='1 / 3');await field.press('Enter');await page.waitForFunction(()=>document.querySelector('#chatgpt-panel .chat-find output').textContent==='2 / 3');await field.press('Shift+Enter');await page.waitForFunction(()=>document.querySelector('#chatgpt-panel .chat-find output').textContent==='1 / 3');
  const r=await row.boundingBox(),view=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children[0].getBounds());assert.ok(view.y>=r.y+r.height-1,'Native ChatGPT cannot cover find row');
  await row.locator('input[type=checkbox]').check();await page.waitForFunction(()=>document.querySelector('#chatgpt-panel .chat-find output').textContent==='1 / 2');
+ await field.press('Escape');assert.equal(await row.isVisible(),false);assert.equal(await app.evaluate(({webContents},id)=>webContents.fromId(id).isFocused(),id),true,'Closing ChatGPT find returns keyboard focus to the page');await page.evaluate(()=>OgleChatFind.open('chatgpt'));
  await page.evaluate(()=>setMode('reveal'));assert.equal(await row.isVisible(),false);
+ await page.evaluate(()=>switchPanel('chatgpt'));
+ await app.evaluate(({webContents},id)=>{const wc=webContents.fromId(id);wc.focus();wc.sendInputEvent({type:'keyDown',keyCode:'p',modifiers:['control','shift']});wc.sendInputEvent({type:'keyUp',keyCode:'p',modifiers:['control','shift']});},id);
+ await page.getByRole('dialog',{name:'Commands',exact:true}).waitFor();
+ assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children[0].getVisible()),false,'Command menu must appear above native ChatGPT');
+ await page.getByRole('combobox',{name:'Search commands'}).press('Escape');
+ await page.waitForFunction(()=>!OgleCommands.isOpen());
+ assert.equal(await app.evaluate(({webContents},id)=>webContents.fromId(id).isFocused(),id),true,'Cancel commands restores native focus');
+ await page.evaluate(()=>OgleCommands.open());await page.getByRole('combobox',{name:'Search commands'}).fill('Open Notes');await page.getByRole('combobox',{name:'Search commands'}).press('Enter');await page.waitForFunction(()=>state.activePanel==='notes'&&!DockLayoutTransition.busy);
+ await page.keyboard.press('Control+Shift+p');await page.getByRole('combobox',{name:'Search commands'}).fill('Find a setting');await page.getByRole('combobox',{name:'Search commands'}).press('Enter');await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Search settings');
+ await page.evaluate(()=>OglePinnedPanel.pin('chatgpt'));await page.waitForFunction(()=>!DockLayoutTransition.busy);
+ await page.locator('#editor-panel .cm-content').focus();await page.keyboard.press('Control+Shift+p');await page.getByRole('combobox',{name:'Search commands'}).press('Escape');await page.waitForTimeout(100);
+ assert.equal(await page.evaluate(()=>document.activeElement.classList.contains('cm-content')),true,'Pinned ChatGPT must not steal editor focus on cancel');
+ await app.evaluate(({webContents},id)=>{const wc=webContents.fromId(id);wc.focus();wc.sendInputEvent({type:'keyDown',keyCode:'p',modifiers:['control','shift']});wc.sendInputEvent({type:'keyUp',keyCode:'p',modifiers:['control','shift']});},id);
+ await page.getByRole('combobox',{name:'Search commands'}).fill('Find in conversation');await page.getByRole('combobox',{name:'Search commands'}).press('Enter');
+ await page.locator('#chatgpt-panel .chat-find input[type=search]').waitFor({state:'visible'});assert.equal(await page.locator('#chats-panel .chat-find').isVisible(),false,'Find must target the invoking pinned ChatGPT pane');
+ await page.locator('#chatgpt-panel .chat-find input[type=search]').press('Escape');await page.evaluate(()=>OglePinnedPanel.unpin());
  await page.evaluate(()=>switchPanel('editor'));await page.keyboard.press('Control+f');assert.equal(await page.locator('.chat-find:not([hidden])').count(),0,'Editor keeps its own Ctrl+F');
  console.log('PASS: Codex and native ChatGPT Ctrl+F, next/previous, case, no matches, Escape, collapse, editor shortcut, and native view geometry.');
 }finally{await app.close();}

@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { dialog, shell, app, net, nativeImage } = require('electron');
 const crypto = require('node:crypto');
+const { isUtf8 } = require('node:buffer');
 const MAX_BYTES = 5 * 1024 * 1024;
 function localPath(value) {
   if (typeof value !== 'string' || !path.isAbsolute(value) || value.includes('\0')) throw new Error('Choose an absolute local path');
@@ -41,6 +42,7 @@ class DockFiles {
     if (!stat.isFile() || stat.size > MAX_BYTES) throw new Error('Open a text file smaller than 5 MB');
     const data = await fs.readFile(file);
     if (data.includes(0)) throw new Error('This appears to be a binary or UTF-16 file. Open a UTF-8 text file.');
+    if (!isUtf8(data)) throw new Error('This file is not valid UTF-8. Convert its encoding before opening it in Ogle.');
     this.opened.set(file, stat.mtimeMs);
     return { path: file, name: path.basename(file), text: data.toString('utf8'), mtime: stat.mtimeMs };
   }

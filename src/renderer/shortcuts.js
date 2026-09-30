@@ -113,7 +113,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       tray.hidden=!tray.childElementCount;
       pinStatus.textContent=pinNotice;pinStatus.hidden=!pinNotice;
     }
-    function openGroup(id) { currentGroup = null; folderNavigation = []; if (id) expandedGroups.add(id); form.hidden = true; render(); if (id) content.querySelector(`[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({block:'nearest'}); }
+    function openGroup(id) { currentGroup = null; folderNavigation = []; const seen = new Set(); let ancestor = id; while (ancestor && !seen.has(ancestor)) { seen.add(ancestor); expandedGroups.add(ancestor); ancestor = items.find(item => item.id === ancestor)?.parentId; } form.hidden = true; render(); if (id) content.querySelector(`[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({block:'nearest'}); }
     async function openFolder(entry) {
       cache.set(entry.path, await api.readDirectory(entry.path));
       folderNavigation.push({ path: entry.path, name: entry.alias || entry.name }); form.hidden = true; render();
@@ -126,7 +126,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
     }
     function field(label, value = '') { const wrapper = document.createElement('label'); wrapper.textContent = label; const input = document.createElement('input'); input.value = value; input.setAttribute('aria-label', label); wrapper.append(input); form.append(wrapper); return input; }
     function startForm() { discardEdit(); form.hidden = false; }
-    function finishForm(handler, label = 'Save') { const submit = button(label, handler); submit.dataset.submit = 'true'; form.append(submit, button('Cancel', discardEdit)); form.onsubmit = e => { e.preventDefault(); invoke(handler); }; }
+    function finishForm(handler, label = 'Save') { const submit = button(label, () => {}); submit.type = 'submit'; submit.onclick = null; submit.dataset.submit = 'true'; form.append(submit, button('Cancel', discardEdit)); form.onsubmit = e => { e.preventDefault(); invoke(handler); }; }
     async function imported(payload, parentId = currentGroup || null) {
       const result = await api.importShortcuts(payload);
       if (!Array.isArray(result)) throw new Error('Could not import these links.');
@@ -232,7 +232,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       line.addEventListener('dragend', () => { dragging = null; document.querySelectorAll('.drop-over').forEach(el => el.classList.remove('drop-over')); });
       if (!filesystemEntry) dropTarget(line, entry.parentId || null, entry.id);
       if (framed) dropTarget(wrapper, entry.id);
-      const open = button('', () => entry.kind === 'group' ? (expandedGroups.has(entry.id) ? expandedGroups.delete(entry.id) : expandedGroups.add(entry.id), render()) : entry.kind === 'folder' && mode === 'icons' ? openFolder(entry) : api.openShortcut(entry.path), entry.path || 'Open group'); open.className = 'links-open';
+      const open = button('', () => entry.kind === 'group' ? (expandedGroups.has(entry.id) ? expandedGroups.delete(entry.id) : expandedGroups.add(entry.id), render()) : entry.kind === 'folder' && mode === 'icons' ? openFolder(entry) : api.openShortcut(entry.path), entry.path || `Open group ${entry.alias || entry.name}`); if (entry.kind === 'group') open.setAttribute('aria-expanded', String(expandedGroups.has(entry.id))); open.className = 'links-open';
       const icon = iconFor(entry);
       const label = document.createElement('span'); label.className = 'links-label'; const name = document.createElement('strong'); name.textContent = entry.alias || entry.name; const target = document.createElement('small'); target.textContent = entry.path || 'Group'; label.append(name, target); label.draggable = !filesystemEntry; label.title = 'Drag label to reorder'; open.append(...(framed ? [label] : [icon, label])); line.append(open);
       if (entry.kind === 'folder' && mode === 'details') line.append(button(expanded.has(entry.path) ? '▾' : '▸', () => browse(entry), 'Browse folder'));

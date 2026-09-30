@@ -1,7 +1,8 @@
 'use strict';
 window.PetDockEditor = (() => {
   let root, api, settings, save, report, tabs = [], activeId, view, area, timer, loading = false, status;
-  let currentTheme = 'dark', themeSlot;
+  let currentTheme = 'dark', themeSlot, languageSlot, renderedId;
+  const sessions = new Map();
   const languages = ['text','javascript','typescript','json','python','html','css','markdown','shell','powershell','c','cpp','csharp','vb','cmd','sql'];
   const byId = () => tabs.find(tab => tab.id === activeId);
   const label = (tag, text, className) => { const node = document.createElement(tag); node.textContent = text; if (className) node.className = className; return node; };
@@ -49,12 +50,16 @@ window.PetDockEditor = (() => {
       status.append(button('Discard and close',()=>{tab.closeConfirmed=true;close(id);}),button('Keep tab',()=>updateStatus())); return;
     }
     tabs = tabs.filter(t=>t.id !== id);
+    sessions.delete(id);
     if (!tabs.length) create(); else if (id === activeId) select(tabs[0].id); else renderTabs();
     schedule();
   }
   function focusEditor() { if (!root.hidden) { if (view) view.focus(); else area.querySelector("textarea")?.focus(); } }
   function select(id) {
-    activeId = id; const tab = byId(); if (!tab) return;
+    const tab = tabs.find(item => item.id === id); if (!tab) return;
+    // Keep each document's history and viewport in memory, never in settings.
+    if (view && tabs.some(item => item.id === renderedId)) sessions.set(renderedId,{state:view.state,themeSlot,languageSlot,top:view.scrollDOM.scrollTop,left:view.scrollDOM.scrollLeft});
+    activeId = id; renderedId = id;
     loading = true; view?.destroy(); view = null; area.replaceChildren();
     const vendors = window.PetDockVendors;
     if (vendors?.EditorView) {
@@ -62,17 +67,31 @@ window.PetDockEditor = (() => {
         run(editor) { if (vendors.completionStatus(editor.state) === 'active') { vendors.acceptCompletion(editor); return true; } return vendors.indentWithTab.run(editor); },
         shift:vendors.indentWithTab.shift
       }]));
-      view = new vendors.EditorView({doc:tab.text,parent:area,extensions:[tabKey,vendors.basicSetup,(themeSlot = new vendors.Compartment()).of(editorTheme(currentTheme)),languageExtension(tab.language),vendors.EditorView.updateListener.of(update=>{if(update.docChanged) updated(update.state.doc.toString());})]});
+      const session = sessions.get(id);
+      if (session) {
+        themeSlot=session.themeSlot; languageSlot=session.languageSlot;
+        view=new vendors.EditorView({state:session.state,parent:area});
+        view.dispatch({effects:[themeSlot.reconfigure(editorTheme(currentTheme)),languageSlot.reconfigure(languageExtension(tab.language))]});
+        view.scrollDOM.scrollTop=session.top; view.scrollDOM.scrollLeft=session.left;
+      } else view = new vendors.EditorView({doc:tab.text,parent:area,extensions:[tabKey,vendors.basicSetup,(themeSlot = new vendors.Compartment()).of(editorTheme(currentTheme)),(languageSlot = new vendors.Compartment()).of(languageExtension(tab.language)),vendors.EditorView.updateListener.of(update=>{if(update.docChanged) updated(update.state.doc.toString());})]});
     } else {
       const textarea = document.createElement('textarea'); textarea.className = 'editor-fallback'; textarea.value = tab.text; textarea.spellcheck = false; textarea.setAttribute('aria-label','Code editor'); textarea.oninput = () => updated(textarea.value); area.append(textarea);
     }
     root.querySelector('.editor-language').value = tab.language; root.querySelector('.editor-framework').value=tab.framework || 'modern'; root.querySelector('.editor-framework').hidden=!['csharp','vb'].includes(tab.language); loading = false; renderTabs(); updateStatus(); schedule(); focusEditor();
   }
-  function create() { const tab = {id:crypto.randomUUID(),name:`Untitled ${tabs.filter(t=>!t.path).length+1}`,path:'',language:'text',text:'',savedText:'',dirty:false}; tabs.push(tab); select(tab.id); }
+  function create(text = '') { const tab = {id:crypto.randomUUID(),name:`Untitled ${tabs.filter(t=>!t.path).length+1}`,path:'',language:'text',text,savedText:'',dirty:Boolean(text)}; tabs.push(tab); select(tab.id); return tab.id; }
   async function open() { const file = await api.editorOpen(); if (!file) return; const existing = tabs.find(t=>t.path === file.path); if (existing) return select(existing.id); const tab = {id:crypto.randomUUID(),name:file.name,path:file.path,text:file.text,language:infer(file.path),savedText:file.text,dirty:false}; tabs.push(tab); select(tab.id); }
   async function write(saveAs = false) { const tab = byId(); if (!tab) return; const captured = tab.text; const result = await api.editorSave({path:tab.path || undefined,text:captured,saveAs}); if (!result) return; tab.path = result.path; tab.name = result.name; tab.savedText = captured; tab.dirty = tab.text !== captured; if(tab.language === 'text') tab.language = infer(result.path); if(tab.id === activeId) select(tab.id); else renderTabs(); await flush(); }
+  function getSelection() {
+    return view ? view.state.selection.ranges.filter(range=>!range.empty).map(range=>view.state.sliceDoc(range.from,range.to)).join('\n') : (()=>{const input=area?.querySelector('textarea');return input?input.value.slice(input.selectionStart,input.selectionEnd):'';})();
+  }
+  async function newFromText(text) {
+    if(typeof text!=='string')throw new TypeError('Editor text must be a string.');
+    if(text.length>100000)throw new RangeError('Selection is too large for a new editor tab (100,000 characters maximum).');
+    const id=create(text);await flush();return id;
+  }
   async function copySelection() {
-    const text = view ? view.state.selection.ranges.map(range => view.state.sliceDoc(range.from,range.to)).join('\n') : (() => { const input=area.querySelector('textarea'); return input ? input.value.slice(input.selectionStart,input.selectionEnd) : ''; })();
+    const text = getSelection();
     if (text) await api.clipboardWriteText(text);
   }
   async function pasteText() {
@@ -136,5 +155,5 @@ window.PetDockEditor = (() => {
     currentTheme = ['dark','light','midnight'].includes(theme) ? theme : 'dark';
     if(view && themeSlot) view.dispatch({effects:themeSlot.reconfigure(editorTheme(currentTheme))});
   }
-  return {mount,flush,applyTheme};
+  return {mount,flush,applyTheme,getSelection,newFromText};
 })();

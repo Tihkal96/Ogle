@@ -8,7 +8,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.5.25](https://github.com/Tihkal96/Ogle/releases/download/v0.5.25/Ogle-0.5.25-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.6.0](https://github.com/Tihkal96/Ogle/releases/download/v0.6.0/Ogle-0.6.0-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -38,6 +38,23 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 ## Release checklist for maintainers and AI agents
 
 Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release.
+
+## Version 0.6.0
+
+Reliability and usability pass toward 1.0:
+
+- Streaming replies no longer rebuild unchanged prompt controls per text chunk. Full Codex history refresh pauses while its panel is hidden and resumes when opened.
+- Closing the window or quitting saves pending notes, drafts and editor changes first. If saving fails, Ogle stays open so you can recover your work.
+- Editor tabs keep undo history, selection and viewport when switching tabs, changing languages or saving.
+- Select text and right-click → **Paste into** to move a copy to ChatGPT, Codex, PowerShell, CMD, either administrator shell, a new editor file, or Notes. Ogle opens the destination. Chats remain unsent; terminal text is staged in an editable command draft until you click Run. Existing Notes/chat drafts are appended to. A Codex paste without a selected task waits for you to choose one. Administrator sessions still use normal Windows consent.
+- Ctrl+Shift+P opens a searchable command menu for panels, settings, prompts, metrics and window controls. It also works inside embedded ChatGPT; right-click the pet and choose Commands to open it with the mouse.
+- Settings has search and a section jump menu. Existing settings and saved choices are preserved.
+- Conversation find scans in batches, keeps exact match counts, and bounds highlight painting for large conversations. Escape restores typing focus.
+- Pinned nested link groups expand their ancestors; Enter saves link edits; shell status follows the selected session.
+- Partially damaged settings retain valid fields. Before replacing damaged input, Ogle keeps the original bytes in a `settings.json.recovery-*.json` file beside the profile. Unreadable profiles are not overwritten.
+- Non-UTF-8 files are rejected before editing rather than silently corrupting their text. File errors have actionable messages, with technical details in Debug.
+
+Run `npm run test:readiness` for the isolated regression suite. Set `PETDOCK_TEST_EXE` to the packaged executable to exercise the real package where supported. The suite does not send live chat prompts or request administrator access. See [release readiness](RELEASE_READINESS.md) for evidence and remaining 1.0 checks.
 
 ## Version 0.5.25
 
