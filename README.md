@@ -53,7 +53,7 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 
 ## Release checklist for maintainers and AI agents
 
-Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release. Also update version labels and direct ZIP links in the owner’s existing Reddit release posts whenever those posts contain a specific version; verify the saved post links after editing.
+Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release. Leave Reddit alone; announcement browsing or edits require a new explicit request from the owner.
 
 ## Version 0.6.2
 
