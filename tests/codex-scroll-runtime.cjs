@@ -12,7 +12,13 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  await finished();await page.waitForTimeout(250);
  const measure=()=>page.evaluate(()=>({top:$('messages').scrollTop,max:$('messages').scrollHeight-$('messages').clientHeight}));
  let metrics=await measure();assert.ok(metrics.max-metrics.top<5,JSON.stringify({firstOpen:metrics}));
- await page.evaluate(()=>{const node=$('messages');node.dispatchEvent(new WheelEvent('wheel',{deltaY:-200}));node.scrollTop=1000;});await page.waitForTimeout(150);const saved=(await measure()).top;
+ assert.equal(await page.locator('#go-bottom').isVisible(),false,'Latest arrow is hidden at bottom');
+ await page.evaluate(()=>OglePanelView.zoom('chats',1.1));await page.waitForTimeout(200);metrics=await measure();assert.ok(metrics.max-metrics.top<5,'Zoom keeps bottom-following chat at bottom');
+ await page.evaluate(()=>OglePanelView.zoom('chats',1,true));await page.waitForTimeout(200);
+ await page.evaluate(()=>{$('messages').style.paddingBottom='350px';});await page.waitForTimeout(250);metrics=await measure();assert.ok(metrics.max-metrics.top<5,'Late layout growth follows bottom');
+ await page.evaluate(async()=>{await switchPanel('notes');addMessage('hidden-stream','assistant','A later answer\n'.repeat(80));await switchPanel('chats');});await page.waitForTimeout(300);metrics=await measure();assert.ok(metrics.max-metrics.top<5,'Returning to a tab previously at bottom follows new content');
+ await page.evaluate(()=>{$('messages').style.paddingBottom='';});await page.waitForTimeout(150);
+ await page.evaluate(()=>{const node=$('messages');node.dispatchEvent(new WheelEvent('wheel',{deltaY:-200}));node.scrollTop=1000;});await page.waitForTimeout(150);const saved=(await measure()).top;await page.evaluate(()=>OglePanelView.zoom('chats',1.1));await page.waitForTimeout(200);assert.ok(Math.abs((await measure()).top-saved)<5,'Zoom preserves scrolled-up reading position');await page.evaluate(()=>OglePanelView.zoom('chats',1,true));await page.waitForTimeout(200);assert.equal(await page.locator('#go-bottom').isVisible(),true,'Latest arrow appears above bottom');
  await page.evaluate(()=>selectThread({id:'scroll-b',name:'B'}));await finished();await page.waitForTimeout(150);metrics=await measure();assert.ok(metrics.max-metrics.top<5);
  await page.evaluate(()=>selectThread({id:'scroll-a',name:'A'}));await finished();await page.waitForTimeout(250);metrics=await measure();assert.ok(Math.abs(metrics.top-saved)<5,JSON.stringify({saved,restored:metrics}));
  await page.evaluate(async()=>{await switchPanel('notes');await switchPanel('chats');});await page.waitForTimeout(200);assert.ok(Math.abs((await measure()).top-saved)<5,'Tab switch preserves reading position');
@@ -20,7 +26,7 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  await page.evaluate(()=>{for(let i=0;i<100;i++)addMessage('stream','assistant','stream '+i);});await page.waitForTimeout(200);assert.ok(Math.abs((await measure()).top-saved)<5,'Streaming must not pull the reader down');
  await page.evaluate(async()=>{await switchPanel('notes');await selectThread({id:'scroll-c',name:'C'});});assert.equal(await page.evaluate(()=>state.messages.size),0);
  await page.evaluate(()=>switchPanel('chats'));await finished();await page.waitForTimeout(250);metrics=await measure();assert.ok(metrics.max-metrics.top<5,JSON.stringify({hiddenFirstOpen:metrics}));
- await page.evaluate(()=>{state.running.clear();state.chatgptWorking=false;state.petHovered=false;state.pendingReaction=null;state.reactionUntil=0;state.attention?.clear();updatePetState();idleAnimation.reset(performance.now()-60001);});
+ await page.evaluate(()=>{receiveVisualActivity=()=>{};visualActivity.clear();completedTasks.clear();state.running.clear();state.chatgptWorking=false;state.petHovered=false;state.pendingReaction=null;state.reactionUntil=0;state.attention?.clear();updatePetState();idleAnimation.mode='idle';idleAnimation.reset(performance.now()-60001);});
  await page.waitForFunction(()=>idleAnimation.active&&['waving','review'].includes(canvas.dataset.state));
  await page.evaluate(()=>{idleAnimation.active.until=performance.now()-1;});await page.waitForFunction(()=>!idleAnimation.active&&canvas.dataset.state==='idle');
  assert.ok(await page.evaluate(()=>performance.now()-idleAnimation.since<1000));
