@@ -81,8 +81,24 @@ function desktopThread(state) {
     requestCount: requests.length
   };
 }
+// A background activity probe needs only authoritative runtime metadata. Never
+// project turn.items (large tool/reasoning streams) into renderer messages here.
+function desktopRuntime(state) {
+  const type=state?.threadRuntimeStatus?.type;
+  if (!['active','idle'].includes(type)) return null;
+  let last=state.turns?.at(-1);
+  const history=state.turnHistory?.kind==='canonical'?state.turnHistory.history:null;
+  if(history){
+    last=undefined;
+    const islands=history.islands||[];
+    for(let i=islands.length-1;i>=0&&!last;i--){const entries=islands[i].entries||[];for(let j=entries.length-1;j>=0&&!last;j--)last=history.entitiesByKey?.[entries[j].value];}
+    if(!last)for(const key in history.entitiesByKey||{})if(Object.hasOwn(history.entitiesByKey,key)&&history.entitiesByKey[key])last=history.entitiesByKey[key];
+  }
+  const turnId=type==='idle'||last?.status==='inProgress'?last?.turnId||last?.id:undefined;
+  return {running:type==='active',...(typeof turnId==='string'&&turnId?{turnId}: {})};
+}
 class DesktopIpc extends EventEmitter {
-  constructor({ connectSocket = net.connect, timeoutMs = 10000 } = {}) { super(); this.connectSocket = connectSocket; this.timeoutMs = timeoutMs; this.pending = new Map(); this.states = new Map(); this.owners = new Map(); this.followed = new Set(); this.timers = new Map(); this.signatures = new Map(); this.clientId = 'initializing-client'; this.socket = null; this.connecting = null; }
+  constructor({ connectSocket = net.connect, timeoutMs = 10000, runtimeOnly = false } = {}) { super(); this.runtimeOnly = runtimeOnly; this.connectSocket = connectSocket; this.timeoutMs = timeoutMs; this.pending = new Map(); this.states = new Map(); this.owners = new Map(); this.followed = new Set(); this.timers = new Map(); this.signatures = new Map(); this.clientId = 'initializing-client'; this.socket = null; this.connecting = null; }
   async connect() {
     if (this.socket && this.clientId !== 'initializing-client') return;
     if (this.connecting) return this.connecting;
@@ -140,6 +156,7 @@ class DesktopIpc extends EventEmitter {
     else if (change.type === 'patches' && old?.revision === change.baseRevision) { try { old.state = applyDesktopPatches(old.state, change.patches); old.revision = change.revision; } catch { this.states.delete(id); this.follow(id, message.sourceClientId); return; } }
     else { this.follow(id, message.sourceClientId); return; }
     this.emit('snapshot', id);
+    if(this.runtimeOnly)return;
     const entry = this.states.get(id);
     if (change.type === 'patches' && !change.patches.some(patch => patchChangesMessages(entry.state, patch))) return;
     if (!this.timers.has(id)) this.timers.set(id, setTimeout(() => {
@@ -147,6 +164,7 @@ class DesktopIpc extends EventEmitter {
     }, 120));
   }
   _emitState(id) {
+    if(this.runtimeOnly)return;
     const latest = this.states.get(id); if (!latest) return;
     const projected = desktopThread(latest.state), signature = JSON.stringify(projected);
     if (this.signatures.get(id) === signature) return;
@@ -157,6 +175,17 @@ class DesktopIpc extends EventEmitter {
   async read(id, owner) {
     if (!this.states.has(id)) await new Promise(resolve => { const done = received => { if (received !== id) return; clearTimeout(timer); this.off('snapshot', done); resolve(); }; const timer = setTimeout(() => { this.off('snapshot', done); resolve(); }, 2000); this.on('snapshot', done); this.follow(id, owner); });
     const entry = this.states.get(id); return entry ? desktopThread(entry.state) : null;
+  }
+  async readRuntime(id, owner) {
+    if(!this.states.has(id))await new Promise((resolve,reject)=>{
+      const cleanup=()=>{clearTimeout(timer);this.off('snapshot',done);this.off('disconnected',failed);};
+      const done=received=>{if(received===id){cleanup();resolve();}};
+      const failed=error=>{cleanup();reject(error);};
+      const timer=setTimeout(()=>{cleanup();resolve();},2000);
+      this.on('snapshot',done);this.on('disconnected',failed);
+      try{this.follow(id,owner);}catch(error){failed(error);}
+    });
+    return desktopRuntime(this.states.get(id)?.state);
   }
   async send(id, text, owner, images = []) { const input = promptInputs(text, images); this.follow(id, owner); const response = await this.request('thread-follower-start-turn', { conversationId: id, turnStart: { request: { threadId: id, input }, context: { inheritThreadSettings: true } } }, owner, 30000); return response.result.result; }
   async steer(id, text, owner, images = []) {
@@ -178,14 +207,15 @@ class DesktopIpc extends EventEmitter {
 
 /** Newline-delimited app-server protocol. Never resolves approvals automatically. */
 class CodexBridge extends EventEmitter {
-  constructor({ executable, spawnProcess = spawn, timeoutMs = 30000, connectTimeoutMs = 12000, connectionModes = ['shared', 'standalone'], desktop = spawnProcess === spawn && process.platform === 'win32' ? new DesktopIpc() : null } = {}) {
+  constructor({ executable, spawnProcess = spawn, timeoutMs = 30000, connectTimeoutMs = 12000, connectionModes = ['shared', 'standalone'], runtimeClientFactory = () => new DesktopIpc({runtimeOnly:true,timeoutMs:2500}), desktop = spawnProcess === spawn && process.platform === 'win32' ? new DesktopIpc() : null } = {}) {
     super();
     Object.assign(this, { executable: executable || 'codex.exe', executableOverride: executable, spawnProcess, timeoutMs, connectTimeoutMs });
     this.pending = new Map(); this.requests = new Set(); this.resumed = new Set(); this.resuming = new Map(); this.nextId = 1;
     this.child = null; this.connected = false; this.connecting = null; this.mode = null;
     this.connectionModes = connectionModes; this.historyReader = null; this.unsupportedHistory = new Set();
+    this.runtimeClientFactory=runtimeClientFactory;this.runtimeProbes=new Set();this.runtimeGeneration=0;
     this.desktop = desktop; this.deltas = new Map(); this.deltaTimer = null;
-    this.activity = spawnProcess === spawn && connectionModes.includes('shared') ? new CodexActivity({ list: () => this._rpc('thread/list', { limit: 64, sortKey: 'updated_at', archived: false, useStateDbOnly: true }, 5000) }) : null;
+    this.activity = spawnProcess === spawn && connectionModes.includes('shared') ? new CodexActivity({ list: () => this._rpc('thread/list', { limit: 64, sortKey: 'updated_at', archived: false, useStateDbOnly: true }, 5000), readRuntime: id => this._readActivityRuntime(id) }) : null;
     this.activity?.on('activity', activity => this.emit('activity', activity));
     desktop?.on('state', state => this.emit('notification', { method: 'petdock/threadState', params: state }));
     desktop?.on('thread-opened', threadId => this.emit('thread-opened', threadId));
@@ -210,7 +240,7 @@ class CodexBridge extends EventEmitter {
     for (const mode of this.connectionModes) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.6.4' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.6.5' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
@@ -379,8 +409,15 @@ class CodexBridge extends EventEmitter {
     if (!this.requests.has(id)) throw new Error('This Codex request is no longer pending.');
     this._write({ id, result }); this.requests.delete(id);
   }
+  async _readActivityRuntime(id) {
+    if(typeof id!=='string'||!id||this.runtimeProbes.size>=2)return null;
+    const generation=this.runtimeGeneration,client=this.runtimeClientFactory();this.runtimeProbes.add(client);
+    try {const owner=await client.owner(id);if(!owner||generation!==this.runtimeGeneration)return null;const result=await client.readRuntime(id,owner);return generation===this.runtimeGeneration?result:null;}
+    catch{return null;}
+    finally{this.runtimeProbes.delete(client);client.close();}
+  }
   _dispose(error = new Error('Codex connection closed.')) {
-    this.activity?.stop();
+    this.activity?.stop();++this.runtimeGeneration;for(const client of this.runtimeProbes)client.close(error);this.runtimeProbes.clear();
     const child = this.child; this.child = null; this.connected = false;
     this.resumed.clear(); this.resuming.clear(); this.requests.clear();
     this.unsupportedHistory.clear(); this.historyReader?.close(); this.historyReader = null;
@@ -391,4 +428,4 @@ class CodexBridge extends EventEmitter {
   }
   close() { this.desktop?.close(); this._dispose(); this.emit('status', { state: 'disconnected', detail: 'Codex disconnected.' }); }
 }
-module.exports = { CodexBridge, DesktopIpc, applyDesktopPatches, desktopThread, promptInputs, IMAGE_LIMITS };
+module.exports = { CodexBridge, DesktopIpc, applyDesktopPatches, desktopThread, desktopRuntime, promptInputs, IMAGE_LIMITS };
