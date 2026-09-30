@@ -30,11 +30,11 @@ public static class OgleInputTotals {
       kh=SetWindowsHookEx(13, keyboard, module, 0); mh=SetWindowsHookEx(14, mouse, module, 0);
     }
     if(kh==IntPtr.Zero || mh==IntPtr.Zero) {if(kh!=IntPtr.Zero)UnhookWindowsHookEx(kh);if(mh!=IntPtr.Zero)UnhookWindowsHookEx(mh);throw new Exception("Input counters unavailable");}
-    bool stopping=false;
-    Thread reader=new Thread(()=>{try{while(Console.In.Read()!=-1){}}catch{} stopping=true;});reader.IsBackground=true;reader.Start();
+    int stopping=0;
+    Thread reader=new Thread(()=>{try{while(Console.In.Read()!=-1){}}catch{} Interlocked.Exchange(ref stopping,1);});reader.IsBackground=true;reader.Start();
     using(var timer=new System.Windows.Forms.Timer()) {
       timer.Interval=1000;
-      timer.Tick+=(sender,args)=>{if(stopping){Application.ExitThread();return;}try{Console.WriteLine(Interlocked.Read(ref clicks)+","+Interlocked.Read(ref keys));Console.Out.Flush();}catch{Application.ExitThread();}};
+      timer.Tick+=(sender,args)=>{if(Interlocked.CompareExchange(ref stopping,0,0)!=0){Console.WriteLine(Interlocked.Read(ref clicks)+","+Interlocked.Read(ref keys));Console.Out.Flush();Application.ExitThread();return;}try{Console.WriteLine(Interlocked.Read(ref clicks)+","+Interlocked.Read(ref keys));Console.Out.Flush();}catch{Application.ExitThread();}};
       timer.Start();Console.WriteLine("0,0");Console.Out.Flush();
       try{Application.Run();}finally{UnhookWindowsHookEx(kh);UnhookWindowsHookEx(mh);}
     }

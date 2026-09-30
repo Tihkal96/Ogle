@@ -28,8 +28,9 @@ test('malformed JSON is preserved before defaults can overwrite it',()=>{
 });
 test('non-UTF8 text is rejected without altering file while UTF8 round trips',async()=>{
  const dir=temp(),file=path.join(dir,'legacy.txt');
- const source=fs.readFileSync(path.join(__dirname,'../src/main/files.cjs'),'utf8');
- const box={module:{exports:{}},require:id=>id==='electron'?{}:require(id),Buffer,AbortSignal,URL};vm.runInNewContext(source,box);
+ const filename=path.join(__dirname,'../src/main/files.cjs'),localRequire=require('node:module').createRequire(filename);
+ const source=fs.readFileSync(filename,'utf8');
+ const box={module:{exports:{}},require:id=>id==='electron'?{}:localRequire(id),Buffer,AbortSignal,URL};vm.runInNewContext(source,box);
  const files=new box.module.exports.DockFiles(null);
  try {fs.writeFileSync(file,Buffer.from([0x63,0x61,0x66,0xe9]));await assert.rejects(files.read(file),/UTF-8/);assert.deepEqual(fs.readFileSync(file),Buffer.from([0x63,0x61,0x66,0xe9]));
  fs.writeFileSync(file,'café ☃');assert.equal((await files.read(file)).text,'café ☃');

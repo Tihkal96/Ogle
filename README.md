@@ -24,7 +24,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.6.2](https://github.com/Tihkal96/Ogle/releases/download/v0.6.2/Ogle-0.6.2-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.6.3](https://github.com/Tihkal96/Ogle/releases/download/v0.6.3/Ogle-0.6.3-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -54,6 +54,13 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 ## Release checklist for maintainers and AI agents
 
 Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release. Leave Reddit alone; announcement browsing or edits require a new explicit request from the owner.
+
+## Version 0.6.3
+
+- Links resolve Windows namespace shortcut icons, including This PC. Enter saves edits from text fields and group selectors; repeated saves are guarded.
+- Click and key totals persist locally across restarts and reset on a new local calendar day. Only totals are stored, never typed text. Totals are checkpointed every five seconds and saved on a normal exit.
+- Metrics sit one row higher. Optional CPU temperature, GPU utilization and GPU clock rows are off by default; enable them in Settings. They use available Windows/driver readings without installing anything and show `n/a` when unsupported.
+- Administrator shell buttons wait for the pending startup/Windows consent request before accepting another click. Ordinary shells remain available, and the guard clears immediately after startup succeeds or fails.
 
 ## Version 0.6.2
 

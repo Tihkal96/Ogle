@@ -20,7 +20,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   assert.equal(await page.getByRole('button',{name:'Open group Parent',exact:true}).getAttribute('aria-expanded'),'true');
   await page.locator('[data-id="child"] button[title="Rename or edit target"]').click();
   await page.getByLabel('Display name',{exact:true}).fill('Enter saves');
-  await page.getByLabel('Display name',{exact:true}).press('Enter');
+  await page.getByLabel('Move to group',{exact:true}).focus();
+  await page.getByLabel('Move to group',{exact:true}).press('Enter');
   await page.waitForFunction(()=>savedLinks.find(x=>x.id==='child').name==='Enter saves');
   assert.equal(await page.evaluate(()=>commits),1,'Enter saves exactly once');
   await page.locator('[data-id="child"] button[title="Rename or edit target"]').click();
@@ -30,8 +31,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   assert.equal(await page.evaluate(()=>commits),2,'Click saves exactly once');
   await page.evaluate(()=>{
    OgleDiagnostics={record:e=>failures.push(e.message)};
-   let next=0;
-   PetDockTerminal.mount(document.querySelector('#shell'),{terminalCreate:async options=>({...options,id:'fixture-'+(++next)}),terminalWrite:async()=>{},terminalResize:async()=>{},terminalClose:async()=>{},onEvent:callback=>window.shellEvent=callback});
+   let next=0;window.createRequests=[];window.delayAdmin=false;
+   PetDockTerminal.mount(document.querySelector('#shell'),{terminalCreate:async options=>{createRequests.push(options);if(options.admin&&delayAdmin)await new Promise(resolve=>window.finishAdmin=resolve);return {...options,id:'fixture-'+(++next)};},terminalWrite:async()=>{},terminalResize:async()=>{},terminalClose:async()=>{},onEvent:callback=>window.shellEvent=callback});
   });
   await page.getByRole('button',{name:'New Command Prompt',exact:true}).click();
   await page.getByRole('button',{name:'New administrator PowerShell',exact:true}).click();
@@ -42,6 +43,17 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   await page.getByRole('button',{name:'ADMIN · PowerShell · ended',exact:true}).click();assert.equal(await status.innerText(),'Session ended');
   await page.getByRole('button',{name:'Close session',exact:true}).click();assert.equal(await status.innerText(),'Terminal ready');
   await page.getByRole('button',{name:'Close session',exact:true}).click();assert.match(await status.innerText(),/Create a CMD/);
+  await page.evaluate(()=>{delayAdmin=true;});
+  await page.getByRole('button',{name:'New administrator PowerShell',exact:true}).click();
+  await page.waitForFunction(()=>typeof finishAdmin==='function');
+  assert.equal(await page.getByRole('button',{name:'New administrator Command Prompt',exact:true}).isDisabled(),true);
+  await page.evaluate(()=>{for(let i=0;i<5;i++)document.querySelector('[aria-label="New administrator PowerShell"]').click();});
+  assert.equal(await page.evaluate(()=>createRequests.length),3,'Repeated admin clicks do not queue sessions');
+  assert.equal(await page.getByRole('button',{name:'New Command Prompt',exact:true}).isEnabled(),true);
+  await page.evaluate(()=>{delayAdmin=false;finishAdmin();});
+  await page.waitForFunction(()=>!document.querySelector('[data-admin-create]').disabled);
+  await page.getByRole('button',{name:'New administrator Command Prompt',exact:true}).click();
+  await page.waitForFunction(()=>createRequests.length===4);
   assert.deepEqual(await page.evaluate(()=>failures),[]);
   console.log('Pinned nested groups, single-submit Enter/click saves, named group expansion and per-session shell status passed. No real shell/admin/clipboard access.');
  }finally{await browser.close();}
