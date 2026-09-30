@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const invoke = (name, ...args) => ipcRenderer.invoke(`dock:${name}`, ...args);
 contextBridge.exposeInMainWorld('dock', Object.freeze({
   setPinnedPanel: side => invoke('setPinnedPanel',side),
+  panelFullscreen: enabled => invoke('panelFullscreen',enabled),
+  chatgptZoom: factor => invoke('chatgptZoom',factor),
   windowShape: rects => invoke('windowShape',rects),
   activityStats: () => invoke('activityStats'),
   boot: () => invoke('boot'),

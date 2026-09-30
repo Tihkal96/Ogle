@@ -1,6 +1,6 @@
 "use strict";
 window.OglePinnedPanel=(()=>{
-  const names={chats:'Codex',chatgpt:'ChatGPT',editor:'Editor',terminal:'Shell',shortcuts:'Shortcuts'};
+  const names={chats:'Codex',chatgpt:'ChatGPT',editor:'Editor',terminal:'Shell',shortcuts:'Links'};
   let state,api,open,refresh,report,menuTarget,appliedSide=null,queue=Promise.resolve();
   const el=id=>document.getElementById(id);
   function visible(name){return state.activePanel===name || state.pinnedPanel===name;}

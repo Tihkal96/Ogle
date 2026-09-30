@@ -2,6 +2,8 @@
 
 Keep download references synchronized with the actual public release. A successful build or draft release is not a published download.
 
+**Owner instruction (2026-09-30): leave Reddit alone.** Reddit browsing and announcement updates are not part of the release workflow. Do not perform the historical Reddit steps below without a new explicit request from the owner.
+
 ## Release checklist
 
 1. Read the release version from `package.json`; keep the lockfile, release tag and ZIP filename consistent.

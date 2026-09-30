@@ -1,11 +1,12 @@
 'use strict';
 const { WebContentsView, shell, dialog, session } = require('electron');
+const path = require('node:path');
 const { isHttps } = require('../chatgpt/navigation.cjs');
 const { ChatGPTActivity } = require('./chatgpt-activity.cjs');
 const HOME = 'https://chatgpt.com/';
 
 class ChatGPTPanel {
-  constructor({ parent, onStatus, onActivity, onInteraction, onFindOpen, onFindResult, onCommandsOpen, onSelectionMenu } = {}) {
+  constructor({ parent, onStatus, onActivity, onInteraction, onFindOpen, onFindResult, onCommandsOpen, onSelectionMenu, onZoom, onExitFullscreen, onChildWindow } = {}) {
     this.parent = parent;
     this.onStatus = onStatus;
     this.onActivity = onActivity;
@@ -14,6 +15,7 @@ class ChatGPTPanel {
     this.onFindResult = onFindResult;
     this.onCommandsOpen = onCommandsOpen;
     this.onSelectionMenu = onSelectionMenu;
+    Object.assign(this,{onZoom,onExitFullscreen,onChildWindow,zoomFactor:1});
     this.activity = null;
     this.view = null;
     this.children = new Set();
@@ -23,6 +25,15 @@ class ChatGPTPanel {
     this.resize = () => this.applyLayout();
     parent?.on('resize', this.resize);
     parent?.once('closed', () => this.close());
+  }
+
+  setZoom(factor) {
+    if (!Number.isFinite(factor)) throw new Error('Invalid zoom factor.');
+    this.zoomFactor = Math.max(.6, Math.min(2, Math.round(factor * 10) / 10));
+    const contents = this.view?.webContents;
+    if (contents && !contents.isDestroyed()) contents.setZoomFactor(this.zoomFactor);
+    this.onZoom?.(this.zoomFactor);
+    return this.zoomFactor;
   }
 
   setStatus(message, failed = false) {
@@ -61,6 +72,7 @@ class ChatGPTPanel {
     });
     contents.on('did-create-window', child => {
       this.children.add(child);
+      this.onChildWindow?.();
       this.secure(child.webContents);
       child.on('closed', () => this.children.delete(child));
     });
@@ -72,9 +84,19 @@ class ChatGPTPanel {
     if (!this.parent || this.parent.isDestroyed()) throw new Error('The dock window is closed.');
     this.view = new WebContentsView({ webPreferences: {
       sandbox: true, contextIsolation: true, nodeIntegration: false,
-      webSecurity: true, partition: 'persist:petdock-chatgpt'
+      webSecurity: true, partition: 'persist:petdock-chatgpt',
+      preload: path.join(__dirname, 'chatgpt-view-preload.cjs')
     } });
     const contents = this.view.webContents;
+    contents.setZoomFactor(this.zoomFactor);
+    contents.ipc.on('ogle:chatgpt-wheel-zoom', (event, direction) => {
+      if (event.senderFrame !== contents.mainFrame || !this.visible ||
+          !this.view?.getVisible() || ![-1, 1].includes(direction)) return;
+      try { if (new URL(event.senderFrame.url).origin !== 'https://chatgpt.com') return; }
+      catch { return; }
+      this.setZoom(this.zoomFactor + direction * .1);
+    });
+    contents.on('did-finish-load',()=>contents.setZoomFactor(this.zoomFactor));
     // Native child-view input never bubbles into the dock renderer. Send only
     // an activity signal, never keys, text, pointer coordinates or page content.
     let lastMouseMove = 0;
@@ -83,6 +105,7 @@ class ChatGPTPanel {
     };
     contents.on('before-input-event', (event, input) => {
       interact();
+      if(input.type==='keyDown'&&input.key==='Escape'&&this.onExitFullscreen?.()){event.preventDefault();this.parent.webContents.focus();return;}
       if(input.type==='keyDown' && input.control && input.shift && !input.alt && !input.meta && String(input.key).toLowerCase()==='p' && this.visible && this.view?.getVisible()){event.preventDefault();this.parent.webContents.focus();this.onCommandsOpen?.();return;}
       if (input.type === 'keyDown' && input.control && !input.alt && !input.meta &&
           String(input.key).toLowerCase() === 'f' && this.visible && this.view?.getVisible()) {

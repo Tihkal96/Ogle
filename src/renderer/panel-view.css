@@ -1,0 +1,23 @@
+/* The empty application footer is intentionally absent; tab status stays local. */
+.shell>footer{display:none!important}
+.message.user .message-label{text-align:right;display:block}
+.panel{position:relative}
+.panel-fullscreen-button{position:absolute;right:4px;top:3px;z-index:6;width:24px;height:24px;background:var(--surface);color:var(--muted);font-size:16px;padding:0}
+#chatgpt-panel>.subtoolbar,#editor-panel>.subtoolbar,#shortcuts-panel>.links-toolbar,#terminal-panel>.terminal-controls,.notes-header{padding-right:32px}
+#chats-panel .conversation-header{padding-right:32px}
+#settings-panel>h1{padding-right:30px}
+#editor-panel .cm-editor,#editor-panel .editor-fallback{font-size:calc(12px * var(--content-zoom,1))!important}
+#terminal-command-draft{font-size:calc(12px * var(--content-zoom,1))}
+#panel-fullscreen-bar{display:flex;align-items:center;gap:5px;flex:none;height:34px;padding:3px 8px;background:var(--raised);border-bottom:1px solid var(--border);order:0}
+#panel-fullscreen-bar strong{margin-right:auto}
+#panel-fullscreen-bar button{height:26px;min-width:28px}
+body.panel-fullscreen{padding:0;background:var(--surface)}
+.panel-fullscreen #dock{height:100vh;display:flex;flex-direction:column}
+.panel-fullscreen .pet-stage,.panel-fullscreen .toolbar,.panel-fullscreen #conversation-strip,.panel-fullscreen #conversation-picker,.panel-fullscreen #side-panel>header,.panel-fullscreen #error,.panel-fullscreen #panel-menu{display:none!important}
+.panel-fullscreen #workspace,.panel-fullscreen .shell,.panel-fullscreen #expanded,.panel-fullscreen #side-panel,.panel-fullscreen #side-panel-content{display:contents!important}
+.panel-fullscreen .panel{display:none!important}
+.panel-fullscreen .panel[data-fullscreen=true]{display:flex!important;flex:1;min-height:0;order:1;width:100%;zoom:1!important}
+.panel-fullscreen #settings-panel[data-fullscreen=true]{display:block!important;overflow:auto}
+.panel-fullscreen .panel-fullscreen-button{display:none}
+.panel-fullscreen #composer{order:2;flex:none}
+.panel-fullscreen:not([data-fullscreen-panel=chats]) #composer{display:none!important}

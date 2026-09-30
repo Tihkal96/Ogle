@@ -10,7 +10,7 @@ let saveQueue = Promise.resolve();
 function save(partial) { Object.assign(state.settings, partial); const pending = saveQueue.then(() => api.saveSettings(partial)); saveQueue = pending.catch(error); return pending; }
 function title(thread) { return thread?.name || thread?.title || thread?.preview?.slice(0, 90) || 'Untitled task'; }
 function basename(path) { return String(path || '').split(/[\\/]/).filter(Boolean).pop() || 'No project'; }
-function setConnection(connection, detail) { detail ||= connection?.detail; const value = typeof connection === 'object' ? connection?.state : connection; state.connected = ['ready', 'connected','desktop'].includes(value); codexQueue.setConnected(state.connected); if(state.connected)refreshQueuedRuntime(); if (['error','disconnected'].includes(value)) state.running.clear(); if(detail && !state.connected)window.OgleDiagnostics.record(detail,'Codex connection'); $('status-dot').title=state.connected?'Codex connected':'Codex not connected'; $('status-dot').setAttribute('aria-label',$('status-dot').title); $('status-dot').className = state.connected ? 'ready' : ''; $('footer-status').textContent = '';  updateComposer(); }
+function setConnection(connection, detail) { detail ||= connection?.detail; const value = typeof connection === 'object' ? connection?.state : connection; state.connected = ['ready', 'connected','desktop'].includes(value); codexQueue.setConnected(state.connected); if(state.connected)refreshQueuedRuntime(); if (['error','disconnected'].includes(value)) {state.running.clear();visualActivity.clear();} if(detail && !state.connected)window.OgleDiagnostics.record(detail,'Codex connection'); $('status-dot').title=state.connected?'Codex connected':'Codex not connected'; $('status-dot').setAttribute('aria-label',$('status-dot').title); $('status-dot').className = state.connected ? 'ready' : ''; $('footer-status').textContent = '';  updateComposer(); }
 function compactUsesChatGPT() { return state.settings.compactChatTarget==='chatgpt'; }
 function composerUsesChatGPT() { return state.composerContext==='__chatgpt__'; }
 function syncComposerContext() {
@@ -42,6 +42,39 @@ function updateComposer() {
   updatePetState();
 }
 const completedTasks=new Set();
+// Rollout evidence affects the pet only. Queue/steer decisions retain their
+// authoritative runtime and ownership checks.
+const visualActivity=new Map(),completedTurns=new Set();
+function recordVisualActivity(threadId,activity) {
+  visualActivity.delete(threadId);visualActivity.set(threadId,activity);
+  if(visualActivity.size>256)for(const [id,value] of visualActivity){if(!value.running && !state.running.has(id))visualActivity.delete(id);if(visualActivity.size<=256)break;}
+}
+function visualCodexRunning() {
+  for(const activity of visualActivity.values())if(activity.running)return true;
+  for(const [id,turnId] of state.running){const activity=visualActivity.get(id);if(!activity || activity.running || (activity.turnId!==turnId && !['desktop','pending'].includes(turnId)))return true;}
+  return false;
+}
+function completeTaskReaction(threadId,turnId,outcome='completed') {
+  turnId ||= visualActivity.get(threadId)?.turnId;
+  const key=turnId?JSON.stringify([threadId,turnId]):null;
+  if(key && completedTurns.has(key))return;
+  if(key){completedTurns.add(key);if(completedTurns.size>512)completedTurns.delete(completedTurns.values().next().value);}
+  if(outcome!=='interrupted' && outcome!=='aborted')queueReaction(outcome==='failed'?'failed':'review',threadId);
+}
+function receiveVisualActivity(activity) {
+  if(!activity?.threadId || typeof activity.running!=='boolean')return;
+  const previous=visualActivity.get(activity.threadId);
+  if(!activity.running && previous?.running && previous.turnId!==activity.turnId)return;
+  if(activity.running && completedTurns.has(JSON.stringify([activity.threadId,activity.turnId])))return;
+  recordVisualActivity(activity.threadId,activity);
+  if(activity.running===false)completeTaskReaction(activity.threadId,activity.turnId,activity.completed?'completed':'aborted');
+  updatePetState();
+}
+function restoreBootActivity(activities) {
+  if(!state.connected)return;
+  // Live events received while boot was awaiting I/O are newer than its cache.
+  for(const activity of activities || [])if(!visualActivity.has(activity.threadId))receiveVisualActivity(activity);
+}
 function acknowledgeCompletion(threadId) {
   if(!threadId || !completedTasks.delete(threadId))return;
   if(!completedTasks.size && state.reactionUntil===Infinity)state.reactionUntil=0;
@@ -59,7 +92,7 @@ function queueReaction(kind,threadId) {
 function updatePetState() {
   let next,restart=false;
   if(document.querySelector('.approval') || state.attention?.size) next='waiting';
-  else if(state.running.size || state.chatgptWorking) next='running';
+  else if(visualCodexRunning() || state.chatgptWorking) next='running';
   else {
     if(state.pendingReaction) {
       state.reaction=state.pendingReaction;state.pendingReaction=null;
@@ -162,11 +195,12 @@ $('new-task').onclick = () => attempt(async () => { const cwd = await api.choose
 $('pin-thread').onclick = () => { if (!state.selected) return; const pins = new Set(state.settings.pinnedThreads || []); pins.has(state.selected.id) ? pins.delete(state.selected.id) : pins.add(state.selected.id); save({pinnedThreads:[...pins]}); $('pin-thread').textContent = pins.has(state.selected.id) ? '★' : '☆'; renderThreads(); };
 let noteTimer; $('note').oninput = () => { $('note-status').textContent = 'Saving…'; clearTimeout(noteTimer); noteTimer = setTimeout(async () => { try { await save({note:$('note').value}); $('note-status').textContent = 'Saved locally'; } catch { $('note-status').textContent = 'Save failed'; } }, 400); };
 function chatgptLayout() {
-  const host = $('chatgpt-host'), visible = !window.OgleCommands?.isOpen() && !window.DockLayoutTransition.busy && !state.collapsed && (state.activePanel === 'chatgpt' || state.pinnedPanel==='chatgpt');
+  const host = $('chatgpt-host'), visible = !window.OgleCommands?.isOpen() && !window.DockLayoutTransition.busy && !state.collapsed && (state.fullscreenPanel ? state.fullscreenPanel==='chatgpt' : (state.activePanel === 'chatgpt' || state.pinnedPanel==='chatgpt'));
   const rect = host.getBoundingClientRect();
   api.chatgptLayout({visible,bounds:{x:Math.round(rect.x),y:Math.round(rect.y),width:Math.max(1,Math.round(rect.width)),height:Math.max(1,Math.round(rect.height))}}).catch(error);
 }
 function switchPanel(name) {
+  if(window.OglePanelView?.active)return window.OglePanelView.exit().then(()=>switchPanel(name));
   window.OgleChatFind?.close();
   if(name!=='notes')window.OgleNotesZoom?.reset();
   if(name===state.pinnedPanel)name=name==='editor'?'terminal':'editor';
@@ -220,6 +254,7 @@ async function flushLocal() {
 }
 $('sidebar-toggle').onclick=()=>{save({sidebarVisible:state.settings.sidebarVisible===false});applySettings();};
 function setMode(mode) {
+  if(window.OglePanelView?.active)return window.OglePanelView.exit().then(()=>setMode(mode));
   if(state.pinnedPanel)mode='expand';
   if(mode!=='expand'){window.OgleCommands?.close(false);window.OgleNotesZoom?.reset();window.OgleChatFind?.close();}
   window.OglePinnedPanel.hideMenu();
@@ -265,9 +300,9 @@ let hoverTimer,panelIdleTimer,quickIdleTimer,lastPointerPosition;
 function autoCollapseDelay() { const value=Number(state.settings.autoCollapseDelay);return Number.isFinite(value)&&value>=1000&&value<=120000?value:7000; }
 function resetPanelIdle() {
   clearTimeout(panelIdleTimer);
-  if(state.adminPromptPending || state.settings.autoCollapse===false || window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.mode==='expand' && (state.pinnedPanel || state.panelPinned || state.pointerInside || state.nativePointerInside)))return;
+  if(state.fullscreenPanel || state.adminPromptPending || state.settings.autoCollapse===false || window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.mode==='expand' && (state.pinnedPanel || state.panelPinned || state.pointerInside || state.nativePointerInside)))return;
   panelIdleTimer=setTimeout(()=>{
-    if(state.adminPromptPending || window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.mode==='expand' && (state.pinnedPanel || state.panelPinned || state.pointerInside || state.nativePointerInside)))return;
+    if(state.fullscreenPanel || state.adminPromptPending || window.DockLayoutTransition.busy || !['expand','reveal'].includes(state.mode) || (state.mode==='expand' && (state.pinnedPanel || state.panelPinned || state.pointerInside || state.nativePointerInside)))return;
     if(!$('panel-menu').hidden || document.querySelector('dialog[open]') || state.chatgptSending || document.querySelector('.approval') || window.PetDockAttachments?.isBusy()){resetPanelIdle();return;}
     state.suppressHoverReveal=true;
     setMode(state.mode==='expand'?'reveal':'idle');
@@ -317,10 +352,10 @@ function approval(event) { const box = document.createElement('div'); box.classN
 function setRuntime(threadId,runtime,outcome='completed',completedTurnId) {
   state.attention ||= new Set();
   if(runtime.waitingForApproval || runtime.waitingForInput)state.attention.add(threadId);else state.attention.delete(threadId);
-  if(state.running.has(threadId) && !runtime.running) {
-    queueReaction(outcome==='failed'?'failed':'review',threadId);
+  if(state.running.has(threadId) && !runtime.running && (!visualActivity.get(threadId)?.running || (completedTurnId && visualActivity.get(threadId)?.turnId===completedTurnId))) {
+    completeTaskReaction(threadId,completedTurnId || state.running.get(threadId),outcome);
   }
-  if(runtime.running) state.running.set(threadId,runtime.turnId || 'desktop');else state.running.delete(threadId);
+  if(runtime.running) {state.running.set(threadId,runtime.turnId || 'desktop');if(runtime.turnId && visualActivity.get(threadId)?.turnId!==runtime.turnId)recordVisualActivity(threadId,{running:true,turnId:runtime.turnId});}else {state.running.delete(threadId);if(!visualActivity.get(threadId)?.running || (completedTurnId && visualActivity.get(threadId)?.turnId===completedTurnId))recordVisualActivity(threadId,{running:false,turnId:completedTurnId || visualActivity.get(threadId)?.turnId});}
   codexQueue.runtime(threadId,runtime,{completedTurnId});
   if(threadId===state.selected?.id) $('desktop-approval').hidden=!(runtime.waitingForApproval || runtime.waitingForInput);
 }
@@ -338,7 +373,7 @@ function desktopThread(params) {
   updateComposer();
 }
 $('desktop-approval').onclick=()=>attempt(()=>api.openCodex(state.selected?.id));
-function onEvent(event) { if(event.type==='open-panel-shortcut')return switchPanel(event.panel); if(event.type==='focus-prompt-shortcut')return attempt(async()=>{await setMode('quick');document.getElementById('prompt').focus();}); if(event.type==='selection-paste')return attempt(()=>window.OgleSelectionTransfer.paste(event)); if(event.type==='commands-open')return window.OgleCommands.open({target:event.target}); if(event.type==='chat-find-open')return window.OgleChatFind.open(event.target); if(event.type==='chatgpt-find-result')return window.OgleChatFind.result(event.result); if(event.type==='codex-thread-opened')return acknowledgeCompletion(event.threadId); if(event.type==='admin-prompt'){state.adminPromptPending=event.pending;resetPanelIdle();resetQuickIdle();return;} if(event.type==='toggle-chat-target')return attempt(toggleCompactChatTarget); if(event.type==='toggle-bar')return setMode(state.mode==='reveal'?'idle':'reveal'); if(event.type==='dock-shown'){resetPanelIdle();chatgptLayout();return;} if(event.type==='startup-error'){window.OgleDiagnostics.record(event.message,'Startup');return;} if(event.type==='chatgpt-interaction')return resetPanelIdle(); if(event.type==='chatgpt-activity') {state.chatgptWorking=event.state==='working';if(event.state==='done'||event.state==='failed')queueReaction(event.state==='failed'?'failed':'review');updateComposer();return;} if(event.type==='toggle-panel')return collapse(!event.expanded); if (event.type === 'request-close') return attempt(async()=>{await flushLocal();await api.windowAction('close');}); if(event.type==='settings-open') return switchPanel('settings'); if(event.type==='window/action') {if(event.action==='collapse')return collapse(true);if(event.action==='expand')return collapse(false);if(event.action==='settings')return switchPanel('settings');} if(event.type==='settings') {Object.assign(state.settings,event.settings || {});applySettings();return;} if (event.type === 'pointer') { state.nativePointerInside = event.inside;if(Number.isFinite(event.x)&&Number.isFinite(event.y))state.petPointer={x:event.x,y:event.y};if(state.mode==='expand' || !event.inside)pointerInside(event.inside); return; } if (event.type === 'connection') return setConnection(event.state,event.detail); if (event.type === 'request') return approval(event); if (event.type !== 'codex') return; if(/reasoning|commandExecution.*delta|tool.*delta/i.test(event.method || ''))return; if(event.method==='petdock/threadState') return desktopThread(event.params || {}); if(event.method==='item/agentMessage/delta'){const p=event.params || {};markTaskActivity(p.threadId || state.selected?.id);if(!p.threadId || p.threadId===state.selected?.id)addMessage(p.itemId,'assistant',messageView.text(p.itemId)+(p.delta || ''));return;} const p = event.params || {}, method = event.method; const threadId = p.threadId || p.thread?.id;if(['turn/started','turn/completed','item/started','item/completed'].includes(method))markTaskActivity(threadId); if (method === 'turn/started') {state.running.set(threadId,p.turn?.id);codexQueue.runtime(threadId,{running:true,turnId:p.turn?.id});} if (method === 'turn/completed') { const active=state.running.get(threadId);if(p.turn?.id && active && !['pending','desktop'].includes(active) && active!==p.turn.id)return;state.running.delete(threadId); queueReaction(p.turn?.status==='failed'?'failed':'review',threadId);codexQueue.runtime(threadId,{running:false},{completed:!p.turn?.id,completedTurnId:p.turn?.id}); } if (threadId && threadId !== state.selected?.id) { updateComposer(); return; } if (method === 'item/started' || method === 'item/completed') { if (p.item) renderItem(p.item); } else if (method === 'turn/started') $('activity').textContent = 'Codex is working…'; else if (method === 'turn/completed') { $('activity').textContent = state.running.has(threadId)?'Codex is working…':p.turn?.status === 'failed' ? 'Turn failed' : p.turn?.status === 'interrupted' ? 'Stopped' : 'Ready for your next prompt'; if (p.turn?.error) {if(state.mode==='expand' && (state.activePanel==='chats' || state.pinnedPanel==='chats'))error(p.turn.error);else window.OgleDiagnostics.record(p.turn.error,'Codex turn');} } else if (method === 'error') {const issue=p.error || p.message || 'Codex reported an error';if(state.mode==='expand' && (state.activePanel==='chats' || state.pinnedPanel==='chats'))error(issue);else window.OgleDiagnostics.record(issue,'Codex');} updateComposer(); }
+function onEvent(event) { if(event.type==='codex-activity')return receiveVisualActivity(event); if(event.type==='exit-panel-fullscreen')return attempt(()=>window.OglePanelView.exit()); if(event.type==='chatgpt-zoom')return window.OglePanelView.zoom('chatgpt',event.factor,true); if(event.type==='open-panel-shortcut')return switchPanel(event.panel); if(event.type==='focus-prompt-shortcut')return attempt(async()=>{await setMode('quick');document.getElementById('prompt').focus();}); if(event.type==='selection-paste')return attempt(()=>window.OgleSelectionTransfer.paste(event)); if(event.type==='commands-open')return window.OgleCommands.open({target:event.target}); if(event.type==='chat-find-open')return window.OgleChatFind.open(event.target); if(event.type==='chatgpt-find-result')return window.OgleChatFind.result(event.result); if(event.type==='codex-thread-opened')return acknowledgeCompletion(event.threadId); if(event.type==='admin-prompt'){state.adminPromptPending=event.pending;resetPanelIdle();resetQuickIdle();return;} if(event.type==='toggle-chat-target')return attempt(toggleCompactChatTarget); if(event.type==='toggle-bar')return setMode(state.mode==='reveal'?'idle':'reveal'); if(event.type==='dock-shown'){resetPanelIdle();chatgptLayout();return;} if(event.type==='startup-error'){window.OgleDiagnostics.record(event.message,'Startup');return;} if(event.type==='chatgpt-interaction')return resetPanelIdle(); if(event.type==='chatgpt-activity') {state.chatgptWorking=event.state==='working';if(event.state==='done'||event.state==='failed')queueReaction(event.state==='failed'?'failed':'review');updateComposer();return;} if(event.type==='toggle-panel')return collapse(!event.expanded); if (event.type === 'request-close') return attempt(async()=>{await flushLocal();await api.windowAction('close');}); if(event.type==='settings-open') return switchPanel('settings'); if(event.type==='window/action') {if(event.action==='collapse')return collapse(true);if(event.action==='expand')return collapse(false);if(event.action==='settings')return switchPanel('settings');} if(event.type==='settings') {Object.assign(state.settings,event.settings || {});applySettings();return;} if (event.type === 'pointer') { state.nativePointerInside = event.inside;if(Number.isFinite(event.x)&&Number.isFinite(event.y))state.petPointer={x:event.x,y:event.y};if(state.mode==='expand' || !event.inside)pointerInside(event.inside); return; } if (event.type === 'connection') return setConnection(event.state,event.detail); if (event.type === 'request') return approval(event); if (event.type !== 'codex') return; if(/reasoning|commandExecution.*delta|tool.*delta/i.test(event.method || ''))return; if(event.method==='petdock/threadState') return desktopThread(event.params || {}); if(event.method==='item/agentMessage/delta'){const p=event.params || {};markTaskActivity(p.threadId || state.selected?.id);if(!p.threadId || p.threadId===state.selected?.id)addMessage(p.itemId,'assistant',messageView.text(p.itemId)+(p.delta || ''));return;} const p = event.params || {}, method = event.method; const threadId = p.threadId || p.thread?.id;if(['turn/started','turn/completed','item/started','item/completed'].includes(method))markTaskActivity(threadId); if (method === 'turn/started') {recordVisualActivity(threadId,{running:true,turnId:p.turn?.id});state.running.set(threadId,p.turn?.id);codexQueue.runtime(threadId,{running:true,turnId:p.turn?.id});} if (method === 'turn/completed') { const active=state.running.get(threadId);if(p.turn?.id && active && !['pending','desktop'].includes(active) && active!==p.turn.id)return;state.running.delete(threadId); if(!visualActivity.get(threadId)?.running || visualActivity.get(threadId)?.turnId===p.turn?.id)recordVisualActivity(threadId,{running:false,turnId:p.turn?.id});completeTaskReaction(threadId,p.turn?.id,p.turn?.status);codexQueue.runtime(threadId,{running:false},{completed:!p.turn?.id,completedTurnId:p.turn?.id}); } if (threadId && threadId !== state.selected?.id) { updateComposer(); return; } if (method === 'item/started' || method === 'item/completed') { if (p.item) renderItem(p.item); } else if (method === 'turn/started') $('activity').textContent = 'Codex is working…'; else if (method === 'turn/completed') { $('activity').textContent = state.running.has(threadId)?'Codex is working…':p.turn?.status === 'failed' ? 'Turn failed' : p.turn?.status === 'interrupted' ? 'Stopped' : 'Ready for your next prompt'; if (p.turn?.error) {if(state.mode==='expand' && (state.activePanel==='chats' || state.pinnedPanel==='chats'))error(p.turn.error);else window.OgleDiagnostics.record(p.turn.error,'Codex turn');} } else if (method === 'error') {const issue=p.error || p.message || 'Codex reported an error';if(state.mode==='expand' && (state.activePanel==='chats' || state.pinnedPanel==='chats'))error(issue);else window.OgleDiagnostics.record(issue,'Codex');} updateComposer(); }
 const petImage = new Image(), canvas = $('pet'), context = canvas.getContext('2d');
 function loadPet(pet) { if (!pet) return; petImage.src = pet.spriteUrl; save({petId:pet.id}); }
 let pets = [];
@@ -439,8 +474,9 @@ attempt(async () => {
   window.PetDockShortcuts?.mount($('shortcuts-panel'),api,state.settings,save,error,()=>switchPanel('shortcuts'));
   window.PetDockTerminal?.mount($('terminal-panel'),api);
   window.PetDockSettings?.mount($('settings-panel'),api,state.settings,pets,save,applySettings,error,async()=>{pets=await api.listPets();applySettings();return pets;},()=>switchPanel('chatgpt'));
+  window.OglePanelView.init({state,api,report:error,layout:chatgptLayout,idle:resetPanelIdle});
   state.threads=Array.isArray(boot.threads)?boot.threads:boot.threads?.data || [];state.cursor=boot.threads?.nextCursor;
-  $('note').value=state.settings.note || '';state.bootReady=true;applySettings();await setMode('idle');setConnection(boot.connection);renderProjects();renderThreads();$('load-more').hidden=!state.cursor;
+  $('note').value=state.settings.note || '';state.bootReady=true;applySettings();await setMode('idle');setConnection(boot.connection);restoreBootActivity(boot.activity);renderProjects();renderThreads();$('load-more').hidden=!state.cursor;
   const previous=state.threads.find(t=>t.id===state.settings.lastThreadId);if(previous)await attempt(()=>selectThread(previous));
   if(!state.settings.compactChatTarget)await chooseCompactTarget();
 });

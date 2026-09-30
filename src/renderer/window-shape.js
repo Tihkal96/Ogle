@@ -3,6 +3,7 @@ window.OgleWindowShape=(()=>{
   let scheduled=false,last='';
   const selector='#pet,#activity-stats,#side-panel,#panel-menu,#chat-target-menu,#conversation-picker,dialog[open],.cm-tooltip';
   function rectangles(){
+    if(document.body.classList.contains('panel-fullscreen'))return [{x:0,y:0,width:innerWidth,height:innerHeight}];
     const elements=[...document.querySelectorAll(selector),document.querySelector(document.body.classList.contains('bar-idle')?'#bar-orb':'.shell')];
     return elements.filter(el=>el&&el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden').map(el=>{
       const r=el.getBoundingClientRect();return {x:r.x-2,y:r.y-2,width:r.width+4,height:r.height+4};

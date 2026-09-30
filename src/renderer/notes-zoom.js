@@ -4,6 +4,7 @@ window.OgleNotesZoom = (() => {
   const note = document.getElementById('note');
   let size = null;
   function reset() {
+    window.OglePanelView?.resetZoom('notes');
     size = null;
     note.style.removeProperty('font-size');
   }
