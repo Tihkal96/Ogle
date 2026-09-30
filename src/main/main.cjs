@@ -1,10 +1,11 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, screen, Notification, shell, Menu, net, nativeImage, globalShortcut, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Notification, shell, Menu, net, nativeImage, globalShortcut, clipboard, Tray } = require('electron');
 if (process.argv.includes('--persistent-terminal-worker')) { require('./persistent-admin-worker.cjs').runPersistentWorker(); return; }
 if (process.argv.includes('--terminal-worker')) { require('./terminal-worker.cjs').runWorker(); return; }
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { createDockTray } = require('./tray.cjs');
 const { TopmostController } = require('./topmost-controller.cjs');
 const { DockShortcuts, shortcutKeys } = require('./global-shortcuts.cjs');
 const { createActivityStats } = require('./activity-stats.cjs');
@@ -30,7 +31,7 @@ app.setName('Ogle');
 app.setAppUserModelId('PetDock.Desktop');
 app.setPath('userData', process.env.PETDOCK_DATA_DIR ? path.resolve(process.env.PETDOCK_DATA_DIR) : path.join(app.getPath('appData'), 'PetDock'));
 if (!app.requestSingleInstanceLock()) {app.quit();return;}
-let shutdown, activityStats, shortcuts, win, bridge, chatgpt, store, files, terminals, petLibrary, petDragState, pointerTimer, connection = { state: 'connecting', detail: 'Connecting to Codex…' }, connectionPromise;
+let tray, shutdown, activityStats, shortcuts, win, bridge, chatgpt, store, files, terminals, petLibrary, petDragState, pointerTimer, connection = { state: 'connecting', detail: 'Connecting to Codex…' }, connectionPromise;
 const root = path.resolve(__dirname, '../..');
 const indexPath = path.join(root, 'src/renderer/index.html');
 const indexUrl = pathToFileURL(indexPath).href;
@@ -39,7 +40,13 @@ let inputRegions=null,topmost,contentFullscreen=false,restoreDockBounds=null;
 let expanded = false;
 let pinnedPanelSide = null;
 let layoutMode = 'idle';
-app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
+function showDock() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show(); win.focus(); send({type:'dock-shown'});
+}
+function hideDock() { if (win && !win.isDestroyed()) { chatgpt?.hide(); win.hide(); } }
+app.on('second-instance', showDock);
 function send(payload) { if (win && !win.isDestroyed()) win.webContents.send('dock:event', payload); }
 function showSelectionMenu(text){
   Menu.buildFromTemplate(selectionMenuTemplate(text,{copy:value=>clipboard.writeText(value),paste:payload=>send({type:'selection-paste',...payload})})).popup({window:win});return true;
@@ -86,7 +93,8 @@ app.whenReady().then(async () => {
   configureStartup(app,store.value.autoStart);
   if(process.argv.includes('--autostart')&&!process.env.PETDOCK_DATA_DIR)ensureCodex({open:url=>shell.openExternal(url)}).catch(error=>send({type:'startup-error',message:error.message}));
   const area = screen.getPrimaryDisplay().workArea;
-  win = new BrowserWindow({ title: 'Ogle', width: Math.min(600, area.width), height: Math.min(200, area.height), x: area.x + Math.max(0, area.width - 620), y: area.y + Math.max(0, area.height - 220), transparent: true, frame: false, resizable: false, backgroundColor: '#00000000', alwaysOnTop: store.value.alwaysOnTop, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  win = new BrowserWindow({ title: 'Ogle', width: Math.min(600, area.width), height: Math.min(200, area.height), x: area.x + Math.max(0, area.width - 620), y: area.y + Math.max(0, area.height - 220), transparent: true, frame: false, resizable: false, skipTaskbar: true, backgroundColor: '#00000000', alwaysOnTop: store.value.alwaysOnTop, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  win.on('minimize', hideDock);
   topmost=new TopmostController(win,{enabled:store.value.alwaysOnTop,children:()=>[...(chatgpt?.children||[])]});
   shutdown=new GracefulShutdown({window:win,
     flush:()=>win.webContents.executeJavaScript("typeof state==='undefined' || !state.bootReady ? true : flushLocal().then(()=>true,err=>{error(err);return false;})"),
@@ -106,6 +114,7 @@ app.whenReady().then(async () => {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== indexUrl) event.preventDefault(); });
   chatgpt = new ChatGPTPanel({ parent: win,onChildWindow:()=>topmost.request(),onZoom:factor=>send({type:'chatgpt-zoom',factor}),onExitFullscreen:()=>{if(!contentFullscreen)return false;send({type:'exit-panel-fullscreen'});return true;}, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}),onFindOpen:()=>send({type:'chat-find-open',target:'chatgpt'}),onCommandsOpen:()=>send({type:'commands-open',target:'chatgpt'}),onSelectionMenu:text=>{try{showSelectionMenu(text);}catch(error){send({type:'startup-error',message:error.message});}},onFindResult:result=>send({type:'chatgpt-find-result',result}) });
+  tray=createDockTray({Tray,Menu,nativeImage,iconPath:path.join(root,'assets/ogle.png'),window:win,onShow:showDock,onHide:hideDock,onSettings:()=>{showDock();send({type:'settings-open'});},onQuit:()=>app.quit()});
   register('panelFullscreen',enabled=>{if(typeof enabled!=='boolean')throw new Error('Invalid fullscreen mode');if(enabled===contentFullscreen)return;contentFullscreen=enabled;if(enabled){restoreDockBounds=win.getBounds();win.setBounds(screen.getDisplayMatching(restoreDockBounds).bounds);}else{if(restoreDockBounds)win.setBounds(restoreDockBounds);restoreDockBounds=null;}topmost.request();return win.getBounds();});
   register('chatgptZoom',factor=>chatgpt.setZoom(factor));
   register('windowShape',rects=>{const b=win.getBounds();inputRegions=normalizeRegions(rects,b.width,b.height);if(inputRegions.length)win.setShape(inputRegions);return true;});
@@ -113,7 +122,7 @@ app.whenReady().then(async () => {
   shortcuts=new DockShortcuts(globalShortcut,{
     shortcutCodex:()=>openShortcutPanel('chats'),shortcutGpt:()=>openShortcutPanel('chatgpt'),shortcutEditor:()=>openShortcutPanel('editor'),shortcutShell:()=>openShortcutPanel('terminal'),shortcutLinks:()=>openShortcutPanel('shortcuts'),
     shortcutPrompt:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'focus-prompt-shortcut'});},
-    shortcutVisibility:()=>{if(win.isVisible()&&!win.isMinimized()){chatgpt.hide();win.hide();}else{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'dock-shown'});}},
+    shortcutVisibility:()=>{if(win.isVisible()&&!win.isMinimized())hideDock();else showDock();},
     shortcutChatTarget:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-chat-target'});},
     shortcutBar:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-bar'});},
     shortcutPanel:()=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'toggle-panel',expanded:!expanded});}
@@ -226,7 +235,7 @@ app.whenReady().then(async () => {
     {label:'Settings',click:()=>send({type:'settings-open'})},
     {label:'Always on top',type:'checkbox',checked:store.value.alwaysOnTop,click:item=>{topmost.setEnabled(item.checked);store.update({alwaysOnTop:item.checked});send({type:'settings',settings:store.value});}},
     {type:'separator'},
-    {label:'Minimize',click:()=>win.minimize()},
+    {label:'Hide Ogle',click:hideDock},
     {label:'Quit Ogle',click:()=>send({type:'request-close'})}
   ]).popup({window:win});return true;});
   register('listPets',()=>pets());
@@ -268,7 +277,7 @@ app.whenReady().then(async () => {
   register('setPinnedPanel',side=>{if(side!==null && !['left','right','bottom'].includes(side))throw new Error('Invalid panel position');pinnedPanelSide=side;});
   register('windowAction', action => {
     if (action === 'close') app.quit();
-    else if (action === 'minimize') win.minimize();
+    else if (action === 'minimize') hideDock();
     else if (action === 'pin') { const pinned = !store.value.alwaysOnTop; topmost.setEnabled(pinned); store.update({ alwaysOnTop: pinned }); return pinned; }
     else if (['collapse','expand','idle','reveal','quick','picker'].includes(action)) resize(action);
     else throw new Error('Unknown window action');
@@ -291,7 +300,7 @@ app.on('before-quit', event => {
   if(shutdown && !shutdown.ready){shutdown.request().then(ok=>{if(ok)app.quit();});return;}
   if(quitPending)return;quitPending=true;
   if(win && !win.isDestroyed())win.hide();
-  shortcuts?.dispose();const statsDisposal=activityStats?.dispose();clearInterval(pointerTimer);chatgpt?.close();bridge?.close();terminals?.dispose();
+  tray?.dispose();shortcuts?.dispose();const statsDisposal=activityStats?.dispose();clearInterval(pointerTimer);chatgpt?.close();bridge?.close();terminals?.dispose();
   let timeout;
   Promise.race([Promise.all([fileSearch.dispose(),statsDisposal]),new Promise(resolve=>{timeout=setTimeout(resolve,5000);})]).catch(()=>{}).finally(()=>{clearTimeout(timeout);quitReady=true;app.quit();});
 });
