@@ -1,10 +1,13 @@
 'use strict';
 const {_electron:electron}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 (async()=>{
- const root=path.resolve(__dirname,'..'),profile=path.join(root,'artifacts','dock-workflows-'+Date.now());fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({autoStart:false,autoExpand:false,autoCollapse:false,compactChatTarget:'codex',shortcutVisibility:'',shortcutPanel:'',shortcutBar:'',shortcutChatTarget:''}));const env={...process.env,PETDOCK_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+ const root=path.resolve(__dirname,'..'),profile=path.join(root,'artifacts','dock-workflows-'+Date.now());fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({autoStart:false,autoCollapse:false,compactChatTarget:'codex',shortcutVisibility:'',shortcutPanel:'',shortcutBar:'',shortcutChatTarget:''}));const env={...process.env,PETDOCK_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch(process.env.PETDOCK_TEST_EXE?{executablePath:process.env.PETDOCK_TEST_EXE,args:[],env}:{args:[root],env});
  try{
  const page=await app.firstWindow();await page.waitForFunction(()=>typeof state!=='undefined'&&state.bootReady&&!DockLayoutTransition.busy);await app.evaluate(({BrowserWindow,screen})=>{BrowserWindow.getAllWindows()[0].webContents.setBackgroundThrottling(false);screen.getCursorScreenPoint=()=>({x:-9999,y:-9999});});
+ assert.equal(await page.evaluate(()=>state.settings.autoExpand),false,'Fresh profile defaults to click-only reveal');
+ await page.locator('#bar-orb').dispatchEvent('mouseenter');await page.waitForTimeout(200);assert.equal(await page.evaluate(()=>state.mode),'idle');
+ await page.locator('#pet').evaluate(el=>el.click());await page.waitForFunction(()=>state.mode==='reveal'&&!DockLayoutTransition.busy);
  await page.evaluate(async()=>{await save({autoCollapse:true,autoExpand:false,autoCollapseDelay:1000});applySettings();await setMode('reveal');});
  assert.equal(await page.locator('#panel-pin').getAttribute('hidden'),null,'Pin follows collapse setting, not hover setting');await page.waitForFunction(()=>state.mode==='idle');
  await page.locator('#bar-orb').dispatchEvent('mouseenter');await page.waitForTimeout(200);assert.equal(await page.evaluate(()=>state.mode),'idle','Hover remains disabled');
