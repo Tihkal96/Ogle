@@ -24,9 +24,13 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
    await page.waitForFunction(expected=>$('pet').dataset.state===expected,expected);
    await page.waitForFunction(()=>$('pet').dataset.state==='running');
   }
-  await page.evaluate(async()=>{state.settings.autoExpand=true;state.settings.autoCollapse=true;state.settings.autoCollapseDelay=1000;state.panelPinned=false;await setMode('expand');onEvent({type:'pointer',inside:true,x:20,y:20});});
+  await page.evaluate(async()=>{state.settings.autoExpand=true;state.settings.autoCollapse=true;state.settings.autoCollapseDelay=1000;state.panelPinned=false;await setMode('expand');});
+  const inside=await page.locator('.shell').evaluate(el=>{const r=el.getBoundingClientRect();return {x:Math.round(r.left+20),y:Math.round(r.top+20)};});
+  await app.evaluate(({BrowserWindow,screen},point)=>{screen.getCursorScreenPoint=()=>{const b=BrowserWindow.getAllWindows()[0].getBounds();return {x:b.x+point.x,y:b.y+point.y};};},inside);
+  await page.waitForFunction(()=>state.nativePointerInside===true);
   await page.waitForTimeout(1300);assert.equal(await page.evaluate(()=>state.mode),'expand','Expanded panel stays open under a stationary pointer (including native child view)');
-  await page.evaluate(()=>onEvent({type:'pointer',inside:false,x:-1,y:-1}));
+  await app.evaluate(({screen})=>{screen.getCursorScreenPoint=()=>({x:-9999,y:-9999});});
+  await page.waitForFunction(()=>state.nativePointerInside===false);
   await page.waitForTimeout(600);assert.equal(await page.evaluate(()=>state.mode),'expand','Exit starts a fresh full delay');
   await page.waitForFunction(()=>state.mode==='reveal');
   await page.waitForFunction(()=>state.mode==='idle');

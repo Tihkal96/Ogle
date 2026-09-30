@@ -24,7 +24,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.6.4](https://github.com/Tihkal96/Ogle/releases/download/v0.6.4/Ogle-0.6.4-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.6.5](https://github.com/Tihkal96/Ogle/releases/download/v0.6.5/Ogle-0.6.5-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -55,7 +55,15 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 
 Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release. Leave Reddit alone; announcement browsing or edits require a new explicit request from the owner.
 
+Startup activity checks preserve newer live Codex events over older boot snapshots. Quiet or ambiguous recent tasks receive a bounded, one-time desktop runtime check; the temporary connection closes afterward. Working takes priority over pending done animations without opening the dock.
+
 Clicking the pet shows the horizontal bar by default. Hover reveal is off; it can be enabled in Settings → Dock behavior → Reveal toolbar when hovering the ball. Automatic collapse remains a separate setting.
+
+## Version 0.6.5
+
+- Codex working activity is detected at startup without opening the dock. New live events cannot be erased by an older boot snapshot. Quiet/ambiguous recent rollouts receive at most two concurrent, temporary desktop runtime checks; these never subscribe the main conversation view or send/steer messages.
+- A newly discovered active task now announces its working state even when its log evidence predates Ogle's startup. Historical completions are not replayed; new work takes priority over pending done animations.
+- Hover reveal is off by default. Click the pet to show the horizontal bar; automatic collapse remains independent.
 
 ## Version 0.6.4
 
