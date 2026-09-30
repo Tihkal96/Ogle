@@ -32,3 +32,30 @@ test('real pet preserves done notification while another task works and reveals 
  const f=realPetFixture();f.receiveVisualActivity({threadId:'done',turnId:'old',running:false,completed:true});f.receiveVisualActivity({threadId:'active',turnId:'new',running:true});assert.equal(f.state.petState,'running');
  f.receiveVisualActivity({threadId:'active',turnId:'new',running:false,completed:false});assert.equal(f.state.petState,'review');assert.equal(f.completedTasks.size,1);
 });
+
+test('completion arriving while its Ogle conversation is visible is acknowledged',()=>{
+ const f=realPetFixture();Object.assign(f.state,{mode:'expand',activePanel:'chats',selected:{id:'task'}});
+ f.receiveVisualActivity({threadId:'task',turnId:'turn',running:false,completed:true});
+ assert.equal(f.completedTasks.size,0);assert.equal(f.state.petState,'idle');
+});
+test('viewing one task retains other completions, including when pinned',()=>{
+ const f=realPetFixture();f.receiveVisualActivity({threadId:'other',turnId:'a',running:false,completed:true});
+ Object.assign(f.state,{mode:'expand',activePanel:'editor',pinnedPanel:'chats',selected:{id:'task'}});
+ f.receiveVisualActivity({threadId:'task',turnId:'b',running:false,completed:true});
+ assert.deepEqual([...f.completedTasks],['other']);assert.equal(f.state.petState,'review');
+});
+test('hidden or covered Codex panels do not acknowledge completion',()=>{
+ for(const overrides of [{mode:'idle'},{activePanel:'editor'},{fullscreenPanel:'editor'},{dockVisible:false}]){
+  const f=realPetFixture();Object.assign(f.state,{mode:'expand',activePanel:'chats',selected:{id:'task'}},overrides);
+  f.receiveVisualActivity({threadId:'task',turnId:'turn',running:false,completed:true});assert.equal(f.state.petState,'review');
+ }
+ const f=realPetFixture();Object.assign(f.state,{mode:'expand',activePanel:'chats',selected:{id:'task'}});f.document.hidden=true;
+ f.receiveVisualActivity({threadId:'task',turnId:'turn',running:false,completed:true});assert.equal(f.state.petState,'review');
+ f.document.hidden=false;f.acknowledgeVisibleTask();assert.equal(f.state.petState,'idle');
+});
+test('completion during expansion waits for the panel transition to finish',()=>{
+ const f=realPetFixture();Object.assign(f.state,{mode:'expand',activePanel:'chats',selected:{id:'task'}});f.window.DockLayoutTransition={busy:true};
+ f.receiveVisualActivity({threadId:'task',turnId:'turn',running:false,completed:true});assert.equal(f.state.petState,'review');
+ f.window.DockLayoutTransition.busy=false;f.acknowledgeVisibleTask();assert.equal(f.state.petState,'idle');
+ f.receiveVisualActivity({threadId:'task',turnId:'turn',running:false,completed:true});assert.equal(f.state.petState,'idle','duplicate activity must not resurrect a seen completion');
+});
