@@ -24,7 +24,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.6.3](https://github.com/Tihkal96/Ogle/releases/download/v0.6.3/Ogle-0.6.3-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.6.4](https://github.com/Tihkal96/Ogle/releases/download/v0.6.4/Ogle-0.6.4-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -54,6 +54,11 @@ Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch
 ## Release checklist for maintainers and AI agents
 
 Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release. Leave Reddit alone; announcement browsing or edits require a new explicit request from the owner.
+
+## Version 0.6.4
+
+- Ogle lives in the Windows system tray instead of the taskbar. Click its eye icon to show the dock; right-click for Show/Hide, Settings and Quit. Windows may place the icon in its hidden-icons overflow.
+- Hiding or minimizing keeps Ogle running. Global shortcuts and launching Ogle again can also restore it. Quit saves local work before removing the tray icon.
 
 ## Version 0.6.3
 
@@ -239,7 +244,7 @@ Editor Tab accepts an active completion instead of moving focus, and indents oth
 
 Links defaults to an Android-style icon grid. Groups stay in configurable frames; real folders open navigable icon pages. Windows icons refresh for existing shortcuts, and website favicons are fetched from the site's own `/favicon.ico` when available. Details view remains available. This update migrates earlier default layouts to icons once; later view choices persist.
 
-Start with Windows is on by default for the packaged app and can be disabled in Settings. It registers one per-user login entry. On a login launch, Ogle gives Codex's own startup a grace period, checks its desktop connection/process, and opens it only if absent. Test profiles and development runs never register startup entries. The window's taskbar icon follows the selected pet's first idle frame; the executable's bundled icon uses Rinne Mini's first idle frame. Windows may cache an already-pinned launcher icon separately.
+Start with Windows is on by default for the packaged app and can be disabled in Settings. It registers one per-user login entry. On a login launch, Ogle gives Codex's own startup a grace period, checks its desktop connection/process, and opens it only if absent. Test profiles and development runs never register startup entries. Ogle uses the eye icon in the Windows system tray and has no dock button on the taskbar. Click the tray icon to restore it; its right-click menu provides Settings and Quit. The executable also uses the eye icon.
 
 ### Version 0.4 foundation
 
@@ -283,7 +288,7 @@ Pet installation accepts a slug such as `rinnegan`, `npx codex-pets add rinnegan
 Settings, notes, pins, drafts, editor tabs and shortcuts live in `settings.json` under `%APPDATA%/PetDock`. ChatGPT's browser partition lives there too. Drafts are plain local text. `PETDOCK_DATA_DIR` selects a separate profile for tests. Terminal processes end when the dock exits; scrollback is not persisted.
 
 - `src/main/main.cjs`, `window-layout.cjs`: windows, geometry, trusted IPC and lifecycle.
-- `src/main/startup.cjs`, `pet-icon.cjs`: per-user startup, duplicate-launch checks and pet taskbar icons.
+- `src/main/startup.cjs`, `pet-icon.cjs`: per-user startup, duplicate-launch checks and legacy pet icon helpers. `tray.cjs` owns the notification-area icon and menu.
 - `src/main/codex-bridge.cjs`: app-server transport, desktop coordination, history and turns.
 - `src/main/codex-executable.cjs`: executable discovery for Windows installations without a CLI PATH entry.
 - `src/main/settings.cjs`: validated atomic settings persistence.

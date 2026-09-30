@@ -73,7 +73,7 @@ const path=require('node:path');
     // Native context-menu construction is exercised, while popup display is replaced to avoid blocking automation.
     await page.locator('#pet').dispatchEvent('contextmenu');await page.waitForTimeout(100);
     const menu=await app.evaluate(()=>global.__interactionMenu.map(item=>item.label).filter(Boolean));
-    assert.ok(menu.includes('Settings')&&menu.includes('Minimize')&&menu.includes('Quit Ogle'));
+    assert.ok(menu.includes('Settings')&&menu.includes('Hide Ogle')&&menu.includes('Quit Ogle'));
     await app.evaluate(()=>global.__interactionMenu.find(item=>item.label==='Collapse dock').click());
     await page.waitForFunction(()=>document.body.classList.contains('collapsed'));
     await page.locator('#pet').dispatchEvent('contextmenu');await page.waitForTimeout(100);
