@@ -1,4 +1,4 @@
-# Release readiness — Ogle 0.6.1
+# Release readiness — Ogle 0.6.2
 
 This release improves reliability and everyday use on the current Windows PC. It remains pre-1.0: a second-PC installation/upgrade trial and sustained daily use of live Codex and ChatGPT are still required. Automated local fixtures cannot establish those results.
 
@@ -49,3 +49,12 @@ Known scope limits: undo history is retained within a session, not persisted acr
 ## 0.6.1 workflow checks
 
 Additional regressions cover independent hover/collapse, preserved main tab when pinning another panel, caret watching, fixed native application icon, permanent shell drafts, actual editor selection visibility, configurable group persistence, Windows shortcut source icons, local Codex pet installation, and continued Notes use after a real Codex bridge disconnect. Closing the actual Codex desktop process while Ogle runs is still a manual check; disconnect simulation does not prove launch process independence.
+
+## 0.6.2 window and navigation checks
+
+- Always-on-top controller unit tests cover debounced recovery, owned sign-in window ordering, hidden/minimized behavior, UAC suspension, disabling and cleanup. The native Windows runtime test raises a competing topmost window after the initial recovery burst; user32 z-order enumeration confirms Ogle returns above it while the competing window retains focus. The visible-only guard runs once every two seconds; it does not continuously poll the foreground process or read other applications' content.
+- Fullscreen runtime checks pass for all seven panels, exact dock bounds restoration, pinned-panel preservation, full viewport input regions, per-tab zoom and real CMD font changes. Trusted Ctrl+wheel in embedded ChatGPT changes its native zoom; synthetic page events cannot do so, and the remote page has no dock API. Escape inside native ChatGPT returns to the dock. Screenshots were visually reviewed.
+- Default Shell Ctrl+Alt+S and Links Ctrl+Alt+L bindings pass settings/migration tests, including custom or disabled bindings and collision handling. Direct-panel runtime checks preserve the compact prompt shortcut Ctrl+Alt+P.
+- Credited pet download tests retain creator metadata through local installation, Codex mirroring and refresh. Community sprite assets are downloaded by the user rather than redistributed under the application code license.
+
+Native focus/order checks must run sequentially: other UI automation or user interaction can legitimately change the foreground window and invalidate a focus assertion. These checks do not claim control over UAC secure desktop or exclusive fullscreen games.

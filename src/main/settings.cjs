@@ -3,10 +3,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { shortcutKeys } = require('./global-shortcuts.cjs');
-const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'reveal', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', shortcutChatTarget:'Control+Alt+T', shortcutCodex:'Control+Alt+C', shortcutGpt:'Control+Alt+G', shortcutEditor:'Control+Alt+E', shortcutShell:'Control+Alt+X', shortcutLinks:'Control+Alt+S', shortcutPrompt:'Control+Alt+P', includeSearchFolders:false, statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoCollapse: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 7000, pinnedPanelSide: 'left', petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
+const defaults = () => ({ pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'reveal', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', shortcutChatTarget:'Control+Alt+T', shortcutCodex:'Control+Alt+C', shortcutGpt:'Control+Alt+G', shortcutEditor:'Control+Alt+E', shortcutShell:'Control+Alt+S', shortcutLinks:'Control+Alt+L', shortcutMappingVersion:2, shortcutPrompt:'Control+Alt+P', includeSearchFolders:false, statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: true, autoCollapse: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 7000, pinnedPanelSide: 'left', petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
 function validatePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
   const clean = {};
+  if(Object.hasOwn(patch,'shortcutMappingVersion')) {if(patch.shortcutMappingVersion!==2)throw new Error('Invalid shortcut mapping version');clean.shortcutMappingVersion=2;}
   for(const key of shortcutKeys) if(Object.hasOwn(patch,key)) {
     const value=patch[key];
     if(typeof value!=='string' || value.length>80 || (value && !/^(?:(?:Control|Ctrl|Alt|Shift|Super|CommandOrControl)\+)+(?:[A-Z0-9]|Space|F(?:[1-9]|1[0-9]|2[0-4])|Home|End|Insert|Delete|PageUp|PageDown|Up|Down|Left|Right)$/i.test(value)))throw new Error('Use a shortcut such as Control+Alt+O, or leave it empty.');
@@ -96,6 +97,15 @@ class SettingsStore {
       original = fs.readFileSync(file);
       const parsed = JSON.parse(original.toString('utf8'));
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid settings');
+      if(parsed.shortcutMappingVersion!==2) {
+        const canonical=value=>typeof value==='string'?value.toLowerCase().replace(/^ctrl\+/,'control+'):'';
+        const candidates={...parsed};
+        const migrations=[['shortcutShell','Control+Alt+X','Control+Alt+S'],['shortcutLinks','Control+Alt+S','Control+Alt+L']];
+        for(const [key,oldValue,newValue] of migrations)if(canonical(parsed[key])===canonical(oldValue))candidates[key]=newValue;
+        // A user's custom binding wins over a replacement default.
+        for(let pass=0;pass<migrations.length;pass++)for(const [key] of migrations)if(candidates[key]!==parsed[key]&&shortcutKeys.some(other=>other!==key&&canonical(candidates[other])===canonical(candidates[key])))candidates[key]=parsed[key];
+        Object.assign(parsed,candidates,{shortcutMappingVersion:2});
+      }
       // Reserve the newly requested Ctrl+Alt+G for ChatGPT, moving only the old default.
       if(!Object.hasOwn(parsed,'shortcutGpt') && /^(?:Control|Ctrl)\+Alt\+G$/i.test(parsed.shortcutChatTarget || '')) parsed.shortcutChatTarget='Control+Alt+T';
       // Existing custom accelerators win over new defaults instead of disabling every shortcut.

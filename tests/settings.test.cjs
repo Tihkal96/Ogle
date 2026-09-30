@@ -83,10 +83,24 @@ test('new direct shortcuts migrate old target switch without overwriting custom 
   fs.writeFileSync(file,JSON.stringify({shortcutChatTarget:'Control+Alt+G'}));
   const settings=new SettingsStore(file).value;
   assert.equal(settings.shortcutChatTarget,'Control+Alt+T');assert.equal(settings.shortcutGpt,'Control+Alt+G');
-  assert.equal(settings.shortcutCodex,'Control+Alt+C');assert.equal(settings.shortcutEditor,'Control+Alt+E');assert.equal(settings.shortcutShell,'Control+Alt+X');assert.equal(settings.shortcutLinks,'Control+Alt+S');assert.equal(settings.shortcutPrompt,'Control+Alt+P');
+  assert.equal(settings.shortcutCodex,'Control+Alt+C');assert.equal(settings.shortcutEditor,'Control+Alt+E');assert.equal(settings.shortcutShell,'Control+Alt+S');assert.equal(settings.shortcutLinks,'Control+Alt+L');assert.equal(settings.shortcutPrompt,'Control+Alt+P');
   fs.writeFileSync(file,JSON.stringify({shortcutChatTarget:'Control+Alt+F8',shortcutVisibility:'Control+Alt+C'}));
   const custom=new SettingsStore(file).value;
   assert.equal(custom.shortcutChatTarget,'Control+Alt+F8');assert.equal(custom.shortcutVisibility,'Control+Alt+C');assert.equal(custom.shortcutCodex,'');
   assert.deepEqual(validatePatch({shortcutPrompt:'',shortcutEditor:'Control+Alt+E'}),{shortcutEditor:'Control+Alt+E',shortcutPrompt:''});
+ } finally {fs.rmSync(directory,{recursive:true,force:true});}
+});
+
+test('Shell and Links defaults migrate once and preserve custom accelerator conflicts',()=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'ogle-shell-links-')),file=path.join(directory,'settings.json');
+ try {
+  fs.writeFileSync(file,JSON.stringify({shortcutShell:'Control+Alt+X',shortcutLinks:'Control+Alt+S'}));
+  const store=new SettingsStore(file);assert.equal(store.value.shortcutShell,'Control+Alt+S');assert.equal(store.value.shortcutLinks,'Control+Alt+L');
+  store.update({shortcutShell:'Control+Alt+X',shortcutLinks:'Control+Alt+F9'});
+  const reopened=new SettingsStore(file);assert.equal(reopened.value.shortcutShell,'Control+Alt+X');assert.equal(reopened.value.shortcutLinks,'Control+Alt+F9');
+  fs.writeFileSync(file,JSON.stringify({shortcutShell:'Control+Alt+X',shortcutLinks:'Control+Alt+S',shortcutVisibility:'Control+Alt+L'}));
+  const conflict=new SettingsStore(file).value;assert.equal(conflict.shortcutVisibility,'Control+Alt+L');assert.equal(conflict.shortcutLinks,'Control+Alt+S');assert.equal(conflict.shortcutShell,'Control+Alt+X');
+  fs.writeFileSync(file,JSON.stringify({shortcutShell:'',shortcutLinks:'Control+Alt+F8'}));
+  const custom=new SettingsStore(file).value;assert.equal(custom.shortcutShell,'');assert.equal(custom.shortcutLinks,'Control+Alt+F8');
  } finally {fs.rmSync(directory,{recursive:true,force:true});}
 });

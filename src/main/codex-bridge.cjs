@@ -5,6 +5,7 @@ const net = require('node:net');
 const { randomUUID } = require('node:crypto');
 const { imageSize } = require('image-size');
 const { resolveCodexExecutable } = require('./codex-executable.cjs');
+const { CodexActivity } = require('./codex-activity.cjs');
 
 const IMAGE_LIMITS = { count: 4, bytesEach: 8 * 1024 * 1024, bytesTotal: 16 * 1024 * 1024 };
 function promptInputs(text, images = []) {
@@ -184,6 +185,8 @@ class CodexBridge extends EventEmitter {
     this.child = null; this.connected = false; this.connecting = null; this.mode = null;
     this.connectionModes = connectionModes; this.historyReader = null; this.unsupportedHistory = new Set();
     this.desktop = desktop; this.deltas = new Map(); this.deltaTimer = null;
+    this.activity = spawnProcess === spawn && connectionModes.includes('shared') ? new CodexActivity({ list: () => this._rpc('thread/list', { limit: 64, sortKey: 'updated_at', archived: false, useStateDbOnly: true }, 5000) }) : null;
+    this.activity?.on('activity', activity => this.emit('activity', activity));
     desktop?.on('state', state => this.emit('notification', { method: 'petdock/threadState', params: state }));
     desktop?.on('thread-opened', threadId => this.emit('thread-opened', threadId));
   }
@@ -207,11 +210,12 @@ class CodexBridge extends EventEmitter {
     for (const mode of this.connectionModes) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.6.1' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.6.2' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
         this.connected = true; this.mode = desktopConnected ? 'desktop' : mode;
+        this.activity?.start();
         this.emit('status', { state: 'connected', mode: this.mode, detail: desktopConnected ? 'Connected to Codex desktop task ownership and live updates.' : mode === 'shared' ? 'Connected to shared Codex server.' : 'Connected to local Codex history through a separate server. Do not send to a task running in the desktop app.', ...(proxyError ? { fallbackReason: proxyError.message } : {}) });
         return { mode: this.mode };
       } catch (error) {
@@ -376,6 +380,7 @@ class CodexBridge extends EventEmitter {
     this._write({ id, result }); this.requests.delete(id);
   }
   _dispose(error = new Error('Codex connection closed.')) {
+    this.activity?.stop();
     const child = this.child; this.child = null; this.connected = false;
     this.resumed.clear(); this.resuming.clear(); this.requests.clear();
     this.unsupportedHistory.clear(); this.historyReader?.close(); this.historyReader = null;

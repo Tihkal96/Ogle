@@ -29,7 +29,7 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  assert.equal(await page.evaluate(()=>state.settings.compactChatTarget),'codex');
  await page.evaluate(()=>switchPanel('settings'));await target.click();await target.press('Backspace');await target.locator('..').getByRole('button',{name:'Set',exact:true}).click();await page.evaluate(()=>saveQueue);assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Alt+F9')),false);
  // Capture real callbacks at registration, then exercise the same callback used by Windows.
- const direct=[['shortcutCodex','Open Codex','chats'],['shortcutGpt','Open ChatGPT','chatgpt'],['shortcutEditor','Open Editor','editor'],['shortcutShell','Open Shell','terminal'],['shortcutLinks','Open Shortcuts','shortcuts'],['shortcutPrompt','Write a prompt',null]];
+ const direct=[['shortcutCodex','Open Codex','chats'],['shortcutGpt','Open ChatGPT','chatgpt'],['shortcutEditor','Open Editor','editor'],['shortcutShell','Open Shell','terminal'],['shortcutLinks','Open Links','shortcuts'],['shortcutPrompt','Write a prompt',null]];
  await app.evaluate(({globalShortcut})=>{const register=globalShortcut.register.bind(globalShortcut);global.directCallbacks={};globalShortcut.register=(key,callback)=>{global.directCallbacks[key]=callback;return register(key,callback)};});
  for(const [index,[key,label,panelName]] of direct.entries()){
   await page.evaluate(()=>switchPanel('settings'));

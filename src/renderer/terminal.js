@@ -1,4 +1,5 @@
 (() => {
+  let zoomFactor=1;
   let api, host, active, sessions = new Map(), pending = new Map();
   let draftRow, draftInput, draftRun, draftTitle, pendingDraft = null, staging = Promise.resolve(), selectionOrder = 0;
   const failedDrafts = new Map();
@@ -19,7 +20,7 @@
     try {
       const cwd = host.querySelector('.terminal-cwd').value.trim();
       const config = await api.terminalCreate({ shell, admin, cwd: cwd || undefined, cols: 80, rows: 20 });
-      const term = new window.PetDockVendors.Terminal({ cursorBlink: true, fontSize: 12, scrollback: 5000, fontFamily: '"Cascadia Mono", Consolas, monospace', theme: terminalTheme(currentTheme) });
+      const term = new window.PetDockVendors.Terminal({ cursorBlink: true, fontSize: Math.round(12*zoomFactor), scrollback: 5000, fontFamily: '"Cascadia Mono", Consolas, monospace', theme: terminalTheme(currentTheme) });
       const fit = new window.PetDockVendors.FitAddon(); term.loadAddon(fit);
       const view = element('div', '', 'terminal-session'); host.querySelector('.terminal-views').append(view); term.open(view);
       const tab = element('button', `${admin ? 'ADMIN · ' : ''}${shell === 'cmd' ? 'CMD' : 'PowerShell'}`); tab.type = 'button'; tab.onclick = () => select(config.id); host.querySelector('.terminal-tabs').append(tab);
@@ -170,5 +171,5 @@
     new ResizeObserver(() => resize()).observe(host);
   }
   async function close() { const s = sessions.get(active); if (!s) return; await api.terminalClose(s.id); s.term.dispose(); s.view.remove(); s.tab.remove(); sessions.delete(s.id); active = sessions.keys().next().value; if (active) select(active); else { updateStatus(); renderDraft(); } }
-  window.PetDockTerminal = { mount, resize, create, applyTheme, getSelection: () => sessions.get(active)?.term.getSelection() || '', stageText };
+  window.PetDockTerminal = { setZoom:factor=>{zoomFactor=factor;for(const session of sessions.values())session.term.options.fontSize=Math.round(12*factor);requestAnimationFrame(resize);}, mount, resize, create, applyTheme, getSelection: () => sessions.get(active)?.term.getSelection() || '', stageText };
 })();

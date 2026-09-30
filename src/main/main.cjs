@@ -5,6 +5,7 @@ if (process.argv.includes('--terminal-worker')) { require('./terminal-worker.cjs
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { TopmostController } = require('./topmost-controller.cjs');
 const { DockShortcuts, shortcutKeys } = require('./global-shortcuts.cjs');
 const { createActivityStats } = require('./activity-stats.cjs');
 const { SettingsStore } = require('./settings.cjs');
@@ -34,7 +35,7 @@ const root = path.resolve(__dirname, '../..');
 const indexPath = path.join(root, 'src/renderer/index.html');
 const indexUrl = pathToFileURL(indexPath).href;
 const {normalizeRegions,containsPoint}=require('./window-shape.cjs');
-let inputRegions=null;
+let inputRegions=null,topmost,contentFullscreen=false,restoreDockBounds=null;
 let expanded = false;
 let pinnedPanelSide = null;
 let layoutMode = 'idle';
@@ -50,9 +51,9 @@ async function withChatGPTComposer(action){
 }
 let pendingAdminOperations=0;
 async function withAdminPrompt(action){
-  pendingAdminOperations++;send({type:'admin-prompt',pending:true});
+  pendingAdminOperations++;topmost?.setSuspended(true);send({type:'admin-prompt',pending:true});
   try{return await action();}
-  finally{pendingAdminOperations--;send({type:'admin-prompt',pending:pendingAdminOperations>0});}
+  finally{pendingAdminOperations--;topmost?.setSuspended(pendingAdminOperations>0);send({type:'admin-prompt',pending:pendingAdminOperations>0});}
 }
 function string(value, label, max = 4096) {
   if (typeof value !== 'string' || !value.trim() || value.length > max) throw new Error(`Invalid ${label}`);
@@ -67,6 +68,7 @@ function register(name, handler) {
 function pets() { return petLibrary.list(); }
 async function updatePetIcon(){const icon=nativeImage.createFromPath(path.join(root,'assets/ogle.png'));if(!icon.isEmpty()&&!win.isDestroyed())win.setIcon(icon);}
 function resize(mode = layoutMode) {
+  if(contentFullscreen)return;
   if(typeof mode==='boolean')mode=mode?'expand':'idle';
   if(mode==='collapse')mode='idle';
   layoutMode=mode;
@@ -85,6 +87,7 @@ app.whenReady().then(async () => {
   if(process.argv.includes('--autostart')&&!process.env.PETDOCK_DATA_DIR)ensureCodex({open:url=>shell.openExternal(url)}).catch(error=>send({type:'startup-error',message:error.message}));
   const area = screen.getPrimaryDisplay().workArea;
   win = new BrowserWindow({ title: 'Ogle', width: Math.min(600, area.width), height: Math.min(200, area.height), x: area.x + Math.max(0, area.width - 620), y: area.y + Math.max(0, area.height - 220), transparent: true, frame: false, resizable: false, backgroundColor: '#00000000', alwaysOnTop: store.value.alwaysOnTop, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  topmost=new TopmostController(win,{enabled:store.value.alwaysOnTop,children:()=>[...(chatgpt?.children||[])]});
   shutdown=new GracefulShutdown({window:win,
     flush:()=>win.webContents.executeJavaScript("typeof state==='undefined' || !state.bootReady ? true : flushLocal().then(()=>true,err=>{error(err);return false;})"),
     report:problem=>{if(!win.isDestroyed()&&!win.webContents.isDestroyed())win.webContents.executeJavaScript(`error(${JSON.stringify(problem.message)})`).catch(()=>{});}
@@ -95,13 +98,16 @@ app.whenReady().then(async () => {
   });
   // Native stage dragging follows the same pet-only boundary as pet dragging.
   win.on('will-move',(event,bounds)=>{
+    if(contentFullscreen)return;
     const scale=store.value.petScale || 1,area=screen.getDisplayNearestPoint(petCenter(bounds,scale)).workArea;
     const next=clampPet(bounds,area,scale);
     if(next.x!==bounds.x || next.y!==bounds.y){event.preventDefault();win.setPosition(next.x,next.y);}
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== indexUrl) event.preventDefault(); });
-  chatgpt = new ChatGPTPanel({ parent: win, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}),onFindOpen:()=>send({type:'chat-find-open',target:'chatgpt'}),onCommandsOpen:()=>send({type:'commands-open',target:'chatgpt'}),onSelectionMenu:text=>{try{showSelectionMenu(text);}catch(error){send({type:'startup-error',message:error.message});}},onFindResult:result=>send({type:'chatgpt-find-result',result}) });
+  chatgpt = new ChatGPTPanel({ parent: win,onChildWindow:()=>topmost.request(),onZoom:factor=>send({type:'chatgpt-zoom',factor}),onExitFullscreen:()=>{if(!contentFullscreen)return false;send({type:'exit-panel-fullscreen'});return true;}, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}),onFindOpen:()=>send({type:'chat-find-open',target:'chatgpt'}),onCommandsOpen:()=>send({type:'commands-open',target:'chatgpt'}),onSelectionMenu:text=>{try{showSelectionMenu(text);}catch(error){send({type:'startup-error',message:error.message});}},onFindResult:result=>send({type:'chatgpt-find-result',result}) });
+  register('panelFullscreen',enabled=>{if(typeof enabled!=='boolean')throw new Error('Invalid fullscreen mode');if(enabled===contentFullscreen)return;contentFullscreen=enabled;if(enabled){restoreDockBounds=win.getBounds();win.setBounds(screen.getDisplayMatching(restoreDockBounds).bounds);}else{if(restoreDockBounds)win.setBounds(restoreDockBounds);restoreDockBounds=null;}topmost.request();return win.getBounds();});
+  register('chatgptZoom',factor=>chatgpt.setZoom(factor));
   register('windowShape',rects=>{const b=win.getBounds();inputRegions=normalizeRegions(rects,b.width,b.height);if(inputRegions.length)win.setShape(inputRegions);return true;});
   const openShortcutPanel=panel=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'open-panel-shortcut',panel});};
   shortcuts=new DockShortcuts(globalShortcut,{
@@ -132,8 +138,15 @@ app.whenReady().then(async () => {
   }, 160);
   bridge = new CodexBridge();
   bridge.on('thread-opened', threadId => send({ type: 'codex-thread-opened', threadId }));
+  // Cache session observations that can precede renderer subscription/load.
+  const bootActivity = new Map();
+  bridge.on('activity', activity => {
+    bootActivity.delete(activity.threadId);bootActivity.set(activity.threadId,activity);
+    if(bootActivity.size>256)for(const [id,value] of bootActivity){if(!value.running)bootActivity.delete(id);if(bootActivity.size<=256)break;}
+    send({ type: 'codex-activity', ...activity });
+  });
   const desktopActivity = new Map();
-  bridge.on('status', status => { connection = status; send({ type: 'connection', ...status }); });
+  bridge.on('status', status => { if(['error','disconnected'].includes(status.state))bootActivity.clear();connection = status; send({ type: 'connection', ...status }); });
   bridge.on('notification', event => {
     send({ type: 'codex', ...event });
     let desktopFinished = false;
@@ -154,7 +167,7 @@ app.whenReady().then(async () => {
     await connectionPromise;
     let threads = { data: [], nextCursor: null };
     try { threads = await bridge.listThreads(); } catch (error) { connection = { ...connection, detail: error.message }; }
-    return { threads, pets: await pets(), settings: store.value, connection };
+    return { threads, pets: await pets(), settings: store.value, connection, activity:[...bootActivity.values()] };
   });
   register('listThreads', async (filters = {}) => { await connected(); return bridge.listThreads(filters); });
   register('readThread', async id => { await connected(); return bridge.readThread(string(id, 'task ID')); });
@@ -167,7 +180,7 @@ app.whenReady().then(async () => {
   register('steerTurn', async(id,text,images=[],expectedTurnId)=>{await connected();if(typeof text!=='string'||text.length>200000)throw new Error('Invalid prompt');return bridge.steerTurn(string(id,'task ID'),text,images,expectedTurnId);});
   register('interrupt', (id, turnId) => bridge.interrupt(string(id, 'task ID'), string(turnId, 'turn ID')));
   register('respond', (id, result) => bridge.respond(id, result));
-  register('saveSettings', async patch => { const previous=store.value,changedShortcuts=shortcutKeys.some(key=>Object.hasOwn(patch,key));if(changedShortcuts)shortcuts.configure({...previous,...patch});let result;try{result=store.update(patch);}catch(error){if(changedShortcuts)shortcuts.configure(previous);throw error;}activityStats.configure(result);if(Object.hasOwn(patch,'petScale'))resize();if(Object.hasOwn(patch,'alwaysOnTop'))win.setAlwaysOnTop(result.alwaysOnTop);if(Object.hasOwn(patch,'autoStart'))configureStartup(app,result.autoStart);if(Object.hasOwn(patch,'petId'))await updatePetIcon();return result; });
+  register('saveSettings', async patch => { const previous=store.value,changedShortcuts=shortcutKeys.some(key=>Object.hasOwn(patch,key));if(changedShortcuts)shortcuts.configure({...previous,...patch});let result;try{result=store.update(patch);}catch(error){if(changedShortcuts)shortcuts.configure(previous);throw error;}activityStats.configure(result);if(Object.hasOwn(patch,'petScale'))resize();if(Object.hasOwn(patch,'alwaysOnTop'))topmost.setEnabled(result.alwaysOnTop);if(Object.hasOwn(patch,'autoStart'))configureStartup(app,result.autoStart);if(Object.hasOwn(patch,'petId'))await updatePetIcon();return result; });
   register('chooseFolder', async () => {
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: 'Choose a Codex project folder' });
     return result.canceled ? null : result.filePaths[0];
@@ -211,7 +224,7 @@ app.whenReady().then(async () => {
     {label:'Show metrics',type:'checkbox',checked:store.value.statsVisible!==false,click:item=>{store.update({statsVisible:item.checked});activityStats.configure(store.value);send({type:'settings',settings:store.value});}},
     {label:'Commands…',accelerator:'Control+Shift+P',click:()=>send({type:'commands-open'})},
     {label:'Settings',click:()=>send({type:'settings-open'})},
-    {label:'Always on top',type:'checkbox',checked:win.isAlwaysOnTop(),click:item=>{win.setAlwaysOnTop(item.checked);store.update({alwaysOnTop:item.checked});send({type:'settings',settings:store.value});}},
+    {label:'Always on top',type:'checkbox',checked:store.value.alwaysOnTop,click:item=>{topmost.setEnabled(item.checked);store.update({alwaysOnTop:item.checked});send({type:'settings',settings:store.value});}},
     {type:'separator'},
     {label:'Minimize',click:()=>win.minimize()},
     {label:'Quit Ogle',click:()=>send({type:'request-close'})}
@@ -256,7 +269,7 @@ app.whenReady().then(async () => {
   register('windowAction', action => {
     if (action === 'close') app.quit();
     else if (action === 'minimize') win.minimize();
-    else if (action === 'pin') { const pinned = !win.isAlwaysOnTop(); win.setAlwaysOnTop(pinned); store.update({ alwaysOnTop: pinned }); return pinned; }
+    else if (action === 'pin') { const pinned = !store.value.alwaysOnTop; topmost.setEnabled(pinned); store.update({ alwaysOnTop: pinned }); return pinned; }
     else if (['collapse','expand','idle','reveal','quick','picker'].includes(action)) resize(action);
     else throw new Error('Unknown window action');
     return { expanded,mode:layoutMode,bounds:win.getBounds() };

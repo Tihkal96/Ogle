@@ -2,7 +2,7 @@
 window.OgleDockCommands={mount({state,api,openPanel,setMode,save,applySettings,layout,report}){
   const el=id=>document.getElementById(id);
   let invokingChat=null,originNative=false;
-  const panels=[['chats','Codex','Tasks and conversations'],['chatgpt','ChatGPT','Classic ChatGPT'],['notes','Notes','Scratchpad'],['editor','Editor','Code and text files'],['terminal','Shell','CMD and PowerShell'],['shortcuts','Shortcuts','Shortcuts, file search and Run'],['settings','Settings','Preferences and accounts']];
+  const panels=[['chats','Codex','Tasks and conversations'],['chatgpt','ChatGPT','Classic ChatGPT'],['notes','Notes','Scratchpad'],['editor','Editor','Code and text files'],['terminal','Shell','CMD and PowerShell'],['shortcuts','Links','Links, file search and Run'],['settings','Settings','Preferences and accounts']];
   async function showPanel(id){
     await openPanel(id);
     if(id==='chatgpt'){await api.openChatGPT('focus');return;}

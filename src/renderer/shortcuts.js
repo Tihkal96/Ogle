@@ -55,7 +55,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       discardEdit();
       const heading = document.createElement('h3'); heading.textContent = `Remove ${entry.kind === 'group' ? 'group' : 'link'}?`;
       const explanation = document.createElement('p');
-      explanation.textContent = `Remove “${entry.alias || entry.name}” from Shortcuts?` + (entry.kind === 'group' ? ' Its links will be kept in the parent group.' : ' The original file or website will not be deleted.');
+      explanation.textContent = `Remove “${entry.alias || entry.name}” from Links?` + (entry.kind === 'group' ? ' Its links will be kept in the parent group.' : ' The original file or website will not be deleted.');
       const cancel = button('Cancel', discardEdit);
       const approve = button('Remove', async () => { discardEdit(); await commit(ShortcutModel.remove(items, entry.id)); });
       removal.append(heading, explanation, cancel, approve); removal.showModal(); cancel.focus();
@@ -188,7 +188,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       element.addEventListener('dragleave', () => element.classList.remove('drop-over'));
       element.addEventListener('drop', event => {
         event.preventDefault(); event.stopPropagation(); element.classList.remove('drop-over');
-        if (mode === 'icons' && folderNavigation.length) { report(new Error('Return to a link group before adding shortcuts.')); return; }
+        if (mode === 'icons' && folderNavigation.length) { report(new Error('Return to a link group before adding links.')); return; }
         const transfer = event.dataTransfer;
         const resolvedParent = typeof parentId === 'function' ? parentId() : parentId;
         const id = transfer.getData('application/x-petdock-link') || dragging;
@@ -276,7 +276,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       navigation.replaceChildren(); navigation.hidden = !currentGroup && !folderNavigation.length;
       if (!navigation.hidden) {
         if (currentGroup || folderNavigation.length) navigation.append(button('←', goBack, 'Back to parent group'));
-        navigation.append(button('⌂', () => openGroup(null), 'Back to all shortcuts'));
+        navigation.append(button('⌂', () => openGroup(null), 'Back to all links'));
         const ancestry = [], seen = new Set(); let group = items.find(item => item.id === currentGroup);
         while (group && !seen.has(group.id)) { ancestry.unshift(group); seen.add(group.id); group = items.find(item => item.id === group.parentId); }
         for (const ancestor of ancestry) navigation.append(button(ancestor.alias || ancestor.name, () => openGroup(ancestor.id)));
@@ -288,7 +288,7 @@ if (typeof window !== 'undefined') window.PetDockShortcuts = (() => {
       if (mode === 'icons' && folderNavigation.length) visible = (cache.get(folderNavigation.at(-1).path) || []).map(child => ({ ...child, id: child.path, kind: child.isDirectory ? 'folder' : 'file' }));
       else visible = items.filter(item => currentGroup ? item.parentId === currentGroup : !item.parentId || !items.some(parent => parent.id === item.parentId && parent.kind === 'group'));
       for (const entry of visible) content.append(row(entry, new Set(), mode === 'icons' && folderNavigation.length > 0));
-      if (!visible.length) { const empty = document.createElement('p'); empty.className = 'links-empty'; empty.textContent = folderNavigation.length ? 'This folder is empty.' : currentGroup ? 'This group is empty.' : 'No shortcuts yet.'; content.append(empty); }
+      if (!visible.length) { const empty = document.createElement('p'); empty.className = 'links-empty'; empty.textContent = folderNavigation.length ? 'This folder is empty.' : currentGroup ? 'This group is empty.' : 'No links yet.'; content.append(empty); }
     }
     dropTarget(content, () => currentGroup);
     root.addEventListener('keydown', event => { if (event.key === 'Escape' && (currentGroup || folderNavigation.length) && !event.target.matches('input,select,textarea')) { event.preventDefault(); goBack(); } });

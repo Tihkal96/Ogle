@@ -157,5 +157,5 @@ window.PetDockEditor = (() => {
     currentTheme = ['dark','light','midnight'].includes(theme) ? theme : 'dark';
     if(view && themeSlot) view.dispatch({effects:themeSlot.reconfigure(editorTheme(currentTheme))});
   }
-  return {mount,flush,applyTheme,getSelection,newFromText};
+  return {mount,flush,applyTheme,getSelection,newFromText,measure:()=>view?.requestMeasure()};
 })();
