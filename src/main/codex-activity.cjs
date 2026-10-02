@@ -93,7 +93,7 @@ class CodexActivity extends EventEmitter {
         if (['task_started', 'item_completed'].includes(payload.type)) {
           if (file.active !== payload.turn_id) { baselineActive = false; file.active = payload.turn_id; this.emit('activity', { threadId: file.id, turnId: file.active, running: true, source: 'rollout', visualOnly: true }); }
         } else if (['task_complete', 'turn_aborted'].includes(payload.type) && file.active === payload.turn_id) {
-          baselineTerminal = true; file.active = null; this.emit('activity', { threadId: file.id, turnId: payload.turn_id, running: false, completed: payload.type === 'task_complete', source: 'rollout', visualOnly: true });
+          baselineTerminal = true; file.active = null; this.emit('activity', { threadId: file.id, turnId: payload.turn_id, running: false, completed: payload.type === 'task_complete', completedAt: Date.parse(event.timestamp) || undefined, source: 'rollout', visualOnly: true });
         }
       }
       if (baseline && baselineActive && file.active) this.emit('activity', { threadId: file.id, turnId: file.active, running: true, source: 'rollout', visualOnly: true, baseline: true });

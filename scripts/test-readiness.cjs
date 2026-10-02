@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:
 const root=path.resolve(__dirname,'..'),report=[];
 const checks=[
  ['unit',['--test',...fs.readdirSync(path.join(root,'tests')).filter(name=>name.endsWith('.test.cjs')).map(name=>'tests/'+name)]],
- ...['panel-view','zoom-scroll','codex-scroll','window-shape','shortcuts-settings','dock-workflows','codex-independent','codex-cold-start','codex-completion','shortcuts-modularity','shortcut-icons','selection-app','selection-editor','selection-terminal','selection-chatgpt','readiness-commands','readiness-editor','readiness-find','readiness-settings','readiness-links-shell','readiness-stream','readiness-idle','readiness-history','readiness-shutdown','chat-find','codex-responsive','codex-queue','pet-interactions','pinned-panel','auto-collapse','editor-highlight','keyboard-selection'].map(name=>[name,['tests/'+name+'-runtime.cjs']])
+ ...['topmost','chatgpt-activity','panel-view','zoom-scroll','codex-scroll','window-shape','shortcuts-settings','dock-workflows','codex-independent','codex-cold-start','codex-completion','shortcuts-modularity','shortcut-icons','selection-app','selection-editor','selection-terminal','selection-chatgpt','readiness-commands','readiness-editor','readiness-find','readiness-settings','readiness-links-shell','readiness-stream','readiness-idle','readiness-history','readiness-shutdown','chat-find','codex-responsive','codex-queue','pet-interactions','pinned-panel','auto-collapse','editor-highlight','keyboard-selection'].map(name=>[name,['tests/'+name+'-runtime.cjs']])
 ];
 for(const [name,args] of checks){
  const start=Date.now();process.stdout.write('\nChecking '+name+'\n');

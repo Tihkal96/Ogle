@@ -24,7 +24,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.6.5](https://github.com/Tihkal96/Ogle/releases/download/v0.6.5/Ogle-0.6.5-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.6.6](https://github.com/Tihkal96/Ogle/releases/download/v0.6.6/Ogle-0.6.6-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -58,6 +58,13 @@ Every upgrade must update the direct Windows ZIP download link above: its visibl
 Startup activity checks preserve newer live Codex events over older boot snapshots. Quiet or ambiguous recent tasks receive a bounded, one-time desktop runtime check; the temporary connection closes afterward. Working takes priority over pending done animations without opening the dock.
 
 Clicking the pet shows the horizontal bar by default. Hover reveal is off; it can be enabled in Settings → Dock behavior → Reveal toolbar when hovering the ball. Automatic collapse remains a separate setting.
+
+## Version 0.6.6
+
+- Ogle yields to fullscreen video/games instead of repeatedly raising itself over them, then restores normal always-on-top behavior afterward. Detection uses Windows APIs through a bundled helper; no installation or elevation is required.
+- Completion acknowledgements remember when a task was read. Delayed rollout delivery cannot restart the review animation for work already seen in Codex or Ogle; later work still notifies normally.
+- ChatGPT activity recognizes modern stop controls and responses whose copy/rating buttons remain present during generation. It tracks the newest response and preserves activity when a new chat receives its conversation URL. Website detection remains best-effort, not an official ChatGPT activity API.
+- Includes the recent zoom and chat scrolling fixes: Ctrl+wheel holds editor scroll offsets, the Codex bottom arrow hides at the bottom, and bottom-following survives streaming, zoom and reopening.
 
 ## Version 0.6.5
 

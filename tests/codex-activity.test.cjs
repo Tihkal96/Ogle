@@ -25,6 +25,7 @@ test('unopened task append starts and finishes visual activity without historica
   await fs.appendFile(file, event('task_complete', 'new')); await monitor.tick();
   assert.deepEqual(events.map(e => [e.running, e.completed]), [[true, undefined], [false, true]]);
   assert.ok(events.every(e => e.visualOnly));
+  assert.equal(events.at(-1).completedAt,now,'Preserve completion time, not polling delivery time');
 });
 test('startup discovers recent running item even when start lies beyond bounded tail', async t => {
   const { monitor, events } = await setup(t, event('task_started') + JSON.stringify({ ignored: 'x'.repeat(100000) }) + '\n' + event('item_completed'));
