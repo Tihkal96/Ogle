@@ -39,3 +39,17 @@ test('destroyed window receives no show or context actions', () => {
   const f = fixture(); f.window.destroyed = true; f.tray.emit('click'); f.tray.emit('right-click');
   assert.deepEqual(f.calls, []); assert.equal(f.menu(), undefined); f.control.dispose();
 });
+
+test('tray-only policy covers existing and Chromium child windows across show and restore', () => {
+  const { installTrayOnlyWindows } = require('../src/main/tray.cjs');
+  const app = new EventEmitter();
+  const make = () => Object.assign(new EventEmitter(), { destroyed:false, calls:[], isDestroyed(){return this.destroyed;}, setSkipTaskbar(value){this.calls.push(value);} });
+  const existing = make(), popup = make();
+  const dispose = installTrayOnlyWindows(app, {getAllWindows:()=>[existing]});
+  app.emit('browser-window-created', {}, popup);
+  existing.emit('show'); popup.emit('restore');
+  assert.deepEqual(existing.calls,[true,true]); assert.deepEqual(popup.calls,[true,true]);
+  popup.destroyed=true; popup.emit('closed'); assert.equal(popup.listenerCount('show'),0);
+  dispose(); existing.emit('show'); assert.equal(existing.calls.length,2);
+  assert.equal(app.listenerCount('browser-window-created'),0);
+});

@@ -31,10 +31,10 @@ class OgleCodexQueue {
     }
     this.pump(id);
   }
-  enqueue({threadId,title='',text='',images=[]}) {
+  enqueue({threadId,title='',text='',images=[],options={}}) {
     if(!threadId||(!text.trim()&&!images.length))throw new Error('Choose a task and enter a prompt first.');
     if(this.list(threadId).length>=20||this.entries.length>=60)throw new Error('The message queue is full. Send or remove a queued prompt first.');
-    const entry={id:`queued-${++this.sequence}`,threadId,title,text,images:structuredClone(images),status:'queued'};
+    const entry={id:`queued-${++this.sequence}`,threadId,title,text,images:structuredClone(images),options:structuredClone(options),status:'queued'};
     this.entries.push(entry);this.changed();this.pump(threadId);return entry;
   }
   list(threadId) {return this.entries.filter(entry=>!threadId||entry.threadId===threadId);}

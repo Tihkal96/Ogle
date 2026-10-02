@@ -282,3 +282,28 @@ test('Codex server exit leaves bridge reusable for another connection', async ()
     assert.equal(children.length, 2);
   } finally { bridge.close(); }
 });
+
+test('model catalog follows pages and new turns carry chosen model and effort', async () => {
+  const {bridge, sent} = fixture((message, child) => {
+    if (message.method === 'model/list') child.reply({id:message.id,result:message.params.cursor ? {data:[{model:'beta',hidden:false}],nextCursor:null} : {data:[{model:'alpha',hidden:false},{model:'hidden',hidden:true}],nextCursor:'page2'}});
+    else if (message.id) child.reply({id:message.id,result:{turn:{id:'turn'}}});
+  });
+  assert.deepEqual((await bridge.listModels()).data.map(row=>row.model), ['alpha','beta']);
+  await bridge.sendTurn('task','Hello',[],{model:'alpha',effort:'high'});
+  const request=sent.find(row=>row.method==='turn/start');
+  assert.equal(request.params.model,'alpha');assert.equal(request.params.effort,'high');
+  await assert.rejects(bridge.sendTurn('task','Hello',[],{model:{name:'alpha'}}), /Invalid Codex model/);
+  bridge.close();
+});
+
+test('desktop model overrides preserve collaboration mode and permissions inheritance', async () => {
+  const desktop=new DesktopIpc(); let request;
+  desktop.states.set('task',{state:{latestCollaborationMode:{mode:'plan',settings:{model:'old',reasoning_effort:'low',developer_instructions:'Keep plan instructions'}}}});
+  desktop.follow=()=>{};
+  desktop.request=async (_method,params)=>{request=params;return {result:{result:{turn:{id:'new'}}}};};
+  await desktop.send('task','Hello','owner',[],{model:'new-model',effort:'high'});
+  assert.equal(request.turnStart.context.inheritThreadSettings,true);
+  assert.deepEqual(request.turnStart.request.collaborationMode,{mode:'plan',settings:{model:'new-model',reasoning_effort:'high',developer_instructions:'Keep plan instructions'}});
+  assert.equal(request.turnStart.request.approvalPolicy,undefined);
+  desktop.close();
+});

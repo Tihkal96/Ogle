@@ -7,6 +7,17 @@ const { imageSize } = require('image-size');
 const { resolveCodexExecutable } = require('./codex-executable.cjs');
 const { CodexActivity } = require('./codex-activity.cjs');
 
+function modelOptions(options = {}) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Invalid Codex model options.');
+  const result = {};
+  for (const key of ['model', 'effort']) {
+    if (options[key] == null || options[key] === '') continue;
+    if (typeof options[key] !== 'string' || options[key].length > 160 || !/^[a-zA-Z0-9._:/-]+$/.test(options[key])) throw new Error('Invalid Codex ' + key + '.');
+    result[key] = options[key];
+  }
+  return result;
+}
+
 const IMAGE_LIMITS = { count: 4, bytesEach: 8 * 1024 * 1024, bytesTotal: 16 * 1024 * 1024 };
 function promptInputs(text, images = []) {
   if (typeof text !== 'string') throw new Error('Prompt text must be a string.');
@@ -187,7 +198,24 @@ class DesktopIpc extends EventEmitter {
     });
     return desktopRuntime(this.states.get(id)?.state);
   }
-  async send(id, text, owner, images = []) { const input = promptInputs(text, images); this.follow(id, owner); const response = await this.request('thread-follower-start-turn', { conversationId: id, turnStart: { request: { threadId: id, input }, context: { inheritThreadSettings: true } } }, owner, 30000); return response.result.result; }
+  async send(id, text, owner, images = [], options = {}) {
+    const input = promptInputs(text, images), overrides = modelOptions(options);
+    if (Object.keys(overrides).length && !this.states.has(id)) await this.read(id, owner);
+    const state = this.states.get(id)?.state;
+    if (Object.keys(overrides).length && !state) throw new Error('Codex task settings are not available yet. Open the task and try again.');
+    // A collaboration mode has its own model settings and otherwise wins over
+    // turn/start overrides. Preserve the existing mode and developer instructions.
+    const inherited = state?.latestThreadSettings?.collaborationMode ?? state?.latestCollaborationMode;
+    const collaborationMode = inherited && Object.keys(overrides).length ? {
+      ...inherited, settings: {...inherited.settings,
+        ...(overrides.model ? {model: overrides.model} : {}),
+        ...(overrides.effort ? {reasoning_effort: overrides.effort} : {})}
+    } : undefined;
+    this.follow(id, owner);
+    const response = await this.request('thread-follower-start-turn', {conversationId: id,
+      turnStart: {request: {threadId: id, input, ...overrides, ...(collaborationMode ? {collaborationMode} : {})}, context: {inheritThreadSettings: true}}}, owner, 30000);
+    return response.result.result;
+  }
   async steer(id, text, owner, images = []) {
     const input = promptInputs(text, images), clientUserMessageId = randomUUID();
     const cwd = this.states.get(id)?.state?.cwd;
@@ -240,7 +268,7 @@ class CodexBridge extends EventEmitter {
     for (const mode of this.connectionModes) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.6.6' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.7.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
@@ -369,6 +397,18 @@ class CodexBridge extends EventEmitter {
     }
     return result.thread ? { ...result, thread: projectThread(result.thread) } : result;
   }
+  async listModels() {
+    await this.connect();
+    const data = [], seen = new Set(); let cursor;
+    do {
+      const page = await this._rpc('model/list', {limit: 100, includeHidden: false, ...(cursor ? {cursor} : {})});
+      for (const item of page.data || []) if (!item.hidden && typeof item.model === 'string' && !data.some(row => row.model === item.model)) data.push(item);
+      cursor = page.nextCursor;
+      if (cursor && seen.has(cursor)) throw new Error('Codex returned a repeated model page.');
+      if (cursor) seen.add(cursor);
+    } while (cursor && seen.size < 20);
+    return {data};
+  }
   async accountRead() { await this.connect(); return this._rpc('account/read', { refreshToken: false }); }
   async login() { await this.connect(); return this._rpc('account/login/start', { type: 'chatgpt' }); }
   async logout() { await this.connect(); return this._rpc('account/logout', {}); }
@@ -377,19 +417,19 @@ class CodexBridge extends EventEmitter {
     const result = await this._rpc('thread/start', { ...(cwd ? { cwd } : {}), approvalPolicy: 'on-request', sandbox: 'workspace-write' });
     this.resumed.add(result.thread.id); return result;
   }
-  async sendTurn(threadId, text, images = []) {
-    const input = promptInputs(text, images);
+  async sendTurn(threadId, text, images = [], options = {}) {
+    const input = promptInputs(text, images), overrides = modelOptions(options);
     await this.connect();
     if (this.desktop) {
       let owner;
       try { owner = await this.desktop.owner(threadId); } catch (error) { if (this.mode === 'desktop' || this.desktop.owners.has(threadId)) throw error; }
-      if (owner) return this.desktop.send(threadId, text, owner, images);
+      if (owner) return this.desktop.send(threadId, text, owner, images, overrides);
     }
     if (!this.resumed.has(threadId)) {
       if (!this.resuming.has(threadId)) this.resuming.set(threadId, this._rpc('thread/resume', { threadId, approvalPolicy: 'on-request', sandbox: 'workspace-write' }).then(() => this.resumed.add(threadId)).finally(() => this.resuming.delete(threadId)));
       await this.resuming.get(threadId);
     }
-    return this._rpc('turn/start', { threadId, approvalPolicy: 'on-request', input });
+    return this._rpc('turn/start', { threadId, approvalPolicy: 'on-request', input, ...overrides });
   }
   async steerTurn(threadId, text, images = [], expectedTurnId) {
     const input = promptInputs(text, images);
@@ -428,4 +468,4 @@ class CodexBridge extends EventEmitter {
   }
   close() { this.desktop?.close(); this._dispose(); this.emit('status', { state: 'disconnected', detail: 'Codex disconnected.' }); }
 }
-module.exports = { CodexBridge, DesktopIpc, applyDesktopPatches, desktopThread, desktopRuntime, promptInputs, IMAGE_LIMITS };
+module.exports = { CodexBridge, DesktopIpc, applyDesktopPatches, desktopThread, desktopRuntime, promptInputs, modelOptions, IMAGE_LIMITS };

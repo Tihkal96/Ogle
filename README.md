@@ -1,6 +1,6 @@
 # Ogle
 
-A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, a code editor, shortcut groups and embedded terminals. Existing pet projects are preserved; the app bundles only Rinne Mini (the default), Rinne, and Lago Realistic. Separately installed custom v2 pets remain available. Saved pet choices are preserved; missing choices fall back to Rinne Mini.
+A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, an official Claude Code terminal, a code editor, shortcut groups and embedded terminals. Existing pet projects are preserved; the app bundles only Rinne Mini (the default), Rinne, and Lago Realistic. Separately installed custom v2 pets remain available. Saved pet choices are preserved; missing choices fall back to Rinne Mini.
 
 ## Download and run
 
@@ -24,7 +24,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.6.6](https://github.com/Tihkal96/Ogle/releases/download/v0.6.6/Ogle-0.6.6-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.7.0](https://github.com/Tihkal96/Ogle/releases/download/v0.7.0/Ogle-0.7.0-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -58,6 +58,20 @@ Every upgrade must update the direct Windows ZIP download link above: its visibl
 Startup activity checks preserve newer live Codex events over older boot snapshots. Quiet or ambiguous recent tasks receive a bounded, one-time desktop runtime check; the temporary connection closes afterward. Working takes priority over pending done animations without opening the dock.
 
 Clicking the pet shows the horizontal bar by default. Hover reveal is off; it can be enabled in Settings → Dock behavior → Reveal toolbar when hovering the ball. Automatic collapse remains a separate setting.
+
+## Version 0.7.0
+
+- Choose Codex, ChatGPT and/or Claude on first startup or in Settings → Assistants. Unused assistant tabs are hidden; disabling Codex stops its connection and prevents autostart from opening it. All assistants may be disabled while keeping notes, editor, shell and links.
+- Codex model and reasoning-effort controls use the connected account's available models. Choices apply to new prompts; queued prompts remember their selections. Steering keeps the currently running turn's model.
+- Claude hosts the **official interactive Claude Code CLI**, with project/session history, resume, multiple terminal sessions, copy/paste, theme, zoom and panel pinning. The CLI owns sign-in, permissions and model controls. If missing, the explicit **Set up Claude Code** button opens Anthropic's official Windows installer in the embedded terminal; nothing is installed on startup. Claude is not bundled and its account access is separate from Ogle.
+- Claude pet activity comes from per-session lifecycle hooks, not guesses based on terminal text. Working, permission waiting and completion are tracked for sessions opened through Ogle. Completion clears when that session is viewed. Hooks store only lifecycle metadata and do not alter global Claude settings. Independent Claude terminals are not monitored.
+- Every Ogle window, including sign-in popups, uses tray-only taskbar behavior and reapplies it after showing/restoring.
+
+### Claude setup
+
+Enable Claude in Settings, open its tab and use **＋** to choose a project folder. Sign in through the official terminal if prompted. Use the CLI's own model and session commands; select an existing conversation in the sidebar to resume it. The refresh control reloads local history. Windows Claude Code prerequisites and authentication are managed by the official installer/CLI; see [Anthropic's setup guide](https://code.claude.com/docs/en/setup).
+
+Ogle does not implement a Claude subscription-backed Agent SDK interface or store Claude credentials. Closing a Claude terminal stops that running session; saved conversation history remains in Claude's local profile. Disabling its tab hides it without terminating active work.
 
 ## Version 0.6.6
 

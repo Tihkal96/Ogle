@@ -10,6 +10,7 @@ function runPetClickAction(){
     case 'reveal':return setMode(state.mode==='reveal'?'idle':'reveal');
     case 'toggle':return state.mode==='expand'?collapse(true):switchPanel(state.activePanel);
     case 'chatgpt':return switchPanel('chatgpt');
+    case 'claude':return switchPanel('claude');
     default:return api.openCodex(state.selected?.id);
   }
 }

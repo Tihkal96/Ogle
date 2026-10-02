@@ -32,4 +32,30 @@ function createDockTray({ Tray, Menu, nativeImage, iconPath, window, onShow, onH
     }
   };
 }
-module.exports = { createDockTray };
+// Cover every Electron window, including OAuth popups created by Chromium.
+// Reapply on show/restore because those paths can recreate Windows shell state.
+function installTrayOnlyWindows(app, BrowserWindow) {
+  const tracked = new Map();
+  const attach = (_event, window) => {
+    if (tracked.has(window) || window.isDestroyed()) return;
+    const apply = () => { if (!window.isDestroyed()) window.setSkipTaskbar(true); };
+    const detach = () => {
+      window.removeListener('show', apply);
+      window.removeListener('restore', apply);
+      window.removeListener('closed', detach);
+      tracked.delete(window);
+    };
+    tracked.set(window, detach);
+    apply();
+    window.on('show', apply);
+    window.on('restore', apply);
+    window.once('closed', detach);
+  };
+  app.on('browser-window-created', attach);
+  for (const window of BrowserWindow.getAllWindows()) attach(null, window);
+  return () => {
+    app.removeListener('browser-window-created', attach);
+    for (const detach of [...tracked.values()]) detach();
+  };
+}
+module.exports = { createDockTray, installTrayOnlyWindows };
