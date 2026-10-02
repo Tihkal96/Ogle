@@ -59,3 +59,15 @@ test('completion during expansion waits for the panel transition to finish',()=>
  f.window.DockLayoutTransition.busy=false;f.acknowledgeVisibleTask();assert.equal(f.state.petState,'idle');
  f.receiveVisualActivity({threadId:'task',turnId:'turn',running:false,completed:true});assert.equal(f.state.petState,'idle','duplicate activity must not resurrect a seen completion');
 });
+test('reading in Codex before rollout delivery does not resurrect the seen completion',()=>{
+ const f=realPetFixture();f.Date={now:()=>2000};f.acknowledgeCompletion('task');
+ f.receiveVisualActivity({threadId:'task',turnId:'turn',running:false,completed:true,completedAt:1900});
+ assert.equal(f.state.petState,'idle');assert.equal(f.completedTasks.size,0);
+ f.receiveVisualActivity({threadId:'task',turnId:'next',running:true});
+ f.receiveVisualActivity({threadId:'task',turnId:'next',running:false,completed:true,completedAt:2100});
+ assert.equal(f.state.petState,'review','Reading an earlier turn does not acknowledge future work');
+});
+test('reading in Ogle then collapsing before delayed completion keeps it acknowledged',()=>{
+ const f=realPetFixture();f.Date={now:()=>2000};Object.assign(f.state,{mode:'expand',activePanel:'chats',selected:{id:'task'}});f.acknowledgeVisibleTask();f.state.mode='idle';
+ f.receiveVisualActivity({threadId:'task',turnId:'turn',running:false,completed:true,completedAt:1900});assert.equal(f.state.petState,'idle');
+});

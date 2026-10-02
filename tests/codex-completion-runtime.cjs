@@ -68,6 +68,17 @@ const {execFileSync}=require('node:child_process');
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].show());
     await waitSettled();
     await page.waitForFunction(()=>!completedTasks.has('selected-task')&&state.petState!=='review');
+    await page.evaluate(()=>collapse(true));await waitSettled();
+    const completedAt=Date.now()-100;
+    await app.evaluate((_electron,completedAt)=>{testBridge.emit('thread-opened','native-read-task');testBridge.emit('activity',{threadId:'native-read-task',turnId:'late-native',running:false,completed:true,completedAt});},completedAt);
+    await page.waitForFunction(()=>completedTurns.has(JSON.stringify(['native-read-task','late-native'])));
+    assert.equal(await page.evaluate(()=>completedTasks.has('native-read-task')),false,'Native read before delayed rollout must stay acknowledged');
+    await page.evaluate(()=>switchPanel('chats'));await waitSettled();
+    const ogleCompletedAt=Date.now()-100;
+    await page.evaluate(()=>collapse(true));await waitSettled();
+    await app.evaluate((_electron,completedAt)=>testBridge.emit('activity',{threadId:'selected-task',turnId:'late-ogle',running:false,completed:true,completedAt}),ogleCompletedAt);
+    await page.waitForFunction(()=>completedTurns.has(JSON.stringify(['selected-task','late-ogle'])));
+    assert.equal(await page.evaluate(()=>completedTasks.has('selected-task')),false,'Ogle read before delayed rollout must stay acknowledged after collapse');
     console.log('PASS completion acknowledged for visible selected Codex task, late completion and direct re-expansion; other tasks, different tabs and hidden app retain review.');
   } finally {await app.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

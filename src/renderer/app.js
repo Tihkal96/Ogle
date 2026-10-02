@@ -47,7 +47,7 @@ function updateComposer() {
   $('prompt').title=gpt?'Sends to the conversation currently open in ChatGPT':state.selected?`Send to: ${title(state.selected)}`:'Choose a task in the Codex panel first';
   updatePetState();
 }
-const completedTasks=new Set();
+const completedTasks=new Set(),completionReadAt=new Map();
 // Rollout evidence affects the pet only. Queue/steer decisions retain their
 // authoritative runtime and ownership checks.
 const visualActivity=new Map(),completedTurns=new Set();
@@ -60,11 +60,13 @@ function visualCodexRunning() {
   for(const [id,turnId] of state.running){const activity=visualActivity.get(id);if(!activity || activity.running || (activity.turnId!==turnId && !['desktop','pending'].includes(turnId)))return true;}
   return false;
 }
-function completeTaskReaction(threadId,turnId,outcome='completed') {
+function completeTaskReaction(threadId,turnId,outcome='completed',completedAt) {
   turnId ||= visualActivity.get(threadId)?.turnId;
   const key=turnId?JSON.stringify([threadId,turnId]):null;
   if(key && completedTurns.has(key))return;
   if(key){completedTurns.add(key);if(completedTurns.size>512)completedTurns.delete(completedTurns.values().next().value);}
+  // Rollout polling can deliver a completion after the user already read it.
+  if(Number.isFinite(completedAt) && completedAt<=(completionReadAt.get(threadId) || 0))return;
   if(outcome!=='interrupted' && outcome!=='aborted')queueReaction(outcome==='failed'?'failed':'review',threadId);
 }
 function receiveVisualActivity(activity) {
@@ -73,7 +75,7 @@ function receiveVisualActivity(activity) {
   if(!activity.running && previous?.running && previous.turnId!==activity.turnId)return;
   if(activity.running && completedTurns.has(JSON.stringify([activity.threadId,activity.turnId])))return;
   recordVisualActivity(activity.threadId,activity);
-  if(activity.running===false)completeTaskReaction(activity.threadId,activity.turnId,activity.completed?'completed':'aborted');
+  if(activity.running===false)completeTaskReaction(activity.threadId,activity.turnId,activity.completed?'completed':'aborted',activity.completedAt);
   updatePetState();
 }
 function restoreBootActivity(activities) {
@@ -82,7 +84,10 @@ function restoreBootActivity(activities) {
   for(const activity of activities || [])if(!visualActivity.has(activity.threadId))receiveVisualActivity(activity);
 }
 function clearCompletion(threadId) {
-  if(!threadId || !completedTasks.delete(threadId))return;
+  if(!threadId)return;
+  completionReadAt.delete(threadId);completionReadAt.set(threadId,Date.now());
+  if(completionReadAt.size>512)completionReadAt.delete(completionReadAt.keys().next().value);
+  completedTasks.delete(threadId);
   if(!completedTasks.size && state.reactionUntil===Infinity)state.reactionUntil=0;
 }
 function acknowledgeCompletion(threadId) {
