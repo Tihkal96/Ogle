@@ -50,3 +50,10 @@ test('stale completion after the next started event cannot release another queue
   queue.runtime('a',{running:true,turnId:'turn-2'});queue.runtime('a',{running:false},{completedTurnId:'turn-1'});await tick();assert.equal(calls.length,2);
   queue.runtime('a',{running:false},{completedTurnId:'turn-2'});await tick();assert.equal(calls.length,3);
 });
+
+test('queued prompts snapshot chosen model and effort independently of later picker changes',async()=>{
+ const {queue,calls}=fixture();queue.runtime('a',{running:true});const options={model:'first-model',effort:'high'};
+ queue.enqueue({threadId:'a',text:'first',options});options.model='second-model';options.effort='low';queue.enqueue({threadId:'a',text:'second',options});options.model='third-model';
+ queue.runtime('a',{running:false});await tick();assert.deepEqual(calls[0].options,{model:'first-model',effort:'high'});
+ queue.runtime('a',{running:true});queue.runtime('a',{running:false});await tick();assert.deepEqual(calls[1].options,{model:'second-model',effort:'low'});
+});

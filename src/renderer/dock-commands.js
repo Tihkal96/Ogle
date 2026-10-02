@@ -2,7 +2,7 @@
 window.OgleDockCommands={mount({state,api,openPanel,setMode,save,applySettings,layout,report}){
   const el=id=>document.getElementById(id);
   let invokingChat=null,originNative=false;
-  const panels=[['chats','Codex','Tasks and conversations'],['chatgpt','ChatGPT','Classic ChatGPT'],['notes','Notes','Scratchpad'],['editor','Editor','Code and text files'],['terminal','Shell','CMD and PowerShell'],['shortcuts','Links','Links, file search and Run'],['settings','Settings','Preferences and accounts']];
+  const panels=[['chats','Codex','Tasks and conversations'],['chatgpt','ChatGPT','Classic ChatGPT'],['claude','Claude Code','Coding chats and projects'],['notes','Notes','Scratchpad'],['editor','Editor','Code and text files'],['terminal','Shell','CMD and PowerShell'],['shortcuts','Links','Links, file search and Run'],['settings','Settings','Preferences and accounts']];
   async function showPanel(id){
     await openPanel(id);
     if(id==='chatgpt'){await api.openChatGPT('focus');return;}
@@ -12,7 +12,7 @@ window.OgleDockCommands={mount({state,api,openPanel,setMode,save,applySettings,l
   }
   window.OgleCommands.mount({
     commands:()=>{
-      const commands=panels.map(([id,label,hint])=>({id,label:'Open '+label,hint,run:()=>showPanel(id)}));
+      const commands=panels.filter(([id])=>window.OgleAssistants.enabled(state.settings,id)).map(([id,label,hint])=>({id,label:'Open '+label,hint,run:()=>showPanel(id)}));
       commands.push({id:'settings-search',label:'Find a setting',hint:'Search preferences',run:async()=>{await openPanel('settings');el('settings-panel').querySelector('[aria-label="Search settings"]').focus();}});
       const chat=invokingChat;
       if(chat)commands.push({id:'find',label:'Find in conversation',hint:'Ctrl+F',run:()=>window.OgleChatFind.open(chat)});

@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-function fixture(){const source=fs.readFileSync(require('node:path').join(__dirname,'../src/renderer/app.js'),'utf8');const start=source.indexOf('const visualActivity='),end=source.indexOf('function acknowledgeCompletion',start);const context={state:{running:new Map()},reactions:[],updatePetState(){},queueReaction(kind,id){context.reactions.push([kind,id]);}};vm.createContext(context);vm.runInContext(source.slice(start,end)+';this.visualActivity=visualActivity;',context);return context;}
+function fixture(){const source=fs.readFileSync(require('node:path').join(__dirname,'../src/renderer/app.js'),'utf8');const start=source.indexOf('const visualActivity='),end=source.indexOf('function acknowledgeCompletion',start);const context={state:{settings:{},running:new Map()},reactions:[],updatePetState(){},queueReaction(kind,id){context.reactions.push([kind,id]);}};vm.createContext(context);vm.runInContext(source.slice(start,end)+';this.visualActivity=visualActivity;',context);return context;}
 test('visual completion stops stale working animation without releasing queue runtime',()=>{const f=fixture();f.state.running.set('task','turn');f.receiveVisualActivity({threadId:'task',turnId:'turn',running:false,completed:true});assert.equal(f.visualCodexRunning(),false);assert.equal(f.state.running.get('task'),'turn');assert.equal(f.reactions.length,1);});
 test('authoritative and rollout completion produces one reaction per turn',()=>{const f=fixture();f.completeTaskReaction('task','turn');f.receiveVisualActivity({threadId:'task',turnId:'turn',running:false,completed:true});assert.equal(f.reactions.length,1);});
 test('late old completion cannot suppress newer activity',()=>{const f=fixture();f.receiveVisualActivity({threadId:'task',turnId:'new',running:true});f.receiveVisualActivity({threadId:'task',turnId:'old',running:false,completed:true});assert.equal(f.visualCodexRunning(),true);assert.equal(f.reactions.length,0);});
@@ -14,7 +14,7 @@ test('boot activity stays empty while disconnected',()=>{const f=fixture();f.sta
 function realPetFixture(){
  const source=fs.readFileSync(require('node:path').join(__dirname,'../src/renderer/app.js'),'utf8');
  let now=100;
- const context={state:{running:new Map(),attention:new Set(),petState:'idle',animationGeneration:0,reactionUntil:0,connected:true},document:{querySelector:()=>null},window:{addEventListener(){}},performance:{now:()=>now}};
+ const context={state:{settings:{},running:new Map(),attention:new Set(),petState:'idle',animationGeneration:0,reactionUntil:0,connected:true},document:{querySelector:()=>null},window:{addEventListener(){}},performance:{now:()=>now}};
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('const completedTasks='),source.indexOf('function renderThreads()'))+';this.completedTasks=completedTasks;this.visualActivity=visualActivity;',context);
  context.tick=()=>{now+=100;context.updatePetState();};return context;
 }

@@ -1,6 +1,6 @@
 'use strict';
 window.OglePanelView=(()=>{
-  const names={chats:'Codex',chatgpt:'ChatGPT',notes:'Notes',editor:'Editor',terminal:'Shell',shortcuts:'Links',settings:'Settings'};
+  const names={chats:'Codex',chatgpt:'ChatGPT',claude:'Claude Code',notes:'Notes',editor:'Editor',terminal:'Shell',shortcuts:'Links',settings:'Settings'};
   const scrollHolds=new Map();
   const factors=new Map();let active=null,busy=false,options,bar;
   const el=id=>document.getElementById(id);
@@ -21,6 +21,7 @@ window.OglePanelView=(()=>{
     const restoreScroll=name==='chats'||name==='chatgpt'?null:holdScroll(name,panel);
     panel.style.setProperty('--content-zoom',factor);
     if(name==='chatgpt'){if(!fromNative)options.api.chatgptZoom(factor).catch(options.report);}
+    else if(name==='claude')window.OgleClaude?.setZoom(factor);
     else if(name==='notes')el('note').style.fontSize=13*factor+'px';
     else if(name==='editor')window.PetDockEditor?.measure();
     else if(name==='terminal')window.PetDockTerminal?.setZoom(factor);

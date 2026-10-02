@@ -1,0 +1,10 @@
+#claude-panel{display:flex;min-height:0;gap:8px;position:relative}
+#claude-panel[hidden]{display:none}
+.claude-sidebar{width:170px;flex-shrink:0;display:flex;flex-direction:column;gap:5px;min-height:0;padding:8px;border-right:1px solid var(--border)}
+.claude-thread-list{overflow:auto;flex:1;min-height:0}.claude-thread-list button{display:block;text-align:left;width:100%;margin:3px 0;padding:6px;font-size:11px;overflow-wrap:anywhere}.claude-thread-list small{display:block;opacity:.6}
+.claude-main{display:flex;flex:1;min-width:0;min-height:0;flex-direction:column;padding:8px;gap:6px}
+.claude-controls{display:flex;gap:5px;align-items:center;padding-right:30px;flex-wrap:wrap}.claude-controls select{max-width:145px;font-size:11px}.claude-controls button{padding:3px 6px}
+#claude-status{font-size:11px;opacity:.75;min-height:14px}
+.no-compact-assistant #conversation-strip,.no-compact-assistant #conversation-picker{display:none!important}
+#assistant-choice{max-width:400px;padding:24px;color:var(--text);background:var(--surface,#20262b);border:1px solid var(--border)}
+#claude-views{flex:1;min-height:0;position:relative;overflow:hidden} .claude-terminal-view{position:absolute;inset:0;padding:3px}#claude-sessions{display:flex;gap:4px;overflow:auto;flex-shrink:0}#claude-sessions button{padding:4px 7px;white-space:nowrap;font-size:11px}#claude-sessions .selected{background:var(--selection)}.codex-model-controls{display:flex;gap:5px;padding:3px 10px}.codex-model-controls select{padding:3px;font-size:11px;max-width:190px}

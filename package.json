@@ -1,7 +1,7 @@
 {
   "name": "ogle",
-  "version": "0.6.6",
-  "description": "A Windows pet dock for Codex and ChatGPT",
+  "version": "0.7.0",
+  "description": "A Windows pet dock for Codex, ChatGPT and Claude Code",
   "private": true,
   "main": "src/main/main.cjs",
   "scripts": {

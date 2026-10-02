@@ -1,5 +1,5 @@
 'use strict';
-const keys=['shortcutVisibility','shortcutPanel','shortcutBar','shortcutChatTarget','shortcutCodex','shortcutGpt','shortcutEditor','shortcutShell','shortcutLinks','shortcutPrompt'];
+const keys=['shortcutVisibility','shortcutPanel','shortcutBar','shortcutChatTarget','shortcutCodex','shortcutGpt','shortcutClaude','shortcutEditor','shortcutShell','shortcutLinks','shortcutPrompt'];
 class DockShortcuts {
   constructor(registry,actions){this.registry=registry;this.actions=actions;this.current={};}
   configure(settings){
