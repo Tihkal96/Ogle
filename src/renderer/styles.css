@@ -56,3 +56,31 @@ body:not(.collapsed) .toolbar .tool{min-width:28px;padding-left:5px;padding-righ
 #codex-queue{max-height:95px;overflow:auto;margin-bottom:6px}.queued-prompt{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px}.queued-prompt span{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.queued-prompt small{color:var(--muted)}.queued-prompt button{padding:3px 6px;border:1px solid var(--border);flex:none}
 
 .collapsed .toolbar time{max-width:80px;overflow:hidden;text-overflow:ellipsis}.toolbar:has(#pinned-links .pinned-link:nth-child(6)) .tool span{display:none}
+
+/* Reserve the complete clock and actions; tab captions yield before content does.
+   The shell can be narrower than the window when another panel is pinned. */
+.shell{container-type:inline-size}
+.toolbar #clock{flex:none;max-width:none;overflow:visible;text-overflow:clip}
+.toolbar>.tool{flex:none}
+@container (max-width:1000px){
+  .toolbar:has(.pinned-link) .tool span{display:none}
+}
+@container (max-width:680px){
+  .toolbar .tool span{display:none}
+  .toolbar{gap:0;padding-left:5px;padding-right:5px}
+  body:not(.collapsed) .toolbar .tool,.collapsed .toolbar .tool{width:24px;min-width:24px;padding:0}
+  .toolbar .pinned-link{width:22px;padding:2px}
+  .toolbar .icon{width:24px}
+  .toolbar #clock{font-size:9px;margin-left:3px;margin-right:3px}
+}
+@container (max-width:480px){
+  /* Very narrow displays retain every control on a second line. */
+  .toolbar{flex-wrap:wrap;height:auto!important;min-height:36px}
+  .toolbar #clock{display:block}
+  .toolbar>.spacer{flex-basis:100%}
+}
+@container (min-width:481px) and (max-width:600px){
+  body:not(.collapsed) .toolbar .tool,.collapsed .toolbar .tool{width:22px;min-width:22px}
+  .toolbar .pinned-link{width:21px}
+  .toolbar .icon{width:22px}
+}

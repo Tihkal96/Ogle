@@ -13,7 +13,9 @@ function dockBounds(mode, bounds, area, scale = 1, pinnedSide = null) {
   const heights = { idle: 180, reveal: 216, quick: 386, picker: 506, expand: 820 };
   if (!Object.hasOwn(heights, mode)) throw new Error('Unknown dock layout');
   const width = Math.min(mode === 'expand' ? (pinnedSide && pinnedSide !== 'bottom' ? 1320 : 760) : mode === 'idle' ? Math.max(300, Math.round(118*scale+182)) : 600, area.width);
-  const height = Math.min(Math.round(heights[mode]+(mode==='expand' && pinnedSide==='bottom'?380:0)+(mode==='expand'?145:128)*(scale-1)),area.height);
+  // The narrow toolbar wraps below 480px of shell content (+26px window padding/borders).
+  const toolbarExtra = width <= 506 && ['reveal','quick','picker'].includes(mode) ? 30 : 0;
+  const height = Math.min(Math.round(heights[mode]+toolbarExtra+(mode==='expand' && pinnedSide==='bottom'?380:0)+(mode==='expand'?145:128)*(scale-1)),area.height);
   // Panels may extend offscreen; expanding them must not move the pet to fit.
   return clampPet({x:Math.round(bounds.x+bounds.width/2-width/2),y:bounds.y,width,height},area,scale);
 }

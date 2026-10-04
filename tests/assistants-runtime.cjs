@@ -14,10 +14,10 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  async sendTurn(...args){global.sent.push(args);return {turn:{id:'turn-'+global.sent.length}};}
  close(){} };
  require(${JSON.stringify(path.join(root,'src/main/claude-bridge.cjs'))}).ClaudeBridge=class{
- constructor(options){global.fakeClaude=this;this.onEvent=options.onEvent;this.creates=[];}status(){return {installed:true};}
+ constructor(options){global.fakeClaude=this;this.onEvent=options.onEvent;this.creates=[];this.writes=[];}status(){return {installed:true};}
  listThreads(){return {threads:[{id:'claude-history',title:'Claude fixture',cwd:'C:/fixture'}]};}
  create(options){this.creates.push(options);this.onEvent({type:'claude-terminal',event:'data',id:'claude-session',data:'Claude fixture ready\\r\\n'});return {id:'claude-session'};}
- write(){}resize(){}close(){}dispose(){} };
+ write(id,data){this.writes.push({id,data});}resize(){}close(){}dispose(){} };
  require(${JSON.stringify(path.join(root,'src/main/main.cjs'))});`);
  execFileSync(process.execPath,['--check',path.join(profile,'main.cjs')]);const env={...process.env,PETDOCK_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch({args:[profile],env});
@@ -52,6 +52,13 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  await page.evaluate(()=>switchPanel('claude'));await page.waitForFunction(()=>!DockLayoutTransition.busy);
  await page.locator('#claude-list button').click();await page.locator('#claude-sessions button').waitFor();
  assert.equal(await app.evaluate(()=>global.fakeClaude.creates[0].resume),'claude-history');
+ await page.locator('#claude-views .xterm-screen').click();
+ await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+ assert.deepEqual(await app.evaluate(()=>global.fakeClaude.writes.map(w=>w.data)),['\u001b[B','\r']);
+ await page.locator('#claude-up').click();await page.locator('#claude-enter').click();
+ assert.deepEqual(await app.evaluate(()=>global.fakeClaude.writes.map(w=>w.data)),['\u001b[B','\r','\u001b[A','\r']);
+
+
  const activity=state=>app.evaluate((_e,state)=>global.fakeClaude.onEvent({type:'claude-activity',threadId:'claude-session',state}),state);
  await page.evaluate(()=>{state.running.clear();visualActivity.clear();updatePetState();});
  await activity('working');await page.waitForFunction(()=>state.petState==='running');

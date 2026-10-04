@@ -24,7 +24,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.7.0](https://github.com/Tihkal96/Ogle/releases/download/v0.7.0/Ogle-0.7.0-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.7.1](https://github.com/Tihkal96/Ogle/releases/download/v0.7.1/Ogle-0.7.1-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -58,6 +58,13 @@ Every upgrade must update the direct Windows ZIP download link above: its visibl
 Startup activity checks preserve newer live Codex events over older boot snapshots. Quiet or ambiguous recent tasks receive a bounded, one-time desktop runtime check; the temporary connection closes afterward. Working takes priority over pending done animations without opening the dock.
 
 Clicking the pet shows the horizontal bar by default. Hover reveal is off; it can be enabled in Settings → Dock behavior → Reveal toolbar when hovering the ball. Automatic collapse remains a separate setting.
+
+## Version 0.7.1
+
+- The toolbar reserves space for complete time/date text. Tab captions yield when pinned links crowd the bar; narrow layouts keep the controls accessible.
+- Claude's native setup uses keyboard navigation: click its terminal and use arrows/Enter, or use the new ↑ ↓ ↵ buttons. Reopening the tab restores terminal focus. The official theme screen and transition to login were verified without signing in or sending a prompt.
+- Claude history shows project and last-updated time to distinguish conversations sharing a title. Real sessions remain separate; empty onboarding records and internal-only messages do not become conversation entries.
+- ChatGPT activity recognizes localized stop controls and outer response streaming indicators. A bounded observer remembers brief working states between polls, so quick responses can still trigger pet activity. It reads UI state only, never conversation text; website integration remains best-effort.
 
 ## Version 0.7.0
 
