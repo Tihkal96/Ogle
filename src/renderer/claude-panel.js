@@ -23,14 +23,14 @@ window.OgleClaude=(()=>{
       const term=new window.PetDockVendors.Terminal({cursorBlink:true,fontSize:12*zoom,fontFamily:'"Cascadia Mono",Consolas,monospace',scrollback:5000,theme:theme()}),fit=new window.PetDockVendors.FitAddon();term.loadAddon(fit);term.open(view);
       const tab=make('button',options.setup?'Setup':(options.resume?threads.find(t=>t.id===options.resume)?.title:null)||String(options.cwd||'Claude').split(/[\\/]/).pop());tab.onclick=()=>select(result.id);el('sessions').append(tab);
       const session={...result,resume:options.resume,term,fit,view,tab};sessions.set(result.id,session);
-      term.onData(data=>config.api.claudeWrite(result.id,data).catch(config.report));
+      term.onData(data=>{if(!session.ended)config.api.claudeWrite(result.id,data).catch(config.report);});
       term.attachCustomKeyEventHandler(event=>{if(event.type==='keydown'&&event.ctrlKey&&!event.altKey){if(event.key.toLowerCase()==='c'&&term.hasSelection()){event.preventDefault();config.api.clipboardWriteText(term.getSelection()).catch(config.report);return false;}if(event.key.toLowerCase()==='v'){event.preventDefault();config.api.clipboardReadText().then(text=>term.paste(text)).catch(config.report);return false;}}return true;});
-      for(const data of pending.get(result.id)||[])term.write(data);pending.delete(result.id);select(result.id);
-    }finally{creating=false;el('new').disabled=false;el('setup').disabled=false;}
+      const buffered=pending.get(result.id)||[];pending.delete(result.id);for(const item of buffered)event(item);select(result.id);
+    }finally{creating=false;pending.clear();el('new').disabled=false;el('setup').disabled=false;}
   }
   function event(event){if(!config)return;
     if(event.type==='claude-terminal'){
-      const s=sessions.get(event.id);if(event.event==='data'){if(s)s.term.write(event.data);else{const data=pending.get(event.id)||[];data.push(event.data);if(data.length>200)data.shift();pending.set(event.id,data);}}
+      const s=sessions.get(event.id);if(!s){if(creating){const buffered=pending.get(event.id)||[];buffered.push(event);if(buffered.length>200)buffered.shift();pending.set(event.id,buffered);}return;}if(event.event==='data'){s.term.write(event.data);}
       else if(event.event==='session'){if(s)s.resume=event.resume;}
       else if(event.event==='exit'){if(s){s.ended=true;s.term.write('\r\n[Session ended]\r\n');}activityStates.delete(event.id);activity();status().catch(config.report);refresh().catch(config.report);}return;
     }

@@ -9,8 +9,13 @@ const { imageSize } = require('image-size');
 const MAX_ARCHIVE = 25*1024*1024;
 const recommendedPets = require('../../assets/pet-catalog.json');
 const bundledAuthors = new Map(['rinne','rinne-mini','lago-realistic'].map(id => [id, 'tihkal96']));
+// Retired recommendations still need credits when older Codex copies are refreshed.
+const retiredCredits = [
+  {id:'fern',author:'pixel',sourceUrl:'https://codex-pets.net/share/fern'},
+  {id:'banana-cat',author:'gugaguga',sourceUrl:'https://codex-pets.net/share/banana-cat'}
+];
 function attribution(config) {
-  const known = recommendedPets.find(pet => pet.id === config.id);
+  const known = recommendedPets.find(pet => pet.id === config.id) || retiredCredits.find(pet => pet.id === config.id);
   const author = known?.author || bundledAuthors.get(config.id) || (typeof config.author === 'string' ? config.author.trim().slice(0,120) : '');
   const result = author ? { author } : {};
   const candidate = known?.sourceUrl || config.sourceUrl;

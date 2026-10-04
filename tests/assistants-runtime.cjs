@@ -16,7 +16,7 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  require(${JSON.stringify(path.join(root,'src/main/claude-bridge.cjs'))}).ClaudeBridge=class{
  constructor(options){global.fakeClaude=this;this.onEvent=options.onEvent;this.creates=[];this.writes=[];}status(){return {installed:true};}
  listThreads(){return {threads:[{id:'claude-history',title:'Claude fixture',cwd:'C:/fixture'}]};}
- create(options){this.creates.push(options);this.onEvent({type:'claude-terminal',event:'data',id:'claude-session',data:'Claude fixture ready\\r\\n'});return {id:'claude-session'};}
+ create(options){this.creates.push(options);if(this.earlyExit){this.onEvent({type:'claude-terminal',event:'data',id:'claude-session',data:'Early failure'});this.onEvent({type:'claude-terminal',event:'exit',id:'claude-session',exitCode:1});return {id:'claude-session'};}this.onEvent({type:'claude-terminal',event:'data',id:'claude-session',data:'Claude fixture ready\\r\\n'});return {id:'claude-session'};}
  write(id,data){this.writes.push({id,data});}resize(){}close(){}dispose(){} };
  require(${JSON.stringify(path.join(root,'src/main/main.cjs'))});`);
  execFileSync(process.execPath,['--check',path.join(profile,'main.cjs')]);const env={...process.env,PETDOCK_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
@@ -71,6 +71,18 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  await page.evaluate(()=>OglePanelView.zoom('claude',1.3));assert.equal(await page.locator('#claude-panel').evaluate(el=>el.style.getPropertyValue('--content-zoom')),'1.3');
  await page.evaluate(()=>OglePanelView.exit());await page.evaluate(()=>OglePinnedPanel.unpin());
  await page.evaluate(()=>switchPanel('claude'));
+ // A terminal may exit before its create IPC response reaches the renderer.
+ await page.locator('#claude-close').click();
+ await app.evaluate(()=>{global.fakeClaude.earlyExit=true;});
+ await page.locator('#claude-list button').click();
+ await page.waitForFunction(()=>document.querySelector('#claude-views').innerText.includes('[Session ended]'));
+ const writesBeforeExit=await app.evaluate(()=>global.fakeClaude.writes.length);
+ await page.locator('#claude-enter').click();
+ await page.locator('#claude-views .xterm-screen').last().click();await page.keyboard.press('Enter');
+ assert.equal(await app.evaluate(()=>global.fakeClaude.writes.length),writesBeforeExit,'Ended early session rejects confirm input');
+ const createsBeforeRetry=await app.evaluate(()=>global.fakeClaude.creates.length);
+ await page.locator('#claude-list button').click();
+ assert.equal(await app.evaluate(()=>global.fakeClaude.creates.length),createsBeforeRetry+1,'Ended early session can be reopened');
  await page.evaluate(async()=>{await save({useCodex:false,useClaude:false,useChatGPT:false});applySettings();});
  await page.waitForFunction(()=>state.activePanel==='notes');
  assert.equal(await page.locator('[data-panel="chats"]').first().isVisible(),false);assert.equal(await page.locator('[data-panel="claude"]').first().isVisible(),false);
