@@ -6,10 +6,12 @@ The Settings recommendations link to these community creators on Codex Pets:
 
 | Pet | Creator | Source |
 | --- | --- | --- |
-| Fern | pixel | https://codex-pets.net/share/fern |
+| BMO | gaith | https://codex-pets.net/share/pocketpal |
 | Monthly Salary Cat | xiaoyyy | https://codex-pets.net/share/monthly-salary-cat-fix |
-| Banana Cat | gugaguga | https://codex-pets.net/share/banana-cat |
+| Creepy | creeper | https://codex-pets.net/share/creepy |
 
-Selected from the service's popular catalog on 2026-09-30, restricted to the v2 animation format Ogle supports. Recorded likes (58, 37, 20 respectively) are a dated selection snapshot, not a live ranking.
+BMO and Creepy replace Fern and Banana Cat in the recommendations as of 2026-10-04. Both downloads were validated as v2 atlases and visually checked. Monthly Salary Cat remains from the 2026-09-30 selection. Like counts in the catalog are dated snapshots, not live rankings.
+
+Previously recommended Fern by pixel and Banana Cat by gugaguga retain their creator credits when refreshed from Codex. Changing recommendations never deletes an installed pet. BMO and Creepy are fan artwork; underlying character rights remain with their respective owners.
 
 Community sprites are downloaded from their source when installed; they are not bundled with Ogle. Their packages did not supply a redistribution license when checked. Ogle's MIT license covers Ogle code, not third-party pet artwork or characters. See the source's [terms](https://codex-pets.net/terms). Creator attribution is retained in the local pet manifest and shown in Settings.
