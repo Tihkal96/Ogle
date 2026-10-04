@@ -10,15 +10,59 @@ const ACTIVITY_PROBE = `(() => {
   const turn = last?.closest('article, [data-testid^="conversation-turn-"]') || last;
   const messages = document.querySelectorAll('[data-message-author-role]');
   const latestAssistant = messages[messages.length - 1]?.getAttribute('data-message-author-role') === 'assistant';
-  const stop = [...document.querySelectorAll('button[data-testid="stop-button"], button[data-testid="composer-stop-button"], button[aria-label="Stop generating"], button[aria-label="Stop streaming"]')].some(visible);
-  const streaming = Boolean(last && (last.matches('[data-is-streaming="true"], .result-streaming') || last.querySelector('[data-is-streaming="true"], .result-streaming')));
-  const working = stop || streaming;
+  const stopSelector = 'button[data-testid="stop-button"], button[data-testid="composer-stop-button"], button[data-testid="stop-generating-button"], button[data-testid="stop-streaming-button"], button[aria-label="Stop generating"], button[aria-label="Stop streaming"]';
+  const stop = [...document.querySelectorAll(stopSelector)].some(visible);
+  // Localized ChatGPT can keep a generic composer-submit id while changing
+  // only its icon and translated accessible label. The stop glyph is a filled
+  // square, scoped to that control so attachment/voice buttons cannot match.
+  const submit = document.querySelector('#composer-submit-button');
+  const stopGlyph = visible(submit) && [...submit.querySelectorAll('svg rect')].some(rect => {
+    const width = Number(rect.getAttribute('width')), height = Number(rect.getAttribute('height'));
+    const fill = rect.getAttribute('fill');
+    return width >= 8 && width <= 16 && width === height && fill !== 'none';
+  });
+  const streamSelector = '[data-is-streaming="true"], [data-testid="streaming-indicator"], .result-streaming';
+  const streaming = Boolean(latestAssistant && turn &&
+    (turn.matches(streamSelector + ', [aria-busy="true"]') || turn.querySelector(streamSelector)));
+  const composerStopping = visible(submit) && /^(stop|zaustavi|arrêter|anhalten|detener|interrompi)(\\s|$)/i.test(submit.getAttribute('aria-label') || '');
+  const working = stop || stopGlyph || composerStopping || streaming;
   const complete = Boolean(latestAssistant && turn && [...turn.querySelectorAll('button[data-testid="copy-turn-action-button"], button[data-testid="good-response-turn-action-button"], button[data-testid="bad-response-turn-action-button"]')].some(visible));
   const composer = document.querySelector('#prompt-textarea, [data-testid="prompt-textarea"]');
   const composerReady = visible(composer) && composer.getAttribute('contenteditable') !== 'false' && !composer.disabled;
   const failed = !working && Boolean(turn && [...turn.querySelectorAll('[data-testid="conversation-turn-error"], [data-testid="turn-error"]')].some(visible));
   return {available,working,complete,failed,latestAssistant,composerReady};
 })()`;
+
+
+// Keep only a boolean latch between polls. A response can start and finish in
+// less than one polling interval, but its stop control still mutates the DOM.
+function bufferedProbe(epoch) {
+  return `(() => {
+    const key = '__ogleChatGPTActivityObserver';
+    let observer = window[key];
+    if (!observer || observer.epoch !== ${epoch}) {
+      observer?.watch?.disconnect();
+      const probe = () => ${ACTIVITY_PROBE};
+      observer = {epoch:${epoch}, sawWorking:false, watch:null};
+      const relevant = 'button, #composer-submit-button, [data-is-streaming], .result-streaming, [aria-busy]';
+      const match = node => node?.nodeType === 1 && (node.matches(relevant) || node.querySelector(relevant));
+      observer.watch = new MutationObserver(records => {
+        // Ignore streaming text nodes and ordinary message markup. Inspect only
+        // small changed subtrees which can contain a lifecycle control/status.
+        if (!records.some(record => record.type === 'attributes' ? record.target.matches(relevant) :
+          (record.target.closest?.('#composer-submit-button') || [...record.addedNodes, ...record.removedNodes].some(match)))) return;
+        if (probe().working) observer.sawWorking = true;
+      });
+      observer.watch.observe(document.documentElement, {subtree:true, childList:true, attributes:true,
+        attributeFilter:['data-testid','aria-label','aria-busy','data-is-streaming','class']});
+      Object.defineProperty(window, key, {value:observer, configurable:true, writable:true});
+    }
+    const sample = ${ACTIVITY_PROBE};
+    const sawWorking = observer.sawWorking;
+    observer.sawWorking = false;
+    return {sample, sawWorking};
+  })()`;
+}
 
 class ActivityTracker {
   constructor(emit = () => {}) { this.emit = emit; this.state = 'idle'; this.completionSamples = 0; this.completionArmed = false; }
@@ -49,7 +93,7 @@ class ChatGPTActivity {
   constructor(contents, onActivity = () => {}, interval = 900) {
     this.contents = contents;
     this.tracker = new ActivityTracker(onActivity);
-    this.epoch = 0; this.pending = false; this.disposed = false;
+    this.epoch = 0; this.observationEpoch = 0; this.pending = false; this.disposed = false;
     this.lastUrl = contents.getURL();
     this.navigate = (_event, url, inPlace, mainFrame) => {
       if (!mainFrame) return;
@@ -59,10 +103,12 @@ class ChatGPTActivity {
       try { promotion = inPlace && new URL(this.lastUrl).origin === 'https://chatgpt.com' && new URL(url).origin === 'https://chatgpt.com' && new URL(this.lastUrl).pathname === '/' && /^\/c\/[^/]+$/.test(new URL(url).pathname); } catch {}
       this.lastUrl = url;
       this.epoch++;
-      if (!promotion) this.tracker.reset();
+      if (!promotion) { this.observationEpoch++; this.tracker.reset(); }
     };
     this.failed = (_event, code, _description, _url, mainFrame) => { if (mainFrame && code !== -3) { this.epoch++; this.tracker.fail(); } };
     this.crashed = () => { this.epoch++; this.tracker.fail(); };
+    this.loaded = () => this.poll();
+    contents.on('did-finish-load', this.loaded);
     contents.on('did-start-navigation', this.navigate);
     contents.on('did-fail-load', this.failed);
     contents.on('render-process-gone', this.crashed);
@@ -76,17 +122,23 @@ class ChatGPTActivity {
     if (host !== 'chatgpt.com') return;
     const epoch = this.epoch; this.pending = true;
     try {
-      const sample = await this.contents.executeJavaScript(ACTIVITY_PROBE);
-      if (!this.disposed && epoch === this.epoch && !this.contents.isDestroyed() && !this.contents.isLoadingMainFrame()) this.tracker.sample(sample);
+      const result = await this.contents.executeJavaScript(bufferedProbe(this.observationEpoch));
+      if (!this.disposed && epoch === this.epoch && !this.contents.isDestroyed() && !this.contents.isLoadingMainFrame()) {
+        const sample = result.sample;
+        if (result.sawWorking && sample?.available && !sample.working) this.tracker.sample({...sample, working:true, complete:false});
+        this.tracker.sample(sample);
+      }
     } catch { /* A disappearing execution context is not a completion signal. */ }
     finally { this.pending = false; }
   }
   dispose() {
     this.disposed = true; this.epoch++; clearInterval(this.timer);
+    this.contents.removeListener('did-finish-load', this.loaded);
     this.contents.removeListener('did-start-navigation', this.navigate);
     this.contents.removeListener('did-fail-load', this.failed);
     this.contents.removeListener('render-process-gone', this.crashed);
     this.tracker.reset();
+    if (this.contents.executeJavaScript && !this.contents.isDestroyed?.()) this.contents.executeJavaScript("window.__ogleChatGPTActivityObserver?.watch?.disconnect(); delete window.__ogleChatGPTActivityObserver; true").catch(()=>{});
   }
 }
-module.exports = { ACTIVITY_PROBE, ActivityTracker, ChatGPTActivity };
+module.exports = { ACTIVITY_PROBE, bufferedProbe, ActivityTracker, ChatGPTActivity };

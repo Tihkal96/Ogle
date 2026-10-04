@@ -39,21 +39,30 @@ async function readEdges(file,stat){
     return first.toString('utf8').replace(/[^\n]*$/,'')+'\n'+last.toString('utf8').replace(/^[^\n]*\n/,'');
   }finally{await handle.close();}
 }
+function promptText(content){
+  const text=(typeof content==='string'?content:Array.isArray(content)?content.filter(b=>b.type==='text').map(b=>b.text||'').join(' '):'').trim();
+  if(/^\/(?:[\w-]+)(?:\s|$)/.test(text)||/^<(?:local-command-stdout|local-command-caveat|command-name|system-reminder|task-notification)(?:\s|>)/.test(text))return '';
+  return text;
+}
 function transcriptInfo(text,id,mtime){
-  let cwd='',title='',first='';
+  let cwd='',title='',aiTitle='',first='',lastPrompt='',hasPrompt=false;
   for(const line of text.split('\n')){try{
     const row=JSON.parse(line);if(row.isSidechain)continue;
     if(typeof row.cwd==='string')cwd=row.cwd;
     if(row.type==='custom-title'&&typeof row.customTitle==='string')title=row.customTitle;
     if(!title&&row.type==='summary'&&typeof row.summary==='string')title=row.summary;
-    if(!first&&row.type==='user'){
+    if(row.type==='ai-title'&&typeof row.aiTitle==='string')aiTitle=row.aiTitle;
+    if(row.type==='last-prompt'){const value=promptText(row.lastPrompt);if(value){lastPrompt=value;hasPrompt=true;}}
+    if(row.type==='user'&&!row.isMeta){
       const c=row.message?.content;
-      if(typeof c==='string')first=c;
-      else if(Array.isArray(c))first=c.filter(b=>b.type==='text').map(b=>b.text||'').join(' ');
-      if(first.startsWith('<'))first='';
+      const value=promptText(c);
+      if(value||Array.isArray(c)&&c.some(b=>b.type==='image'))hasPrompt=true;
+      if(!first&&value)first=value;
     }
   }catch{}}
-  return cwd?{id,cwd,title:(title||first||'Claude conversation').replace(/\s+/g,' ').slice(0,180),updatedAt:mtime}:null;
+  // A started CLI or completed onboarding can leave metadata without a chat.
+  // Keep distinct real sessions even when their user-chosen titles are equal.
+  return cwd&&hasPrompt?{id,cwd,title:(title||aiTitle||first||lastPrompt||'Claude conversation').replace(/\s+/g,' ').slice(0,180),updatedAt:mtime}:null;
 }
 
 class ClaudeBridge{

@@ -32,3 +32,9 @@ test('drag clamps pet on all edges while allowing panel outside work area',()=>{
  }
  const left=clampPet({x:-3000,y:200,width:760,height:820},area);assert.ok(left.x<area.x);
 });
+
+test('narrow compact modes reserve the second toolbar row without changing normal widths or expanded height',()=>{
+ const bounds={x:0,y:0,width:600,height:216},normal={x:0,y:0,width:1920,height:1080},narrow={...normal,width:430};
+ for(const mode of ['reveal','quick','picker'])assert.equal(dockBounds(mode,bounds,narrow).height,dockBounds(mode,bounds,normal).height+30);
+ assert.equal(dockBounds('expand',bounds,narrow).height,dockBounds('expand',bounds,normal).height);
+});

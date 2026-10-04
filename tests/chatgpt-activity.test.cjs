@@ -8,11 +8,11 @@ test('DOM probe recognizes composer stop and rejects previous assistant final co
   const vm=require('node:vm');let role='user',stopping=true;
   const visible={getClientRects:()=>[{}]};
   const actions={...visible};
-  const turn={querySelectorAll:selector=>selector.includes('copy-turn')?[actions]:[]};
+  const turn={matches:()=>false,querySelector:()=>null,querySelectorAll:selector=>selector.includes('copy-turn')?[actions]:[]};
   const assistant={closest:()=>turn,matches:()=>false,querySelector:()=>null};
   const composer={...visible,getAttribute:()=> 'true',disabled:false};
   const context={location:{hostname:'chatgpt.com'},getComputedStyle:()=>({visibility:'visible',display:'block'}),document:{
-    readyState:'complete',querySelector:()=>composer,querySelectorAll:selector=>{
+    readyState:'complete',querySelector:selector=>selector==='#composer-submit-button'?null:composer,querySelectorAll:selector=>{
       if(selector==='[data-message-author-role="assistant"]')return[assistant];
       if(selector==='[data-message-author-role]')return[{getAttribute:()=>role}];
       return selector.includes('composer-stop-button')&&stopping?[visible]:[];
@@ -54,3 +54,23 @@ test('new chat URL promotion preserves work but conversation switching clears it
   assert.deepEqual(events,['working','idle']); observer.dispose();
 });
 test('poll is bounded and ignores stale result after navigation',async()=>{class Contents extends EventEmitter{isDestroyed(){return false;}isLoadingMainFrame(){return false;}getURL(){return'https://chatgpt.com/';}executeJavaScript(){this.calls=(this.calls||0)+1;return new Promise(resolve=>this.resolve=resolve);}}const contents=new Contents(),events=[],observer=new ChatGPTActivity(contents,e=>events.push(e.state),60000);const first=observer.poll();await observer.poll();assert.equal(contents.calls,1);contents.emit('did-start-navigation',{},'https://chatgpt.com/c/test',false,true);contents.resolve({...idle,working:true});await first;assert.deepEqual(events,[]);observer.dispose();assert.equal(contents.listenerCount('did-start-navigation'),0);});
+
+test('localized generic submit detects square stop glyph and Croatian stop label without English text',()=>{
+ const vm=require('node:vm');let label='Zaustavi generiranje',rects=[],busy=false;
+ const visible={getClientRects:()=>[{}]};
+ const submit={...visible,getAttribute:()=>label,querySelectorAll:()=>rects};
+ const turn={matches:selector=>busy&&selector.includes('aria-busy'),querySelector:()=>null,querySelectorAll:()=>[]};
+ const assistant={closest:()=>turn};
+ const composer={...visible,getAttribute:()=> 'true'};
+ const context={location:{hostname:'chatgpt.com'},getComputedStyle:()=>({visibility:'visible',display:'block'}),document:{readyState:'complete',querySelector:selector=>selector==='#composer-submit-button'?submit:composer,querySelectorAll:selector=>selector==='[data-message-author-role="assistant"]'?[assistant]:selector==='[data-message-author-role]'?[{getAttribute:()=> 'assistant'}]:[]}};
+ const probe=()=>vm.runInNewContext(ACTIVITY_PROBE,context);
+ assert.equal(probe().working,true,'Croatian generic submit stop label');
+ label='Pošalji poruku';assert.equal(probe().working,false,'normal localized send is idle');
+ rects=[{getAttribute:key=>({width:'10',height:'10',fill:'currentColor'})[key]}];assert.equal(probe().working,true,'language independent stop square');
+ rects=[];busy=true;assert.equal(probe().working,true,'streaming status on outer response article');
+});
+
+test('buffered fast generation emits working then stable completion even when stop is gone at poll',async()=>{
+ class Contents extends EventEmitter{isDestroyed(){return false;}isLoadingMainFrame(){return false;}getURL(){return'https://chatgpt.com/c/fast';}async executeJavaScript(){return {sawWorking:this.fast,sample:{...idle,complete:true,latestAssistant:true,composerReady:true}};}}
+ const contents=new Contents(),events=[],observer=new ChatGPTActivity(contents,e=>events.push(e.state),60000);contents.fast=true;await observer.poll();contents.fast=false;await observer.poll();assert.deepEqual(events,['working','done']);observer.dispose();
+});

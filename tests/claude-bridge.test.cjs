@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs/promises');const os=require('node:os');const path=require('node:path');const {spawnSync}=require('node:child_process');
-const {ClaudeBridge,discoverClaude,activityFor,INSTALL_COMMAND}=require('../src/main/claude-bridge.cjs');
+const {ClaudeBridge,discoverClaude,activityFor,transcriptInfo,INSTALL_COMMAND}=require('../src/main/claude-bridge.cjs');
 const ID='7b04f05e-7a12-4a37-a535-5a12e50a64dd';
 async function fixture(){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'ogle-claude-'));const cli=path.join(dir,'claude.exe');await fs.writeFile(cli,'fixture');const events=[],spawns=[];const pty={spawn(file,args,options){const p={onData(fn){this.data=fn;},onExit(fn){this.exit=fn;},write(data){this.written=data;},resize(c,r){this.dimensions=[c,r];},kill(){this.killed=true;}};spawns.push({file,args,options,p});return p;}};const b=new ClaudeBridge({dataDir:dir,homeDir:dir,executable:cli,env:{SystemRoot:process.env.SystemRoot},pty,onEvent:e=>events.push(e),pollMs:60000});return {dir,cli,b,events,spawns,async cleanup(){b.dispose();await fs.rm(dir,{recursive:true,force:true});}};}
 
@@ -34,6 +34,18 @@ test('terminal /clear or /resume updates its current session without a stale hoo
  await hook(1001,'PostToolUse',ID);await hook(1002,'SessionStart',ID,'subagent');assert.equal((await f.b.status()).active[0].resume,next);
  assert.equal((await f.b.create({cwd:f.dir,resume:next})).id,s.id);assert.equal(f.spawns.length,1);
 }finally{await f.cleanup();}});
+
+test('history ignores onboarding stubs, tool results and local commands but retains real same-title chats',()=>{
+ const parse=rows=>transcriptInfo(rows.map(JSON.stringify).join('\n'),ID,123);
+ const header=[{cwd:'C:\\project',type:'system'},{type:'custom-title',customTitle:'Project'}];
+ assert.equal(parse(header),null);
+ assert.equal(parse([...header,{type:'user',isMeta:true,message:{content:'internal metadata'}},{type:'user',message:{content:[{type:'tool_result',content:'output'}]}},{type:'user',message:{content:'/login'}},{type:'user',message:{content:'<local-command-stdout>Signed in</local-command-stdout>'}}]),null);
+ const valid=[...header,{type:'user',message:{content:'Fix the parser'}}];assert.equal(parse(valid).title,'Project');
+ const second=transcriptInfo(valid.map(JSON.stringify).join('\n'),'9b04f05e-7a12-4a37-a535-5a12e50a64dd',456);assert.notEqual(parse(valid).id,second.id);assert.equal(second.title,parse(valid).title);
+ assert.equal(parse([{type:'user',cwd:'C:\\project',message:{content:'<html>Help fix this page</html>'}}]).title,'<html>Help fix this page</html>');
+ assert.ok(parse([...header,{type:'user',message:{content:[{type:'image',source:{type:'base64'}}]}}]));
+ assert.ok(parse([...header,{type:'last-prompt',lastPrompt:'Persisted prompt outside sampled edges'}]));
+});
 
 test('CLI discovery and setup are explicit, missing installation never starts an installer',async()=>{const f=await fixture();try{
  const missing=path.join(f.dir,'missing.exe');f.b.executable=missing;assert.equal((await f.b.status()).installed,false);await assert.rejects(f.b.create({cwd:f.dir}),/Install Claude/);assert.equal(f.spawns.length,0);
