@@ -100,6 +100,16 @@ function visibleCodexTask() {
   if(state.fullscreenPanel && state.fullscreenPanel!=='chats')return null;
   return (state.activePanel==='chats' || state.pinnedPanel==='chats')?state.selected?.id:null;
 }
+function visibleChatGPT() {
+  if(state.dockVisible===false || document.hidden || window.DockLayoutTransition?.busy || state.mode!=='expand')return false;
+  return state.fullscreenPanel?state.fullscreenPanel==='chatgpt':state.activePanel==='chatgpt'||state.pinnedPanel==='chatgpt';
+}
+function acknowledgeChatGPTCompletion() {
+  if(state.chatgptActivity!=='done' || !visibleChatGPT())return;
+  // A response finishing in view gets its brief completion reaction first.
+  if(state.focusReaction?.provider==='chatgpt' && performance.now()<state.focusReaction.until)return;
+  state.chatgptActivity='idle';
+}
 function acknowledgeVisibleTask() {
   window.OgleClaude?.acknowledge();
   acknowledgeCompletion(visibleCodexTask());
@@ -114,8 +124,9 @@ function queueReaction(kind,threadId) {
 function updatePetState() {
   // Completion can arrive after the panel opens, through any activity source.
   clearCompletion(visibleCodexTask());
+  acknowledgeChatGPTCompletion();
   let next,restart=false;
-  const visibleGPT=state.dockVisible!==false && !document.hidden && state.mode==='expand' && (state.fullscreenPanel?state.fullscreenPanel==='chatgpt':state.activePanel==='chatgpt'||state.pinnedPanel==='chatgpt');
+  const visibleGPT=visibleChatGPT();
   if(state.focusReaction && performance.now()>=state.focusReaction.until)state.focusReaction=null;
   if(document.querySelector('.approval') || state.attention?.size || (state.settings.useClaude===true&&state.claudeWaiting)) next='waiting';
   else if(visibleGPT && state.focusReaction?.provider==='chatgpt')next=state.focusReaction.kind;

@@ -24,7 +24,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.7.3](https://github.com/Tihkal96/Ogle/releases/download/v0.7.3/Ogle-0.7.3-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.7.4](https://github.com/Tihkal96/Ogle/releases/download/v0.7.4/Ogle-0.7.4-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -58,6 +58,11 @@ Every upgrade must update the direct Windows ZIP download link above: its visibl
 Startup activity checks preserve newer live Codex events over older boot snapshots. Quiet or ambiguous recent tasks receive a bounded, one-time desktop runtime check; the temporary connection closes afterward. Working takes priority over pending done animations without opening the dock.
 
 Clicking the pet shows the horizontal bar by default. Hover reveal is off; it can be enabled in Settings → Dock behavior → Reveal toolbar when hovering the ball. Automatic collapse remains a separate setting.
+
+## Version 0.7.4
+
+- ChatGPT's green completion indicator clears after its five-second reaction when the response finishes in view. If it finishes while another tab is open or Ogle is collapsed, it stays green until you open ChatGPT. Active working indicators are preserved. Pinned and fullscreen ChatGPT panels use the same acknowledgement behavior.
+- Verified hidden completion, opening the completed response, simultaneous Codex activity, and the visible five-second reaction with the actual packaged renderer.
 
 ## Version 0.7.3
 
