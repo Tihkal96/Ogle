@@ -1,11 +1,11 @@
 'use strict';
 window.OgleDockCommands={mount({state,api,openPanel,setMode,save,applySettings,layout,report}){
   const el=id=>document.getElementById(id);
-  let invokingChat=null,originNative=false;
-  const panels=[['chats','Codex','Tasks and conversations'],['chatgpt','ChatGPT','Classic ChatGPT'],['claude','Claude Code','Coding chats and projects'],['notes','Notes','Scratchpad'],['editor','Editor','Code and text files'],['terminal','Shell','CMD and PowerShell'],['shortcuts','Links','Links, file search and Run'],['settings','Settings','Preferences and accounts']];
+  let invokingChat=null,originNative=null;
+  const panels=[['chats','Codex','Tasks and conversations'],['chatgpt','ChatGPT','Classic ChatGPT'],['claude-web','Claude','Claude website chat'],['claude','Claude Code','Coding chats and projects'],['notes','Notes','Scratchpad'],['editor','Editor','Code and text files'],['terminal','Shell','CMD and PowerShell'],['shortcuts','Links','Links, file search and Run'],['settings','Settings','Preferences and accounts']];
   async function showPanel(id){
     await openPanel(id);
-    if(id==='chatgpt'){await api.openChatGPT('focus');return;}
+    if(id==='chatgpt'||id==='claude-web'){await (id==='claude-web'?api.openClaudeWeb('focus'):api.openChatGPT('focus'));return;}
     const selectors={notes:'#note',editor:'.cm-content',terminal:'.terminal-session:not([hidden]) .xterm-helper-textarea',chats:state.selected?'#prompt':'#search'};
     const panel=el(id+'-panel');
     (document.querySelector(selectors[id] || '#'+id+'-panel input') || panel.querySelector('button'))?.focus();
@@ -21,10 +21,10 @@ window.OgleDockCommands={mount({state,api,openPanel,setMode,save,applySettings,l
       return commands;
     },
     beforeOpen:async(context)=>{
-      const focused=document.activeElement;originNative=context?.target==='chatgpt';
-      invokingChat=originNative?'chatgpt':focused?.closest('#chats-panel,#composer')?'chats':focused?.closest('#chatgpt-panel')?'chatgpt':['chats','chatgpt'].includes(state.activePanel)?state.activePanel:null;
+      const focused=document.activeElement;originNative=['chatgpt','claude-web'].includes(context?.target)?context.target:null;
+      invokingChat=originNative||(focused?.closest('#chats-panel,#composer')?'chats':focused?.closest('#chatgpt-panel')?'chatgpt':focused?.closest('#claude-web-panel')?'claude-web':['chats','chatgpt','claude-web'].includes(state.activePanel)?state.activePanel:null);
       window.OgleChatFind.close();await setMode('expand');
     },
-    visibility:(open,detail)=>{layout();if(!open&&detail?.restore&&originNative&&state.mode==='expand'&&(state.activePanel==='chatgpt'||state.pinnedPanel==='chatgpt'))api.openChatGPT('focus').catch(report);}
+    visibility:(open,detail)=>{layout();if(!open&&detail?.restore&&originNative&&state.mode==='expand'&&(state.activePanel===originNative||state.pinnedPanel===originNative))(originNative==='claude-web'?api.openClaudeWeb('focus'):api.openChatGPT('focus')).catch(report);}
   });
 }};

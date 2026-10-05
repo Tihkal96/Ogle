@@ -1,6 +1,6 @@
 # Ogle
 
-A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, an official Claude Code terminal, a code editor, shortcut groups and embedded terminals. Existing pet projects are preserved; the app bundles only Rinne Mini (the default), Rinne, and Lago Realistic. Separately installed custom v2 pets remain available. Saved pet choices are preserved; missing choices fall back to Rinne Mini.
+A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, Claude web chat, an official Claude Code terminal, a code editor, shortcut groups and embedded terminals. Existing pet projects are preserved; the app bundles only Rinne Mini (the default), Rinne, and Lago Realistic. Separately installed custom v2 pets remain available. Saved pet choices are preserved; missing choices fall back to Rinne Mini.
 
 ## Download and run
 
@@ -24,7 +24,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.7.4](https://github.com/Tihkal96/Ogle/releases/download/v0.7.4/Ogle-0.7.4-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.7.5](https://github.com/Tihkal96/Ogle/releases/download/v0.7.5/Ogle-0.7.5-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -58,6 +58,13 @@ Every upgrade must update the direct Windows ZIP download link above: its visibl
 Startup activity checks preserve newer live Codex events over older boot snapshots. Quiet or ambiguous recent tasks receive a bounded, one-time desktop runtime check; the temporary connection closes afterward. Working takes priority over pending done animations without opening the dock.
 
 Clicking the pet shows the horizontal bar by default. Hover reveal is off; it can be enabled in Settings → Dock behavior → Reveal toolbar when hovering the ball. Automatic collapse remains a separate setting.
+
+## Version 0.7.5: Claude web chat and history controls
+
+- **Claude** opens the Claude website in its own persistent browser tab. **Claude Code** remains a separate official coding terminal. Enable either or both in Settings - Assistants; website sign-in and Code sign-in are independent. The website supports free Claude accounts within their usage limits; Code requires supported paid access, such as an eligible subscription or Console billing. See [Claude web accounts](https://support.claude.com/en/articles/8114491-get-started-with-claude) and [Claude Code authentication](https://code.claude.com/docs/en/authentication). Ogle does not upgrade an account or submit paid API requests to test access.
+- Right-click a Codex or Claude Code conversation to rename it or move it to the archive. Removal asks for confirmation. **Archived conversations** in the same menu lists recoverable chats and offers restore. Codex uses its own archive; Claude Code transcripts are preserved under `claude-archive` in Ogle's local data folder. Close an active Claude Code terminal before changing its saved conversation.
+- Right-click a project to rename its label or hide it in Ogle. **Show hidden projects** brings hidden entries back. Labels and visibility are saved separately for Codex and Claude Code; these actions never rename, move or delete the actual project folder or its code.
+- Claude Code history comes from real local CLI transcripts, independently of its current sign-in state. A saved project or conversation does not establish that the account can run Claude Code. Empty onboarding records are omitted, while distinct sessions with the same title remain separate.
 
 ## Version 0.7.4
 
@@ -98,9 +105,11 @@ Clicking the pet shows the horizontal bar by default. Hover reveal is off; it ca
 
 ### Claude setup
 
-Enable Claude in Settings, open its tab and use **＋** to choose a project folder. Sign in through the official terminal if prompted. Use the CLI's own model and session commands; select an existing conversation in the sidebar to resume it. The refresh control reloads local history. Windows Claude Code prerequisites and authentication are managed by the official installer/CLI; see [Anthropic's setup guide](https://code.claude.com/docs/en/setup).
+For browser chat, enable **Claude** in Settings - Assistants, open the tab and sign in on the website. Website chats are managed by Claude's own interface; they are separate from local Claude Code projects.
 
-Ogle does not implement a Claude subscription-backed Agent SDK interface or store Claude credentials. Closing a Claude terminal stops that running session; saved conversation history remains in Claude's local profile. Disabling its tab hides it without terminating active work.
+For coding tasks, enable **Claude Code**, open its tab and use **Open project** to choose the folder where it should work. Sign in through the official terminal if prompted. Arrows and Enter control the first-use theme and login menus. Use the CLI's own model and session commands; select an existing conversation in the sidebar to resume it. The refresh control reloads local history. Windows prerequisites and authentication are managed by the official installer/CLI; see [Anthropic's setup guide](https://code.claude.com/docs/en/setup).
+
+Claude Code needs an account with supported Code access. A free website account or existing local history alone does not provide it. Ogle displays the official CLI's sign-in state, without storing credentials or implementing a subscription-backed Agent SDK interface. Closing a terminal stops that session; saved history remains in Claude's local profile. Disabling the tab hides it without terminating active work.
 
 ## Version 0.6.6
 

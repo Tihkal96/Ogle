@@ -95,3 +95,5 @@ body:not(.collapsed) .toolbar .tool{min-width:28px;padding-left:5px;padding-righ
 #chatgpt-activity-status{font-size:10px;color:var(--muted);white-space:nowrap}
 @keyframes assistant-pulse{50%{opacity:.25}}
 @media(prefers-reduced-motion:reduce){.toolbar .tool[data-activity="working"]::after{animation:none}}
+
+#claude-web-panel{flex-direction:column;flex:1;overflow:hidden}#claude-web-host{flex:1;min-height:0;background:var(--inset)}#claude-web-host p{padding:15px;color:var(--muted)}#claude-web-activity-status{font-size:10px;color:var(--muted);white-space:nowrap}

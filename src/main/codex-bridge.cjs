@@ -295,7 +295,7 @@ class CodexBridge extends EventEmitter {
     for (const mode of this.connectionModes) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.7.4' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.7.5' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
@@ -388,9 +388,9 @@ class CodexBridge extends EventEmitter {
       try { this._write({ id, method, params }); } catch (error) { clearTimeout(timer); this.pending.delete(id); reject(error); }
     });
   }
-  async listThreads({ cursor, searchTerm, cwd } = {}) {
+  async listThreads({ cursor, searchTerm, cwd, archived = false } = {}) {
     await this.connect();
-    const result = await this._rpc('thread/list', { cursor, searchTerm, cwd, limit: 60, sortKey: 'updated_at', archived: false });
+    const result = await this._rpc('thread/list', { cursor, searchTerm, cwd, limit: 60, sortKey: 'updated_at', archived });
     // Codex's disk-backed listing can emit one row for each rollout file even
     // when old resume files share one session_meta ID. Consolidate at the data
     // boundary, before any UI work; never alter or delete conversation archives.
@@ -436,6 +436,27 @@ class CodexBridge extends EventEmitter {
       if (cursor) seen.add(cursor);
     } while (cursor && seen.size < 20);
     return {data};
+  }
+  async renameThread(id, name) {
+    if(typeof id !== 'string' || !id.trim())throw new Error('Invalid Codex conversation ID');
+    if(typeof name !== 'string' || !name.trim() || name.trim().length > 200)throw new Error('Enter a conversation name of 1–200 characters');
+    await this.connect();return this._rpc('thread/name/set',{threadId:id,name:name.trim()});
+  }
+  async archiveThread(id) {
+    if(typeof id !== 'string' || !id.trim())throw new Error('Invalid Codex conversation ID');
+    await this.connect();
+    let runtime;
+    // A fresh probe avoids trusting a cached conversation snapshot while deleting.
+    const client=this.runtimeClientFactory();
+    try {const owner=await client.owner(id);if(owner){runtime=await client.readRuntime(id,owner);if(!runtime)throw new Error('Cannot check this conversation yet. Try again once Codex is ready.');}}
+    finally {client.close();}
+    if(!runtime){const result=await this._rpc('thread/read',{threadId:id,includeTurns:false});const status=result?.thread?.status?.type;if(!['active','idle','notLoaded','systemError'].includes(status))throw new Error('Cannot check this conversation yet. Try again once Codex is ready.');runtime={running:status==='active'};}
+    if(runtime.running)throw new Error('Stop the active Codex conversation before removing it.');
+    return this._rpc('thread/archive',{threadId:id});
+  }
+  async unarchiveThread(id) {
+    if(typeof id !== 'string' || !id.trim())throw new Error('Invalid Codex conversation ID');
+    await this.connect();return this._rpc('thread/unarchive',{threadId:id});
   }
   async accountRead() { await this.connect(); return this._rpc('account/read', { refreshToken: false }); }
   async login() { await this.connect(); return this._rpc('account/login/start', { type: 'chatgpt' }); }

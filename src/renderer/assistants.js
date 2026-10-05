@@ -1,14 +1,14 @@
 'use strict';
 window.OgleAssistants=(()=>{
-  const providers=[['codex','Codex','useCodex','chats'],['chatgpt','ChatGPT','useChatGPT','chatgpt'],['claude','Claude Code','useClaude','claude']];
-  function enabled(settings,id){const p=providers.find(p=>p[0]===id||p[3]===id);return !p || (p[0]==='claude'?settings[p[2]]===true:settings[p[2]]!==false);}
+  const providers=[['codex','Codex','useCodex','chats'],['chatgpt','ChatGPT','useChatGPT','chatgpt'],['claude','Claude Code','useClaude','claude'],['claude-web','Claude','useClaudeWeb','claude-web']];
+  function enabled(settings,id){const p=providers.find(p=>p[0]===id||p[3]===id);return !p || ((p[0]==='claude'||p[0]==='claude-web')?settings[p[2]]===true:settings[p[2]]!==false);}
   function apply({state,open,save}){
     for(const [id,,key,panel] of providers){
       const on=enabled(state.settings,id);
       document.querySelectorAll(`[data-panel="${panel}"],[data-chat-target="${id}"]`).forEach(node=>node.hidden=!on);
     }
     document.getElementById('status-dot').hidden=!enabled(state.settings,'codex');
-    const compact=providers.filter(p=>p[0]!=='claude'&&enabled(state.settings,p[0]));
+    const compact=providers.filter(p=>['codex','chatgpt'].includes(p[0])&&enabled(state.settings,p[0]));
     document.body.classList.toggle('no-compact-assistant',!compact.length);
     if(!compact.some(p=>p[0]===state.settings.compactChatTarget)&&compact.length)save({compactChatTarget:compact[0][0]});
     if(!enabled(state.settings,state.pinnedPanel))window.OglePinnedPanel.unpin();

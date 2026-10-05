@@ -3,11 +3,11 @@ window.OgleConversationPicker=(()=>{
  function render(){
   const node=$('compact-thread-list'),position=node.scrollTop,query=$('compact-search').value.toLowerCase(),pins=state.settings.pinnedThreads||[];
   const groups=new Map();
-  for(const thread of state.threads.filter(t=>!query||`${title(t)} ${t.cwd}`.toLowerCase().includes(query))){const key=thread.cwd||'';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(thread);}
+  for(const thread of state.threads.filter(t=>!window.OgleHistory?.hidden('codex',t.cwd)&&(!query||`${title(t)} ${t.cwd} ${window.OgleHistory?.label('codex',t.cwd)||''}`.toLowerCase().includes(query)))){const key=thread.cwd||'';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(thread);}
   node.replaceChildren();
   for(const [cwd,threads] of groups){
-   const group=document.createElement('div');group.className='compact-project';group.setAttribute('role','group');group.setAttribute('aria-label',basename(cwd));
-   const heading=document.createElement('div');heading.className='compact-project-name';heading.textContent=basename(cwd);heading.title=cwd;group.append(heading);
+   const group=document.createElement('div');group.className='compact-project';group.setAttribute('role','group');group.setAttribute('aria-label',window.OgleHistory?.label('codex',cwd)||basename(cwd));
+   const heading=document.createElement('div');heading.className='compact-project-name';heading.textContent=window.OgleHistory?.label('codex',cwd)||basename(cwd);heading.title=cwd;group.append(heading);
    for(const thread of threads.sort((a,b)=>Number(pins.includes(b.id))-Number(pins.includes(a.id)))){
     const option=document.createElement('button');option.type='button';option.className='compact-thread';option.dataset.threadId=thread.id;option.setAttribute('role','option');option.setAttribute('aria-selected',String(thread.id===state.selected?.id));option.textContent=(pins.includes(thread.id)?'★ ':'')+title(thread);option.title=title(thread);
     option.onclick=()=>attempt(async()=>{await setMode('quick');await selectThread(thread);$('prompt').focus();});group.append(option);

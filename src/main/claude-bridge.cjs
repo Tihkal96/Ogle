@@ -5,11 +5,14 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const os=require('node:os');
 const {randomUUID}=require('node:crypto');
+const {promisify}=require('node:util');
+const execFile=promisify(require('node:child_process').execFile);
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INSTALL_COMMAND='irm https://claude.ai/install.ps1 | iex';
 const size=(v,fallback)=>Number.isInteger(v)?Math.max(2,Math.min(500,v)):fallback;
 const psLiteral=value=>"'"+String(value).replace(/'/g,"''")+"'";
 const encoded=script=>Buffer.from(script,'utf16le').toString('base64');
+const within=(root,target)=>{const relative=path.relative(root,target);return !!relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative);};
 
 async function discoverClaude({homeDir=os.homedir(),env=process.env,executable}={}){
   const candidates=executable?[executable]:[
@@ -66,19 +69,19 @@ function transcriptInfo(text,id,mtime){
 }
 
 class ClaudeBridge{
-  constructor({onEvent=()=>{},dataDir,homeDir=os.homedir(),env=process.env,executable,pty,pollMs=400}={}){
-    Object.assign(this,{onEvent,homeDir,env,executable,pty,pollMs});
+  constructor({onEvent=()=>{},dataDir,homeDir=os.homedir(),env=process.env,executable,pty,pollMs=400,authRunner=execFile}={}){
+    Object.assign(this,{onEvent,homeDir,env,executable,pty,pollMs,authRunner});
     this.dataDir=path.resolve(dataDir||path.join(os.tmpdir(),'ogle-claude'));
-    this.sessions=new Map();this.historyCache=new Map();this.pendingCreates=new Map();this.pollTimer=null;this.polling=false;this.disposed=false;
+    this.historyMutations=new Map();this.authCache=null;this.sessions=new Map();this.historyCache=new Map();this.pendingCreates=new Map();this.pollTimer=null;this.polling=false;this.disposed=false;
   }
   emit(event){if(!this.disposed)this.onEvent(event);}
-  async status(){const executable=await discoverClaude(this);return {installed:!!executable,executable,active:[...this.sessions.values()].map(({id,cwd,resume,state,setup})=>({id,cwd,resume,state,setup})),installCommand:INSTALL_COMMAND};}
+  async status(){const executable=await discoverClaude(this);return {installed:!!executable,executable,active:[...this.sessions.values()].map(({id,cwd,resume,state,setup})=>({id,cwd,resume,state,setup})),installCommand:INSTALL_COMMAND,auth:executable?await this.authStatus(executable):null};}
   async listThreads(){
     const root=path.join(this.env.CLAUDE_CONFIG_DIR||path.join(this.homeDir,'.claude'),'projects');let dirs=[];
     try{dirs=await fs.readdir(root,{withFileTypes:true});}catch(error){if(error.code==='ENOENT')return {threads:[],projects:[]};throw error;}
-    const files=[];
+    const files=[],realRoot=await fs.realpath(root);
     for(const dir of dirs){if(!dir.isDirectory())continue;const parent=path.join(root,dir.name);let names=[];try{names=await fs.readdir(parent);}catch{continue;}
-      for(const name of names){const id=name.replace(/\.jsonl$/,'');if(!name.endsWith('.jsonl')||!UUID.test(id))continue;const file=path.join(parent,name);try{const stat=await fs.stat(file);if(stat.isFile())files.push({file,id,stat});}catch{}}
+      for(const name of names){const id=name.replace(/\.jsonl$/,'');if(!name.endsWith('.jsonl')||!UUID.test(id))continue;const file=path.join(parent,name);try{const stat=await fs.lstat(file);const real=await fs.realpath(file);if(stat.isFile()&&!stat.isSymbolicLink()&&real===path.resolve(file)&&within(realRoot,real))files.push({file,id,stat});}catch{}}
     }
     files.sort((a,b)=>b.stat.mtimeMs-a.stat.mtimeMs);const threads=[];
     for(const {file,id,stat} of files.slice(0,500)){
@@ -88,6 +91,79 @@ class ClaudeBridge{
     const retained=new Set(files.slice(0,500).map(x=>x.file));for(const key of this.historyCache.keys())if(!retained.has(key))this.historyCache.delete(key);
     return {threads,projects:[...new Set(threads.map(t=>t.cwd))].map(p=>({path:p,name:path.basename(p)||p}))};
   }
+  async authStatus(executable){
+    if(this.authCache&&this.authCache.executable===executable&&Date.now()-this.authCache.at<30000)return this.authCache.value;
+    let value=null;
+    if(!/\.(cmd|bat)$/i.test(executable))try{
+      const {stdout}=await this.authRunner(executable,['auth','status'],{env:this.env,windowsHide:true,timeout:3000,maxBuffer:16384});
+      const result=JSON.parse(stdout);value={loggedIn:result.loggedIn===true,authMethod:typeof result.authMethod==='string'?result.authMethod.slice(0,50):'unknown',apiProvider:typeof result.apiProvider==='string'?result.apiProvider.slice(0,50):'unknown'};
+    }catch(error){try{const result=JSON.parse(error.stdout||'');if(result.loggedIn===false)value={loggedIn:false,authMethod:typeof result.authMethod==='string'?result.authMethod.slice(0,50):'none',apiProvider:typeof result.apiProvider==='string'?result.apiProvider.slice(0,50):'unknown'};}catch{}}
+    this.authCache={executable,at:Date.now(),value};return value;
+  }
+  historyMutation(id,operation){
+    if(typeof id!=='string'||!UUID.test(id))return Promise.reject(new Error('Invalid Claude conversation.'));
+    if(this.historyMutations.has(id))return Promise.reject(new Error('This Claude conversation is already being changed.'));
+    const task=Promise.resolve().then(operation);this.historyMutations.set(id,task);task.finally(()=>this.historyMutations.delete(id)).catch(()=>{});return task;
+  }
+  async historyFile(id){
+    if(this.pendingCreates.has(id)||[...this.sessions.values()].some(s=>s.resume===id))throw new Error('Close this Claude terminal before changing its saved conversation.');
+    await this.listThreads();const found=[...this.historyCache].filter(([,entry])=>entry.info?.id===id);
+    if(found.length!==1)throw new Error(found.length?'Claude conversation ID is ambiguous.':'Claude conversation was not found.');
+    const [file,entry]=found[0],root=path.resolve(this.env.CLAUDE_CONFIG_DIR||path.join(this.homeDir,'.claude'),'projects');
+    const realRoot=await fs.realpath(root),real=await fs.realpath(file),stat=await fs.lstat(file);
+    if(!stat.isFile()||stat.isSymbolicLink()||real!==path.resolve(file)||!within(realRoot,real))throw new Error('Unsafe Claude history path.');
+    return {file,entry,stat,projectDirectory:path.basename(path.dirname(file))};
+  }
+  renameThread(id,name){return this.historyMutation(id,async()=>{
+    if(typeof name!=='string'||!name.trim()||name.trim().length>180||/[\x00-\x1f\x7f]/.test(name))throw new Error('Choose a conversation name of 1 to 180 characters.');
+    const {file,stat}=await this.historyFile(id),title=name.trim();
+    // Claude Code /rename persists this official custom-title transcript record.
+    await fs.appendFile(file,'\n'+JSON.stringify({type:'custom-title',customTitle:title,sessionId:id})+'\n','utf8');
+    await fs.utimes(file,stat.atime,stat.mtime);this.historyCache.delete(file);
+    return {id,title};
+  });}
+  async archiveRoot(){
+    const root=path.resolve(this.dataDir,'claude-archive');await fs.mkdir(root,{recursive:true});
+    if((await fs.lstat(root)).isSymbolicLink()||await fs.realpath(root)!==root)throw new Error('Unsafe Claude archive path.');return root;
+  }
+  removeThread(id){return this.historyMutation(id,async()=>{
+    const {file,entry,stat,projectDirectory}=await this.historyFile(id),root=await this.archiveRoot(),dir=path.join(root,id);
+    await fs.mkdir(dir);let moved=false;
+    try{
+      await fs.writeFile(path.join(dir,'metadata.json'),JSON.stringify({id,title:entry.info.title,cwd:entry.info.cwd,projectDirectory,updatedAt:stat.mtimeMs,archivedAt:Date.now()}),{flag:'wx'});
+      // Copy before removing, so even a cross-volume archive retains all content.
+      await fs.copyFile(file,path.join(dir,'transcript.jsonl'),require('node:fs').constants.COPYFILE_EXCL);
+      await fs.utimes(path.join(dir,'transcript.jsonl'),stat.atime,stat.mtime);
+      const current=await fs.lstat(file);if(current.size!==stat.size||current.mtimeMs!==stat.mtimeMs||current.isSymbolicLink()||this.pendingCreates.has(id)||[...this.sessions.values()].some(s=>s.resume===id))throw new Error('Claude conversation changed while archiving. Try again after closing its terminal.');
+      await fs.unlink(file);moved=true;this.historyCache.delete(file);return {id,archived:true};
+    }finally{if(!moved)await fs.rm(dir,{recursive:true,force:true});}
+  });}
+  async archivedEntry(id){
+    if(typeof id!=='string'||!UUID.test(id))throw new Error('Invalid Claude archive.');
+    const root=await this.archiveRoot(),dir=path.join(root,id);
+    if((await fs.lstat(dir)).isSymbolicLink()||await fs.realpath(dir)!==dir)throw new Error('Unsafe Claude archive path.');
+    const file=path.join(dir,'transcript.jsonl'),meta=path.join(dir,'metadata.json');
+    for(const candidate of [file,meta])if(!(await fs.lstat(candidate)).isFile()||(await fs.lstat(candidate)).isSymbolicLink()||await fs.realpath(candidate)!==candidate)throw new Error('Unsafe Claude archive file.');
+    if((await fs.stat(meta)).size>16384)throw new Error('Invalid Claude archive metadata.');
+    const metadata=JSON.parse(await fs.readFile(meta,'utf8'));
+    if(metadata.id!==id||typeof metadata.projectDirectory!=='string'||!metadata.projectDirectory||metadata.projectDirectory==='.'||metadata.projectDirectory==='..'||/[\\/:*?"<>|]/.test(metadata.projectDirectory))throw new Error('Invalid Claude archive metadata.');
+    return {dir,file,metadata};
+  }
+  async listArchivedThreads(){
+    const root=await this.archiveRoot(),threads=[];
+    for(const id of await fs.readdir(root)){if(!UUID.test(id))continue;try{const {metadata}=await this.archivedEntry(id);threads.push({id,title:metadata.title,cwd:metadata.cwd,updatedAt:metadata.updatedAt,archivedAt:metadata.archivedAt});}catch{}}
+    return {threads:threads.sort((a,b)=>b.archivedAt-a.archivedAt)};
+  }
+  restoreThread(id){return this.historyMutation(id,async()=>{
+    if(this.pendingCreates.has(id)||[...this.sessions.values()].some(s=>s.resume===id))throw new Error('Close this Claude terminal before restoring its conversation.');
+    const {dir,file,metadata}=await this.archivedEntry(id),root=path.resolve(this.env.CLAUDE_CONFIG_DIR||path.join(this.homeDir,'.claude'),'projects');
+    await fs.mkdir(root,{recursive:true});if(await fs.realpath(root)!==root)throw new Error('Unsafe Claude history path.');
+    const parent=path.join(root,metadata.projectDirectory);await fs.mkdir(parent,{recursive:true});
+    if((await fs.lstat(parent)).isSymbolicLink()||await fs.realpath(parent)!==parent)throw new Error('Unsafe Claude project path.');
+    const target=path.join(parent,id+'.jsonl');await fs.copyFile(file,target,require('node:fs').constants.COPYFILE_EXCL);
+    const stat=await fs.stat(file);await fs.utimes(target,stat.atime,stat.mtime);await fs.rm(dir,{recursive:true,force:true});
+    this.historyCache.delete(target);return {id,restored:true};
+  });}
   async hookSettings(id){
     const dir=path.join(this.dataDir,'claude-hooks',id);await fs.mkdir(dir,{recursive:true});
     const source=await fs.readFile(path.join(__dirname,'claude-hook.ps1'),'utf8');
@@ -103,6 +179,7 @@ class ClaudeBridge{
   async _create(input={}){
     if(this.disposed)throw new Error('Claude terminal is closed.');
     const cwd=path.resolve(input.cwd||this.homeDir);if(!(await fs.stat(cwd)).isDirectory())throw new Error('Choose a project folder.');
+    if(input.resume&&this.historyMutations.has(input.resume))throw new Error('This Claude conversation is being changed.');
     if(input.resume&&!UUID.test(input.resume))throw new Error('Invalid Claude session.');
     if(input.model&&(!/^[a-zA-Z0-9._:[\]-]+$/.test(input.model)||input.model.length>150))throw new Error('Invalid Claude model.');
     const executable=await discoverClaude(this);const setup=input.setup===true;

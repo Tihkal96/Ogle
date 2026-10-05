@@ -5,15 +5,17 @@ window.OgleChatFind = (() => {
   // Keep every match position, but bound DOM Range creation and painting.
   const MAX_PAINTED=1500;
   const bars=new Map();
+  const isNative=name=>name==='chatgpt'||name==='claude-web';
+  const stopNative=name=>name==='claude-web'?api.claudeWebStopFind():api.chatgptStopFind();
   const report=error=>window.OgleDiagnostics.record(error,'Find in chat');
   function clearHighlights(){CSS.highlights.delete('chat-find');CSS.highlights.delete('chat-find-current');}
   function close(restore=false){
     const closedTarget=target;
     generation++;scanning=false;refreshPending=false;clearTimeout(refreshTimer);refreshTimer=null;
     clearTimeout(timer);if(bar)bar.hidden=true;
-    if(target==='chatgpt')api.chatgptStopFind().catch(report);
+    if(isNative(target))stopNative(target).catch(report);
     target=null;requestId=null;ranges=[];current=-1;clearHighlights();document.getElementById('messages').classList.remove('chat-search-active');layout?.();
-    if(restore && closedTarget){if(closedTarget==='chatgpt' && restoreFocus)restoreFocus(closedTarget);else if(previousFocus?.isConnected)previousFocus.focus();}
+    if(restore && closedTarget){if(isNative(closedTarget) && restoreFocus)restoreFocus(closedTarget);else if(previousFocus?.isConnected)previousFocus.focus();}
   }
   function makeRange(match){
     if(!match?.node.isConnected || match.end>match.node.length)return null;
@@ -38,9 +40,9 @@ window.OgleChatFind = (() => {
   }
   function search(forward=true,next=false,scroll=true){
     clearTimeout(timer);if(!target)return;
-    const query=input.value;if(!query){generation++;scanning=false;ranges=[];current=-1;count.textContent='';clearHighlights();if(target==='chatgpt')api.chatgptStopFind().catch(report);return;}
-    if(target==='chatgpt'){
-      requestId=null;count.textContent='…';api.chatgptFind(query,{forward,findNext:next,matchCase:matchCase.checked}).then(id=>{requestId=id;}).catch(report);return;
+    const query=input.value;if(!query){generation++;scanning=false;ranges=[];current=-1;count.textContent='';clearHighlights();if(isNative(target))stopNative(target).catch(report);return;}
+    if(isNative(target)){
+      requestId=null;count.textContent='…';(target==='claude-web'?api.claudeWebFind:api.chatgptFind)(query,{forward,findNext:next,matchCase:matchCase.checked}).then(id=>{requestId=id;}).catch(report);return;
     }
     if(next && !scanning && ranges.length){current=(current+(forward?1:-1)+ranges.length)%ranges.length;highlight(scroll);return;}
     const previous=current, token=++generation, found=[];scanning=true;
@@ -77,10 +79,10 @@ window.OgleChatFind = (() => {
   }
   function mount(options){
     ({api,getTarget,layout,restoreFocus}=options);
-    for(const name of ['chats','chatgpt']){
-      const row=document.createElement('div');row.className='chat-find';row.hidden=true;row.setAttribute('role','search');row.setAttribute('aria-label',`Find in ${name==='chats'?'Codex':'ChatGPT'}`);
+    for(const name of ['chats','chatgpt','claude-web']){
+      const row=document.createElement('div');row.className='chat-find';row.hidden=true;row.setAttribute('role','search');row.setAttribute('aria-label',`Find in ${name==='chats'?'Codex':name==='claude-web'?'Claude':'ChatGPT'}`);
       row.innerHTML='<input type="search" maxlength="500" placeholder="Find in conversation…" aria-label="Find in conversation"><output aria-live="polite"></output><button type="button" title="Previous match (Shift+Enter)" aria-label="Previous match">↑</button><button type="button" title="Next match (Enter)" aria-label="Next match">↓</button><label title="Match case"><input type="checkbox" aria-label="Match case">Aa</label><button type="button" title="Close find (Esc)" aria-label="Close find">×</button>';
-      const anchor=name==='chats'?document.querySelector('.conversation-header'):document.querySelector('#chatgpt-panel>.subtoolbar');anchor.after(row);bars.set(name,row);
+      const anchor=name==='chats'?document.querySelector('.conversation-header'):document.querySelector('#'+name+'-panel>.subtoolbar');anchor.after(row);bars.set(name,row);
       row.querySelector('input[type=search]').addEventListener('input',()=>{generation++;scanning=false;ranges=[];current=-1;clearHighlights();clearTimeout(timer);timer=setTimeout(()=>search(),120);});
       row.querySelector('input[type=checkbox]').onchange=()=>search();
       const buttons=row.querySelectorAll('button');buttons[0].onclick=()=>search(false,true);buttons[1].onclick=()=>search(true,true);buttons[2].onclick=()=>close(true);
@@ -89,6 +91,6 @@ window.OgleChatFind = (() => {
     document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='f'&&!event.altKey){const name=getTarget();if(!bars.has(name))return;event.preventDefault();event.stopPropagation();open(name);}else if(event.key==='Escape'&&target){event.preventDefault();close(true);}},true);
     new MutationObserver(scheduleRefresh).observe(document.getElementById('messages'),{subtree:true,childList:true,characterData:true});
   }
-  function result(value){if(target==='chatgpt'&&input.value&&(!requestId||value.requestId===requestId))count.textContent=`${value.activeMatchOrdinal || 0} / ${value.matches || 0}`;}
+  function result(value,provider='chatgpt'){if(target===provider&&isNative(target)&&input.value&&(!requestId||value.requestId===requestId))count.textContent=`${value.activeMatchOrdinal || 0} / ${value.matches || 0}`;}
   return {mount,open,close,result};
 })();

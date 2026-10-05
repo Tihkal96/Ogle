@@ -1,6 +1,6 @@
 'use strict';
 window.PetDockSettings = (() => {
-  function mount(root,api,settings,initialPets,save,apply,report,reloadPets,showChatGPT,showClaude) {
+  function mount(root,api,settings,initialPets,save,apply,report,reloadPets,showChatGPT,showClaude,showClaudeWeb) {
     let pets=initialPets;
     const el=(tag,text,className)=>{const node=document.createElement(tag);if(text)node.textContent=text;if(className)node.className=className;return node;};
     const button=(text,action)=>{const node=el('button',text);node.onclick=()=>Promise.resolve().then(action).catch(report);return node;};
@@ -9,13 +9,14 @@ window.PetDockSettings = (() => {
     function check(section,label,key,fallback) {const row=el('label',null,'settings-row');row.append(el('span',label));const input=el('input');input.type='checkbox';input.dataset.setting=key;input.checked=settings[key] ?? fallback;input.onchange=async()=>{try{await save({[key]:input.checked});apply();}catch(err){report(err);}};row.append(input);section.append(row);}
     root.append(el('h1','Settings'));
     const assistants=section('Assistants','Choose which assistant tabs appear. Disabled Codex does not connect or start in the background.');
-    check(assistants,'Codex','useCodex',true);check(assistants,'ChatGPT','useChatGPT',true);check(assistants,'Claude','useClaude',false);
+    check(assistants,'Codex','useCodex',true);check(assistants,'ChatGPT','useChatGPT',true);check(assistants,'Claude','useClaudeWeb',false);check(assistants,'Claude Code','useClaude',false);
     const account=section('Accounts','Sign in through the official browser flow. Passwords are never entered into Ogle settings.');
     const accountStatus=el('p','Checking Codex account…','account-status');account.append(accountStatus);
     async function refreshAccount(){if(settings.useCodex===false){accountStatus.textContent='Codex is disabled.';return;}try{const result=await api.codexAccount();const value=result?.account ?? result;accountStatus.textContent=value?.email?`Codex: ${value.email}${value.planType?' · '+value.planType:''}`:value?.type?`Codex: ${value.type}`:'Codex: not signed in';}catch(err){accountStatus.textContent='Codex is not connected.';window.OgleDiagnostics.record(err,'Codex account');}}
     const accountActions=el('div',null,'settings-actions');accountActions.append(button('Sign in to Codex',async()=>{const result=await api.codexLogin();accountStatus.textContent=result?.message || 'Complete sign-in in your browser, then refresh account status.';}),button('Refresh account',refreshAccount),button('Sign out of Codex',async()=>{await api.codexLogout();await refreshAccount();}));account.append(accountActions);
     const chatActions=el('div',null,'settings-actions');chatActions.append(button('ChatGPT / sign in',async()=>{showChatGPT();await api.openChatGPT('login');}),button('Sign out of ChatGPT',async()=>{await api.openChatGPT('logout');}));account.append(chatActions);refreshAccount();
-    const claudeSection=section('Claude Code','Runs the official interactive CLI in Ogle. Sign in and choose models inside the terminal. Setup is available in the Claude tab if the CLI is missing.');
+    const claudeWebActions=el('div',null,'settings-actions');claudeWebActions.append(button('Claude / sign in',async()=>{if(!settings.useClaudeWeb)await save({useClaudeWeb:true});apply();showClaudeWeb?.();await api.openClaudeWeb('login');}),button('Sign out of Claude',()=>api.openClaudeWeb('logout')));account.append(claudeWebActions);
+    const claudeSection=section('Claude Code','Runs the official interactive CLI in Ogle. Sign in and choose models inside the terminal. Setup is available in the Claude Code tab if the CLI is missing.');
     claudeSection.append(button('Open Claude Code',async()=>{if(!settings.useClaude)await save({useClaude:true});apply();showClaude();}));
     const petSection=section('Pet','Right-click your pet for window controls. Drag the pet to move the dock.');
     select(petSection,'Click action','petClickAction',[['codex','Open Codex'],['animation','Play a random animation'],['expand','Open full panel'],['reveal','Show horizontal bar'],['toggle','Toggle full panel'],['chatgpt','Open ChatGPT panel'],['claude','Open Claude Code panel'],['none','Do nothing']], 'reveal');

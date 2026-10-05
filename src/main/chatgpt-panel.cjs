@@ -3,10 +3,11 @@ const { WebContentsView, shell, dialog, session } = require('electron');
 const path = require('node:path');
 const { isHttps } = require('../chatgpt/navigation.cjs');
 const { ChatGPTActivity } = require('./chatgpt-activity.cjs');
-const HOME = 'https://chatgpt.com/';
+const DEFAULT_SITE = Object.freeze({home:'https://chatgpt.com/',origin:'https://chatgpt.com',host:'chatgpt.com',label:'ChatGPT',partition:'persist:petdock-chatgpt',preload:'chatgpt-view-preload.cjs',wheelChannel:'ogle:chatgpt-wheel-zoom',Activity:ChatGPTActivity,conversationPath:/^\/c\/[a-zA-Z0-9-]+$/});
 
 class ChatGPTPanel {
-  constructor({ parent, onStatus, onActivity, onInteraction, onFindOpen, onFindResult, onCommandsOpen, onSelectionMenu, onZoom, onExitFullscreen, onChildWindow } = {}) {
+  constructor({ parent, onStatus, onActivity, onInteraction, onFindOpen, onFindResult, onCommandsOpen, onSelectionMenu, onZoom, onExitFullscreen, onChildWindow, site = DEFAULT_SITE } = {}) {
+    this.site = site;
     this.parent = parent;
     this.onStatus = onStatus;
     this.onActivity = onActivity;
@@ -21,7 +22,7 @@ class ChatGPTPanel {
     this.children = new Set();
     this.visible = false;
     this.bounds = { x: 0, y: 0, width: 0, height: 0 };
-    this.status = { message: 'ChatGPT is ready to open.', failed: false };
+    this.status = { message: this.site.label+' is ready to open.', failed: false };
     this.resize = () => this.applyLayout();
     parent?.on('resize', this.resize);
     parent?.once('closed', () => this.close());
@@ -47,8 +48,8 @@ class ChatGPTPanel {
         !contents || contents.isDestroyed() || !this.visible || !this.view.getVisible() ||
         !this.parent?.isFocused() || !contents.isFocused() || details.isMainFrame !== true) return false;
     try {
-      return new URL(contents.getURL()).origin === 'https://chatgpt.com' &&
-        new URL(requestingUrl).origin === 'https://chatgpt.com';
+      return new URL(contents.getURL()).origin === this.site.origin &&
+        new URL(requestingUrl).origin === this.site.origin;
     } catch { return false; }
   }
 
@@ -61,13 +62,13 @@ class ChatGPTPanel {
       const host = new URL(url).hostname;
       const authHost = ['auth.openai.com', 'auth0.openai.com', 'accounts.google.com', 'appleid.apple.com', 'login.microsoftonline.com', 'login.live.com'].includes(host);
       if (!authHost) {
-        if (host === 'chatgpt.com') contents.loadURL(url).catch(() => {});
+        if (host === this.site.host) contents.loadURL(url).catch(() => {});
         else shell.openExternal(url).catch(() => {});
         return { action: 'deny' };
       }
       return { action: 'allow', overrideBrowserWindowOptions: {
         width: 620, height: 740, autoHideMenuBar: true,
-        webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, partition: 'persist:petdock-chatgpt', preload: undefined }
+        webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, partition: this.site.partition, preload: undefined }
       } };
     });
     contents.on('did-create-window', child => {
@@ -84,15 +85,15 @@ class ChatGPTPanel {
     if (!this.parent || this.parent.isDestroyed()) throw new Error('The dock window is closed.');
     this.view = new WebContentsView({ webPreferences: {
       sandbox: true, contextIsolation: true, nodeIntegration: false,
-      webSecurity: true, backgroundThrottling: false, partition: 'persist:petdock-chatgpt',
-      preload: path.join(__dirname, 'chatgpt-view-preload.cjs')
+      webSecurity: true, backgroundThrottling: false, partition: this.site.partition,
+      preload: path.join(__dirname, this.site.preload)
     } });
     const contents = this.view.webContents;
     contents.setZoomFactor(this.zoomFactor);
-    contents.ipc.on('ogle:chatgpt-wheel-zoom', (event, direction) => {
+    contents.ipc.on(this.site.wheelChannel, (event, direction) => {
       if (event.senderFrame !== contents.mainFrame || !this.visible ||
           !this.view?.getVisible() || ![-1, 1].includes(direction)) return;
-      try { if (new URL(event.senderFrame.url).origin !== 'https://chatgpt.com') return; }
+      try { if (new URL(event.senderFrame.url).origin !== this.site.origin) return; }
       catch { return; }
       this.setZoom(this.zoomFactor + direction * .1);
     });
@@ -127,7 +128,7 @@ class ChatGPTPanel {
       interact();
     });
     this.activity?.dispose();
-    this.activity = new ChatGPTActivity(contents, this.onActivity);
+    this.activity = new this.site.Activity(contents, this.onActivity);
     // Keep the original partition so the existing login stays intact.
     contents.session.setPermissionRequestHandler((sender, permission, callback, details) =>
       callback(this.allowClipboardWrite(sender, permission, details.requestingUrl, details)));
@@ -135,16 +136,16 @@ class ChatGPTPanel {
       this.allowClipboardWrite(sender, permission, requestingOrigin, details));
     this.secure(contents);
     this.parent.contentView.addChildView(this.view);
-    contents.on('did-start-loading', () => this.setStatus('Loading ChatGPT…'));
+    contents.on('did-start-loading', () => this.setStatus('Loading '+this.site.label+'…'));
     contents.on('did-stop-loading', () => {
-      if (!this.status.failed) this.setStatus('Use ChatGPT’s sidebar for past chats. Complete any sign-in or website check here.');
+      if (!this.status.failed) this.setStatus('Use '+this.site.label+'’s sidebar for past chats. Complete any sign-in or website check here.');
     });
-    contents.on('did-finish-load', () => this.setStatus('Use ChatGPT’s sidebar for past chats. Sign in here if asked.'));
+    contents.on('did-finish-load', () => this.setStatus('Use '+this.site.label+'’s sidebar for past chats. Sign in here if asked.'));
     contents.on('did-fail-load', (_event, code, description, _url, isMainFrame) => {
       if (!isMainFrame || code === -3) return;
-      this.setStatus(`ChatGPT could not load (${description}). Reload or open it in your browser.`, true);
+      this.setStatus(`${this.site.label} could not load (${description}). Reload or open it in your browser.`, true);
     });
-    contents.on('render-process-gone', () => this.setStatus('The ChatGPT page stopped. Reload to recover, or open your browser.', true));
+    contents.on('render-process-gone', () => this.setStatus('The '+this.site.label+' page stopped. Reload to recover, or open your browser.', true));
     this.applyLayout();
     return true;
   }
@@ -196,13 +197,13 @@ class ChatGPTPanel {
       return;
     }
     if(action==='logout') {
-      const choice=await dialog.showMessageBox(this.parent,{type:'question',message:'Sign out of ChatGPT in Ogle?',detail:'This clears only the dock’s ChatGPT browser session.',buttons:['Cancel','Sign out'],defaultId:0,cancelId:0});
+      const choice=await dialog.showMessageBox(this.parent,{type:'question',message:'Sign out of '+this.site.label+' in Ogle?',detail:'This clears only the dock’s '+this.site.label+' browser session.',buttons:['Cancel','Sign out'],defaultId:0,cancelId:0});
       if(choice.response!==1)return {cancelled:true};
       const wasVisible=this.visible;
       for(const child of this.children)if(!child.isDestroyed())child.destroy();
       this.children.clear();
       if(this.view)await this.view.webContents.loadURL('about:blank');
-      await session.fromPartition('persist:petdock-chatgpt').clearStorageData();
+      await session.fromPartition(this.site.partition).clearStorageData();
       this.visible=wasVisible;this.ensureView();await this.loadHome();return;
     }
     if(action==='bottom') {
@@ -221,26 +222,26 @@ class ChatGPTPanel {
     this.applyLayout();
     if (created || action === 'new') { await this.loadHome(); return; }
     const contents = this.view.webContents;
-    if (action === 'reload') { this.setStatus('Loading ChatGPT…'); contents.reload(); }
+    if (action === 'reload') { this.setStatus('Loading '+this.site.label+'…'); contents.reload(); }
     else if (action === 'back' && contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
   }
 
   async loadHome() {
     if (!this.view) return;
-    this.setStatus('Loading ChatGPT…');
-    try { await this.view.webContents.loadURL(HOME); }
+    this.setStatus('Loading '+this.site.label+'…');
+    try { await this.view.webContents.loadURL(this.site.home); }
     catch (error) {
       if (error.code === 'ERR_ABORTED') return;
-      this.setStatus('ChatGPT could not load. Reload or open it in your browser.', true);
+      this.setStatus(this.site.label+' could not load. Reload or open it in your browser.', true);
     }
   }
 
   async openExternal() {
     const url = this.view?.webContents.getURL();
-    let target = HOME;
+    let target = this.site.home;
     try {
       const parsed = new URL(url);
-      if (parsed.hostname === 'chatgpt.com' && isHttps(url) && /^\/c\/[a-zA-Z0-9-]+$/.test(parsed.pathname)) target = `${parsed.origin}${parsed.pathname}`;
+      if (parsed.hostname === this.site.host && isHttps(url) && this.site.conversationPath.test(parsed.pathname)) target = `${parsed.origin}${parsed.pathname}`;
     } catch {}
     await shell.openExternal(target);
   }
