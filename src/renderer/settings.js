@@ -1,6 +1,6 @@
 'use strict';
 window.PetDockSettings = (() => {
-  function mount(root,api,settings,initialPets,save,apply,report,reloadPets,showChatGPT,showClaude,showClaudeWeb) {
+  function mount(root,api,settings,initialPets,save,apply,report,reloadPets,showChatGPT,showClaude,showClaudeWeb,workspaceOptions) {
     let pets=initialPets;
     const el=(tag,text,className)=>{const node=document.createElement(tag);if(text)node.textContent=text;if(className)node.className=className;return node;};
     const button=(text,action)=>{const node=el('button',text);node.onclick=()=>Promise.resolve().then(action).catch(report);return node;};
@@ -72,6 +72,7 @@ window.PetDockSettings = (() => {
     const disable=button('Remove administrator access',async()=>{disable.disabled=true;try{await api.terminalDisableAdmin();await refreshAdmin();}finally{disable.disabled=false;}});
     async function refreshAdmin(){try{const result=await api.terminalAdminStatus();enable.hidden=result.enabled || !result.available;disable.hidden=!result.enabled;adminStatus.textContent=result.enabled?'Persistent administrator access is enabled.':result.reason==='standard-account'?'Admin shells ask for Windows administrator approval once per Ogle session. Persistent access requires an administrator Windows account.':result.available?'The first Admin shell asks Windows once to install the protected helper.':'Persistent access is available in the packaged app. Development shells use approval per session.';}catch(err){adminStatus.textContent='Administrator access status is unavailable.';window.OgleDiagnostics.record(err,'Administrator helper');}}
     adminActions.append(enable,disable,button('Close administrator shells',async()=>{await api.terminalReleaseAdmin();await refreshAdmin();}));admin.append(adminActions,adminStatus);refreshAdmin();
+    if(workspaceOptions)window.OgleWorkspaceTools.mount(root,workspaceOptions);
     const debug=section('Debug','Technical diagnostics for developers and troubleshooting.');
     const debugActions=el('div',null,'settings-actions');
     debugActions.append(button('Open debug log',()=>window.OgleDiagnostics.open()));debug.append(debugActions);

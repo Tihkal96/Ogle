@@ -7,6 +7,8 @@ const { imageSize } = require('image-size');
 const { resolveCodexExecutable } = require('./codex-executable.cjs');
 const { CodexActivity } = require('./codex-activity.cjs');
 const { IpcFrames } = require('./ipc-frames.cjs');
+const { CodexHistoryPages } = require('./codex-history-pages.cjs');
+const { CodexRolloutPages } = require('./codex-rollout-pages.cjs');
 
 function modelOptions(options = {}) {
   if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Invalid Codex model options.');
@@ -272,7 +274,7 @@ class CodexBridge extends EventEmitter {
     this.desktop = desktop; this.deltas = new Map(); this.deltaTimer = null;
     this.activity = spawnProcess === spawn && connectionModes.includes('shared') ? new CodexActivity({ list: () => this._rpc('thread/list', { limit: 64, sortKey: 'updated_at', archived: false, useStateDbOnly: true }, 5000), readRuntime: id => this._readActivityRuntime(id) }) : null;
     this.activity?.on('activity', activity => this.emit('activity', activity));
-    desktop?.on('state', state => this.emit('notification', { method: 'petdock/threadState', params: state }));
+    desktop?.on('state', state => this.emit('notification', { method: 'petdock/threadState', params: this.incrementalThreads?.has(state.thread?.id)?{...state,partial:true}:state }));
     desktop?.on('thread-opened', threadId => this.emit('thread-opened', threadId));
   }
   async connect() {
@@ -295,7 +297,7 @@ class CodexBridge extends EventEmitter {
     for (const mode of this.connectionModes) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.7.5' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.8.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
@@ -404,9 +406,24 @@ class CodexBridge extends EventEmitter {
     if (Array.isArray(result?.threads)) return { ...result, threads: unique(result.threads) };
     return result;
   }
-  async readThread(id, {messageLimit = 80} = {}) {
+  async readThread(id, {messageLimit = 80, incremental = false, historyCursor} = {}) {
     if(!Number.isInteger(messageLimit) || messageLimit < 1 || messageLimit > 10000)throw new Error('Invalid conversation history limit');
     await this.connect();
+    if(incremental){
+      this.historyPages ||= new CodexHistoryPages({rpc:(method,params)=>this._rpc(method,params),projectItem:messageItem});
+      this.rolloutPages ||= new CodexRolloutPages();this.incrementalThreads ||= new Set();this.incrementalThreads.add(id);
+      let result;
+      if(historyCursor&&this.rolloutPages.cursors.has(historyCursor)){const metadata=await this._rpc('thread/read',{threadId:id,includeTurns:false});return this.rolloutPages.read(metadata.thread,{limit:messageLimit,cursor:historyCursor});}
+      try{result=await this.historyPages.read(id,{limit:messageLimit,cursor:historyCursor});}
+      catch(error){if(historyCursor||!/(?:list_(?:items|turns) is not supported yet|unknown method|method not found|unsupported method)/i.test(error.message))throw error;
+        const metadata=await this._rpc('thread/read',{threadId:id,includeTurns:false});result=await this.rolloutPages.read(metadata.thread,{limit:messageLimit});
+      }
+      // Desktop v11 has no delta-only subscription: its first snapshot is full.
+      // Keep it once for patch authority and live streaming; do not download it
+      // again when loading earlier history. Emitted windows are additive.
+      if(!historyCursor&&this.desktop){try{const owner=await this.desktop.owner(id);if(owner){const live=await this.desktop.read(id,owner,80);if(live){result.runtime=live.runtime;if(result.thread.history.source==='rollout')result.thread.turns=live.thread.turns;result.thread={...result.thread,...threadOptions(this.desktop.states.get(id)?.state||{})};result.thread.history.liveSource='desktop-snapshot';}}}catch{/* Bounded app-server history remains available. */}}
+      return result;
+    }
     if (this.desktop) { try { const owner = await this.desktop.owner(id); if (owner) { const result = await this.desktop.read(id, owner, messageLimit); if (result) return result; } } catch { /* Disk history remains readable when desktop closes. */ } }
     let result;
     if (!this.unsupportedHistory.has(id)) {
@@ -424,6 +441,15 @@ class CodexBridge extends EventEmitter {
       return this.historyReader.readThread(id, {messageLimit});
     }
     return result.thread ? { ...result, thread: projectThread(result.thread, messageLimit) } : result;
+  }
+  async readRuntime(id) {
+    await this.connect();
+    if(this.desktop){try{const owner=await this.desktop.owner(id);if(owner){const cached=desktopRuntime(this.desktop.states.get(id)?.state);return {runtime:cached?{source:'desktop',...cached}:null};}}catch{/* Metadata remains readable after the desktop exits. */}}
+    const result=await this._rpc('thread/read',{threadId:id,includeTurns:false});
+    const type=result.thread?.status?.type;if(!['active','idle','systemError'].includes(type))return {runtime:null};
+    if(type!=='active')return {runtime:{source:'app-server',running:false}};
+    const latest=await this._rpc('thread/turns/list',{threadId:id,limit:1,sortDirection:'desc',itemsView:'notLoaded'});
+    return {runtime:{source:'app-server',running:true,...(latest.data?.[0]?.id?{turnId:latest.data[0].id}:{})}};
   }
   async listModels() {
     await this.connect();
@@ -509,7 +535,7 @@ class CodexBridge extends EventEmitter {
     this.activity?.stop();++this.runtimeGeneration;for(const client of this.runtimeProbes)client.close(error);this.runtimeProbes.clear();
     const child = this.child; this.child = null; this.connected = false;
     this.resumed.clear(); this.resuming.clear(); this.requests.clear();
-    this.unsupportedHistory.clear(); this.historyReader?.close(); this.historyReader = null;
+    this.historyPages?.clear();this.rolloutPages?.clear();this.incrementalThreads?.clear();this.unsupportedHistory.clear(); this.historyReader?.close(); this.historyReader = null;
     clearTimeout(this.deltaTimer); this.deltaTimer = null; this.deltas.clear();
     for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); }
     this.pending.clear();

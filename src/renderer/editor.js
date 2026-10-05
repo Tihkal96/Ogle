@@ -8,8 +8,9 @@ window.PetDockEditor = (() => {
   const label = (tag, text, className) => { const node = document.createElement(tag); node.textContent = text; if (className) node.className = className; return node; };
   const button = (text, action, title) => { const node = label('button',text); node.type = 'button'; node.onmousedown = event => event.preventDefault(); node.onclick = () => Promise.resolve().then(action).catch(report); if (title) { node.title = title; node.setAttribute('aria-label',title); } return node; };
   function infer(path) { const ext = path?.split('.').pop().toLowerCase(); return ({js:'javascript',mjs:'javascript',cjs:'javascript',ts:'typescript',tsx:'typescript',jsx:'javascript',json:'json',py:'python',html:'html',htm:'html',css:'css',md:'markdown',ps1:'powershell',sh:'shell',bat:'cmd',cmd:'cmd',c:'c',h:'c',cpp:'cpp',hpp:'cpp',cs:'csharp',vb:'vb',sql:'sql'})[ext] || 'text'; }
-  async function flush() { clearTimeout(timer); await save({editorTabs:tabs.map(({id,name,path,language,text,dirty,framework})=>({id,name,path,language,text,dirty,framework})),activeEditorTab:activeId || ''}); }
-  function schedule() { clearTimeout(timer); timer = setTimeout(() => flush().catch(report),400); }
+  async function flush() { autosave?.cancel(); await save({editorTabs:tabs.map(({id,name,path,language,text,dirty,framework})=>({id,name,path,language,text,dirty,framework})),activeEditorTab:activeId || ''}); }
+  let autosave;
+  function schedule() {autosave.schedule();}
   function languageExtension(language) {
     const vendors = window.PetDockVendors;
     if (!vendors) return [];
@@ -19,14 +20,14 @@ window.PetDockEditor = (() => {
     if (['shell','powershell','c','csharp','vb','cmd'].includes(language)) { const mode=vendors[language==='cmd'?'batch':language]; return mode ? vendors.StreamLanguage.define(mode) : []; }
     return typeof vendors[language] === 'function' ? vendors[language]() : [];
   }
-  function updated(text) { if (loading || !byId()) return; const tab = byId(); tab.text = text; tab.dirty = tab.savedText === undefined || tab.text !== tab.savedText; schedule(); renderTabs(); updateStatus(); }
+  function updated(text) { if (loading || !byId()) return; const tab = byId(),wasDirty=tab.dirty; tab.text = text; tab.dirty = tab.savedText === undefined || tab.text !== tab.savedText; schedule(); if(wasDirty!==tab.dirty)renderTabs(); updateStatus(); }
   function updateStatus(message) {
     const tab = byId(); if (!tab) return;
     status.replaceChildren();
     const location = label('span',message || (tab.path || 'Scratch tab · automatically kept in Ogle')); location.title = tab.path || ''; status.append(location);
-    let detail = `${tab.text.split('\n').length} lines · ${tab.dirty ? 'Unsaved file changes' : 'Saved'}`;
+    let detail = `${view?.state.doc.lines || tab.text.split('\n').length} lines · ${tab.dirty ? 'Unsaved file changes' : 'Saved'}`;
     let issue = false;
-    if (tab.language === 'json' && tab.text.trim()) { try { JSON.parse(tab.text); detail = 'JSON valid'; } catch (err) { detail = err.message; issue = true; } }
+    if(tab.language==='json')detail+=' · JSON diagnostics in the gutter';
     const hints=root.querySelector('.editor-hints'); hints.hidden=true;
     if (['csharp','vb'].includes(tab.language) && tab.framework && tab.framework!=='modern') {
       const findings=[]; if(/\b(async|await)\b/i.test(tab.text)) findings.push('Async/await needs a newer compiler and async support than the original toolchain.');
@@ -103,7 +104,7 @@ window.PetDockEditor = (() => {
     else if (input?.isConnected) { input.setRangeText(text,input.selectionStart,input.selectionEnd,'end'); updated(input.value);input.focus(); }
   }
   function mount(container, bridge, initial, persist, onError) {
-    root=container;api=bridge;settings=initial;save=persist;report=onError;currentTheme=settings.theme || 'dark';
+    root=container;api=bridge;settings=initial;save=persist;report=onError;autosave=new window.OgleAutosave(flush,{report});currentTheme=settings.theme || 'dark';
     tabs=(Array.isArray(settings.editorTabs)?settings.editorTabs:[]).map(tab=>({...tab,language:languages.includes(tab.language)?tab.language:'text',savedText:tab.dirty ? undefined : tab.text,dirty:Boolean(tab.dirty) || (!tab.path && !!tab.text)}));
     const controls=document.createElement('div'); controls.className='subtoolbar'; controls.append(button('＋',create,'New tab'),button('▱',open,'Open file'),button('↓',()=>write(false),'Save file (Ctrl+S)'),button('⇲',()=>write(true),'Save file as'),button('⧉',copySelection,'Copy selection'),button('▣',pasteText,'Paste'));
     const spacer=document.createElement('span');spacer.className='spacer';controls.append(spacer);
@@ -157,5 +158,11 @@ window.PetDockEditor = (() => {
     currentTheme = ['dark','light','midnight'].includes(theme) ? theme : 'dark';
     if(view && themeSlot) view.dispatch({effects:themeSlot.reconfigure(editorTheme(currentTheme))});
   }
-  return {mount,flush,applyTheme,getSelection,newFromText,measure:()=>view?.requestMeasure()};
+  function restoreWorkspace(next){
+    const focus=document.activeElement;autosave.cancel();view?.destroy();view=null;sessions.clear();renderedId=null;activeId=null;
+    tabs=(next.editorTabs||[]).map(tab=>({...tab,savedText:tab.dirty?undefined:tab.text}));
+    if(tabs.length)select(tabs.some(tab=>tab.id===next.activeEditorTab)?next.activeEditorTab:tabs[0].id);else create();
+    if(focus?.isConnected)focus.focus();
+  }
+  return {mount,flush,snapshot:()=>({editorTabs:tabs.map(({id,name,path,language,text,dirty,framework})=>({id,name,path,language,text,dirty,framework})),activeEditorTab:activeId||''}),restoreWorkspace,applyTheme,getSelection,newFromText,measure:()=>view?.requestMeasure()};
 })();

@@ -1,7 +1,9 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const {isDeepStrictEqual}=require('node:util');
 const { randomUUID } = require('node:crypto');
+const {durableWrite,readRecovery,recoverCorrupt}=require('./durable-file.cjs');
 const { shortcutKeys } = require('./global-shortcuts.cjs');
 const defaults = () => ({ useCodex:true, useChatGPT:true, useClaude:false, useClaudeWeb:false, projectNames:{}, hiddenProjects:{}, assistantsConfigured:false, pinnedThreads: [], drafts: {}, note: '', petId: 'rinne-mini', petClickAction:'reveal', shortcutVisibility:'Control+Alt+O', shortcutPanel:'Control+Alt+Space', shortcutBar:'Control+Alt+B', shortcutChatTarget:'Control+Alt+T', shortcutCodex:'Control+Alt+C', shortcutGpt:'Control+Alt+G', shortcutClaude:'', shortcutEditor:'Control+Alt+E', shortcutShell:'Control+Alt+S', shortcutLinks:'Control+Alt+L', shortcutMappingVersion:2, shortcutPrompt:'Control+Alt+P', includeSearchFolders:false, statsVisible:true, statsBackground:false, statsTextTransparency:0, statsBackgroundTransparency:45, statsClicks:true, statsKeys:true, statsCpu:true, statsRam:true, statsCpuTemp:false, statsGpu:false, statsGpuClock:false, statsPosition:'right', alwaysOnTop: true, lastThreadId: null, projectPath: '', editorTabs: [], activeEditorTab: '', shortcuts: [], shortcutsView: 'icons', toolbarOrder: [], terminalCommands: [], autoExpand: false, autoCollapse: true, autoStart: true, hoverDelay: 3000, autoCollapseDelay: 7000, pinnedPanelSide: 'left', petScale: 1, showTime: true, showDate: false, timeFormat: '24h', dateFormat: 'locale', theme: 'dark', sidebarVisible: true });
 function validatePatch(patch) {
@@ -102,15 +104,17 @@ function validatePatch(patch) {
 }
 class SettingsStore {
   constructor(file) {
-    this.file = file;
+    this.file = file;this.asyncTail=Promise.resolve();this.pendingAsync=0;this.writer=null;
     this.value = defaults();
     this.loadError = null;
+    this.recoveryInfo = null;
+    this.needsRepair = false;
     this.recoveryOriginal = null;
     this.loadReadFailed = false;
     let original;
     try {
-      original = fs.readFileSync(file);
-      const parsed = JSON.parse(original.toString('utf8'));
+      const recovered=readRecovery(file);original=recovered.bytes;this.recoveryInfo=recovered.info;this.needsRepair=!!recovered.info;if(recovered.source!=='primary')try{const primary=fs.readFileSync(file);try{const value=JSON.parse(primary.toString('utf8'));if(!value||typeof value!=='object'||Array.isArray(value))this.recoveryOriginal=primary;}catch{this.recoveryOriginal=primary;}}catch{}
+      let parsed;try{parsed=JSON.parse(original.toString('utf8'));if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw new Error('Invalid settings');}catch(error){const backup=recoverCorrupt(file);if(!backup)throw error;this.recoveryOriginal=original;original=backup.bytes;this.recoveryInfo=backup.info;this.needsRepair=true;parsed=JSON.parse(original.toString('utf8'));}
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid settings');
       if(parsed.shortcutMappingVersion!==2) {
         const canonical=value=>typeof value==='string'?value.toLowerCase().replace(/^ctrl\+/,'control+'):'';
@@ -131,11 +135,12 @@ class SettingsStore {
       const errors = [];
       // A damaged preference must not discard unrelated notes, drafts or tabs.
       for (const [key, value] of Object.entries(parsed)) {
-        try { Object.assign(this.value, validatePatch({ [key]: value })); }
+        try {const clean=validatePatch({ [key]: value });if(Object.keys(clean).length)Object.assign(this.value,clean);else if(!['__proto__','constructor','prototype'].includes(key))Object.defineProperty(this.value,key,{value,writable:true,enumerable:true,configurable:true});}
         catch (error) { errors.push(error.message); }
       }
-      if (errors.length) { this.loadError = errors.join('; '); this.recoveryOriginal = original; }
+      if (errors.length) { this.needsRepair=true;this.loadError = errors.join('; '); this.recoveryOriginal ??= original; }
     } catch (error) {
+      this.needsRepair=true;
       if (error.code !== 'ENOENT') {
         this.loadError = error.message;
         if (original) this.recoveryOriginal = original;
@@ -144,9 +149,22 @@ class SettingsStore {
     }
     if(this.value.linksLayoutVersion!==2){this.value.linksLayoutVersion=2;}
   }
+  enqueue(operation){this.pendingAsync++;const task=this.asyncTail.then(operation);this.asyncTail=task.catch(()=>{});task.finally(()=>{this.pendingAsync--;}).catch(()=>{});return task;}
+  workerTask(operation,payload={}){return this.enqueue(()=>{this.writer||=new(require('./persistence-client.cjs').PersistenceWorker)();return this.writer.run({operation,file:this.file,value:this.value,...payload});});}
+  updateAsync(patch){let clean;try{clean=validatePatch(patch);}catch(error){return Promise.reject(error);}return this.enqueue(async()=>{
+    if(this.loadReadFailed)throw new Error('Settings could not be read. Restart after restoring access before saving changes.');
+    if(!this.needsRepair&&this.recoveryOriginal===null&&Object.entries(clean).every(([key,value])=>isDeepStrictEqual(this.value[key],value)))return this.value;
+    const next={...this.value,...clean};this.writer||=new(require('./persistence-client.cjs').PersistenceWorker)();
+    await this.writer.run({operation:'settings',file:this.file,value:next,recovery:this.recoveryOriginal});this.value=next;this.needsRepair=false;this.recoveryOriginal=null;this.recoveryInfo=null;return this.value;
+  });}
+  flush(){return this.asyncTail;}
+  async dispose(){await this.flush();await this.writer?.dispose();}
   update(patch) {
-    const next = { ...this.value, ...validatePatch(patch) };
+    if(this.pendingAsync)throw new Error("A save is in progress; use updateAsync while asynchronous persistence is active.");
+    const clean=validatePatch(patch);
     if (this.loadReadFailed) throw new Error('Settings could not be read. Restart after restoring access before saving changes.');
+    if(!this.needsRepair&&this.recoveryOriginal===null&&Object.entries(clean).every(([key,value])=>isDeepStrictEqual(this.value[key],value)))return this.value;
+    const next = { ...this.value, ...clean };
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     if (this.recoveryOriginal !== null) {
       // Preserve the exact damaged input before the first successful replacement.
@@ -154,10 +172,8 @@ class SettingsStore {
       fs.writeFileSync(recovery, this.recoveryOriginal, { flag: 'wx' });
       this.recoveryOriginal = null;
     }
-    const temporary = `${this.file}.tmp`;
-    fs.writeFileSync(temporary, JSON.stringify(next, null, 2), 'utf8');
-    fs.renameSync(temporary, this.file);
-    this.value = next;
+    durableWrite(this.file,JSON.stringify(next,null,2),{keepPrevious:true});
+    this.value = next;this.needsRepair=false;this.recoveryInfo=null;
     return this.value;
   }
 }

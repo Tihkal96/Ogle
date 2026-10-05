@@ -1,413 +1,50 @@
 # Ogle
 
-A Windows desktop dock with an animated pet, Codex tasks, classic ChatGPT, Claude web chat, an official Claude Code terminal, a code editor, shortcut groups and embedded terminals. Existing pet projects are preserved; the app bundles only Rinne Mini (the default), Rinne, and Lago Realistic. Separately installed custom v2 pets remain available. Saved pet choices are preserved; missing choices fall back to Rinne Mini.
+A Windows dock with an animated pet, Codex tasks, ChatGPT, Claude web chat, Claude Code, notes, a code editor, Links and embedded PowerShell/CMD terminals.
 
-## Download and run
+## Download and setup
 
-Settings → Pet includes credited downloads for **BMO by gaith**, **Monthly Salary Cat by xiaoyyy**, and **Creepy by creeper**. Community artwork is installed from Codex Pets rather than included under Ogle's MIT license. See [pet credits](assets/PET_ATTRIBUTION.md). The selected pet's creator is shown in Settings.
+Download [Ogle 0.8.0](https://github.com/Tihkal96/Ogle/releases/download/v0.8.0/Ogle-0.8.0-win32-x64.zip), extract the entire ZIP, and run `Ogle.exe`. Keep the executable and its supporting files together. The GitHub Source code archives are for development. A release needs no Node.js, npm or Git.
 
-Global shortcuts (customizable in Settings):
+For a stable installation, use the install-for-this-user control in Settings. It copies Ogle into `%LOCALAPPDATA%\Ogle\Application`, creates the selected Desktop/Start menu shortcuts, and preserves the existing profile. The ZIP can also run portably. This is a user-level installation and does not permanently grant administrator shell rights.
 
-| Keys | Action |
+Choose the assistant tabs you use at startup or in Settings. Codex requires its installed application and sign-in. ChatGPT and Claude sign in independently inside their browser tabs. Claude Code runs its official CLI; complete its own setup and sign-in in the terminal. Ogle also works with all assistants disabled.
+
+Ogle lives in the Windows tray. Click the pet to reveal the horizontal bar; click a tab to expand. The default idle collapse delay is seven seconds and pauses while the pointer is inside the expanded window. Right-click the pet for window controls. Settings controls startup, shortcuts, themes, pet size, metrics and assistant tabs.
+
+## Everyday controls
+
+| Shortcut | Action |
 | --- | --- |
-| Ctrl+Alt+C | Open Codex |
-| Ctrl+Alt+G | Open ChatGPT |
-| Ctrl+Alt+E | Open Editor |
-| Ctrl+Alt+S | Open Shell |
-| Ctrl+Alt+L | Open Links |
-| Ctrl+Alt+P | Focus the horizontal prompt box |
-| Ctrl+Alt+T | Switch the prompt between Codex and ChatGPT |
+| Ctrl+Alt+C / G | Codex / ChatGPT |
+| Ctrl+Alt+E / S / L | Editor / Shell / Links |
+| Ctrl+Alt+P | Focus the horizontal prompt |
+| Ctrl+Alt+T | Switch its Codex/ChatGPT destination |
+| Ctrl+F | Find in the current supported chat/editor |
+| Ctrl+mouse wheel | Zoom panel content |
 
-The former default Ctrl+Alt+G target switch migrates to Ctrl+Alt+T. The previous default Shell/Links pair (Ctrl+Alt+X / Ctrl+Alt+S) migrates to Ctrl+Alt+S / Ctrl+Alt+L; custom bindings are preserved. Empty space beside the pet passes clicks to the application behind Ogle in ball, bar and expanded modes, using a native Windows window region.
+Global shortcuts are customizable. Right-click a tab to pin it beside the main panel; close the pinned pane with its X. Fullscreen controls apply to panel content. Links supports groups, drag ordering and seven toolbar pins. Shell input has an editable command frame; pasted commands are not executed until you run them.
 
-Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
+The bundled pets are Rinne Mini (default), Rinne and Lago Realistic. Settings offers credited community pets and refreshes the local library from installed Codex pets. See [artwork credits](assets/PET_ATTRIBUTION.md); third-party artwork keeps its own rights.
 
-### Windows release — no source checkout needed
+## Updates and local data
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.7.5](https://github.com/Tihkal96/Ogle/releases/download/v0.7.5/Ogle-0.7.5-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
-2. Extract the entire build archive. Keep its executable, resources and supporting files together.
-3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
+Settings can check the official GitHub release, verify its ZIP against the published SHA-256, and prepare a separate update. Restart to update is allowed only after active work is stopped and edits are saved. The handoff keeps the application's installation path so existing shortcuts and startup entries continue to work. A backup of the previous application, including any extra files you placed there, is retained beside the installation. Prepared updates can be recovered after a restart; their ZIP is verified again before reuse.
 
-For a local repository build, the executable is `dist/Ogle-win32-x64/Ogle.exe`; `Launch-Ogle.ps1` launches that build.
+For a manual update, close Ogle after saving, extract the new build, and run its executable. Settings, notes, drafts, editor tabs and browser sessions are stored in your local Ogle profile, outside the application folder. Releases contain no accounts or personal data. Do not delete that profile when replacing the build. Automatic replacement is unavailable for development builds, junctions and protected system locations; use the verified ZIP there.
 
-To use Codex features, install and sign in to Codex on that PC. Sign in to ChatGPT separately inside Ogle. Accounts, notes, settings and chat sessions are local to each PC and are not included in releases or this repository. Windows startup is enabled by default for the packaged app and can be turned off in Settings.
+## Recovery and limits
 
-### Development
+Settings → Workspace and recovery exports notes, assistant drafts, editor buffers, Links and preferences. Import previews the contents and retains a recovery copy; restored editor buffers have no file paths so they cannot overwrite files. Browser cookies, credentials, administrator access and startup registration are excluded. Saves run off the UI thread, keep a last-good file and recover valid pending writes on startup. Continuous typing is saved at least every 1.5 seconds, with a final flush on normal shutdown.
 
-```powershell
-git clone https://github.com/Tihkal96/Ogle.git
-cd Ogle
-npm ci
-npm start
-```
+Open Settings → Debug for technical errors. A browser login or website check must be completed in its tab. Reload is an explicit action and can interrupt that website's response; collapsing Ogle preserves its browser page. Website activity indicators use UI signals and can change when providers update their sites. Fixtures do not guarantee live account behavior.
 
-Build the Windows application with `npm run package`, then launch `dist/Ogle-win32-x64/Ogle.exe` or `./Launch-Ogle.ps1`. Codex features require Codex to be installed and signed in. Ogle discovers `codex.exe` through PATH, the local Codex installation, Microsoft Store package, and standard npm native package locations. If your installation is elsewhere, set `PETDOCK_CODEX_PATH` to the full executable path and restart Ogle. A missing installation now shows setup guidance instead of a raw ENOENT error.
+Windows decides administrator consent for shells; Ogle cannot permanently bypass it. Unsupported hardware meters show N/A. Codex transport availability and model choices depend on the installed Codex version. Long histories load progressively; find covers loaded content. Browser tabs depend on internet connectivity. Save errors keep Ogle open; forced termination and crashes cannot guarantee pending edits survive.
 
-### Compatibility with earlier PetDock versions
+## Development and releases
 
-Ogle is the new project and application name. Existing user data remains under `%APPDATA%/PetDock`, including settings, notes and the `persist:petdock-chatgpt` browser partition, so the rename does not create a fresh profile. Environment variables retain their `PETDOCK_*` names for compatibility; use the names documented below rather than substituting `OGLE_*`.
+Run `npm install`, `npm test`, and `npm start` for source development. `npm run package` creates the complete Windows build under `dist/Ogle-win32-x64`; keep that build tracked through Git LFS. Runtime checks use isolated profiles and should never submit live prompts or disturb user sign-ins. Syntax-check generated Electron harnesses before launching them.
 
-## Contributing
+Follow [publishing instructions](docs/PUBLISHING.md) and [release acceptance checks](RELEASE_READINESS.md). Every release must update this README's versioned direct ZIP link and verify the uploaded ZIP and SHA-256. Keep documentation about current behavior; Git history contains previous release changes. Leave Reddit alone unless the owner explicitly authorizes it again.
 
-Fork [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle), make changes on a branch in your fork, and open a pull request. **@Tihkal96 reviews and merges contributions; contributors do not push directly to the upstream repository.** See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and checks. [CODEOWNERS](.github/CODEOWNERS) assigns review ownership; it does not by itself enforce repository permissions or branch protection.
-
-## Release checklist for maintainers and AI agents
-
-Every upgrade must update the direct Windows ZIP download link above: its visible version, release tag and ZIP filename must all match `package.json`. Update package-lock and the bridge client version too, build and verify the complete tracked Windows package, upload the matching ZIP and checksum, and verify that the published link downloads that release. `scripts/check-release-link.cjs` runs during packaging and rejects a stale README download link. Do not leave an older direct-download URL after publishing a newer release. Leave Reddit alone; announcement browsing or edits require a new explicit request from the owner.
-
-Startup activity checks preserve newer live Codex events over older boot snapshots. Quiet or ambiguous recent tasks receive a bounded, one-time desktop runtime check; the temporary connection closes afterward. Working takes priority over pending done animations without opening the dock.
-
-Clicking the pet shows the horizontal bar by default. Hover reveal is off; it can be enabled in Settings → Dock behavior → Reveal toolbar when hovering the ball. Automatic collapse remains a separate setting.
-
-## Version 0.7.5: Claude web chat and history controls
-
-- Toolbar captions give way to icons on narrow docks, keeping the full clock, date and Settings button visible even with every assistant enabled.
-
-- **Claude** opens the Claude website in its own persistent browser tab. **Claude Code** remains a separate official coding terminal. Enable either or both in Settings - Assistants; website sign-in and Code sign-in are independent. The website supports free Claude accounts within their usage limits; Code requires supported paid access, such as an eligible subscription or Console billing. See [Claude web accounts](https://support.claude.com/en/articles/8114491-get-started-with-claude) and [Claude Code authentication](https://code.claude.com/docs/en/authentication). Ogle does not upgrade an account or submit paid API requests to test access.
-- Right-click a Codex or Claude Code conversation to rename it or move it to the archive. Removal asks for confirmation. **Archived conversations** in the same menu lists recoverable chats and offers restore. Codex uses its own archive; Claude Code transcripts are preserved under `claude-archive` in Ogle's local data folder. Close an active Claude Code terminal before changing its saved conversation.
-- Right-click a project to rename its label or hide it in Ogle. **Show hidden projects** brings hidden entries back. Labels and visibility are saved separately for Codex and Claude Code; these actions never rename, move or delete the actual project folder or its code.
-- Claude Code history comes from real local CLI transcripts, independently of its current sign-in state. A saved project or conversation does not establish that the account can run Claude Code. Empty onboarding records are omitted, while distinct sessions with the same title remain separate.
-
-## Version 0.7.4
-
-- ChatGPT's green completion indicator clears after its five-second reaction when the response finishes in view. If it finishes while another tab is open or Ogle is collapsed, it stays green until you open ChatGPT. Active working indicators are preserved. Pinned and fullscreen ChatGPT panels use the same acknowledgement behavior.
-- Verified hidden completion, opening the completed response, simultaneous Codex activity, and the visible five-second reaction with the actual packaged renderer.
-
-## Version 0.7.3
-
-- Codex opens with the latest 80 messages at the bottom on its first visible frame. Use **Earlier messages** to load older history in batches of 80. Each chat retains its scroll position. Tool and reasoning payloads are excluded from the visible history.
-- Model and effort controls use the selected chat's desktop settings. The model catalog is cached; background refreshes do not rebuild a focused dropdown or overwrite an explicit choice for that chat.
-- Desktop conversation state is limited to four followed chats. Large incoming IPC frames are assembled in linear time, streaming updates project only the visible history, and unchanged sidebar entries are not redrawn. Dragging coalesces movement and avoids duplicate native position changes.
-- ChatGPT activity recognizes the current composer and conversation markup, including localized controls, and tracks trusted Send actions without observing every text token. The working/completed lifecycle is tested against the current structure; website changes can still require detection updates.
-- Each assistant has its own activity indicator. ChatGPT displays Working/Done in its toolbar; its visible completion plays briefly even while Codex works, then returns to the ongoing work animation. The pet tooltip lists active assistants.
-- ChatGPT stays alive without background timer/render throttling when Ogle collapses. A transient page-load failure no longer hides the browser behind a blank panel; the toolbar shows a reload hint. Opening or collapsing the tab does not reload or close its page. An isolated test keeps the same page running for more than eight seconds in ball mode; the user's live interruption has not been reproduced.
-- Claude Code offers an explicit **Open project** action, focuses its terminal for setup and input, and provides command shortcuts for login, model, status and help. Commands are inserted for review before Enter. Terminal resizing occurs only when its dimensions change. Existing real Claude histories are preserved; Claude sign-in and project trust remain in the official CLI.
-- Validation: 243 unit tests; actual renderer tests for a 10,000-message conversation, streaming responsiveness, scroll restoration, drag bursts, assistant controls and ChatGPT activity; official Claude CLI keyboard setup through the login screen in an isolated profile. Live ChatGPT generation and signed-in Claude answers require account-level confirmation.
-
-## Version 0.7.2
-
-- Settings → Pet recommends BMO by gaith and Creepy by creeper in place of Fern and Banana Cat; Monthly Salary Cat stays. Rinne Mini remains the startup default. Installed pets are preserved, including creator credits for retired recommendations.
-- Claude terminals now retain session and exit events that arrive before the window finishes opening. An early failure shows as ended and can be reopened, instead of accepting input into a dead session.
-- The feature review covers assistant input/activity, toolbar layouts, panel pinning, zoom, collapse behavior, daily counters, tray policy and local pet synchronization. Browser/terminal checks use isolated profiles and do not submit real prompts or sign in.
-
-## Version 0.7.1
-
-- The toolbar reserves space for complete time/date text. Tab captions yield when pinned links crowd the bar; narrow layouts keep the controls accessible.
-- Claude's native setup uses keyboard navigation: click its terminal and use arrows/Enter, or use the new ↑ ↓ ↵ buttons. Reopening the tab restores terminal focus. The official theme screen and transition to login were verified without signing in or sending a prompt.
-- Claude history shows project and last-updated time to distinguish conversations sharing a title. Real sessions remain separate; empty onboarding records and internal-only messages do not become conversation entries.
-- ChatGPT activity recognizes localized stop controls and outer response streaming indicators. A bounded observer remembers brief working states between polls, so quick responses can still trigger pet activity. It reads UI state only, never conversation text; website integration remains best-effort.
-
-## Version 0.7.0
-
-- Choose Codex, ChatGPT and/or Claude on first startup or in Settings → Assistants. Unused assistant tabs are hidden; disabling Codex stops its connection and prevents autostart from opening it. All assistants may be disabled while keeping notes, editor, shell and links.
-- Codex model and reasoning-effort controls use the connected account's available models. Choices apply to new prompts; queued prompts remember their selections. Steering keeps the currently running turn's model.
-- Claude hosts the **official interactive Claude Code CLI**, with project/session history, resume, multiple terminal sessions, copy/paste, theme, zoom and panel pinning. The CLI owns sign-in, permissions and model controls. If missing, the explicit **Set up Claude Code** button opens Anthropic's official Windows installer in the embedded terminal; nothing is installed on startup. Claude is not bundled and its account access is separate from Ogle.
-- Claude pet activity comes from per-session lifecycle hooks, not guesses based on terminal text. Working, permission waiting and completion are tracked for sessions opened through Ogle. Completion clears when that session is viewed. Hooks store only lifecycle metadata and do not alter global Claude settings. Independent Claude terminals are not monitored.
-- Every Ogle window, including sign-in popups, uses tray-only taskbar behavior and reapplies it after showing/restoring.
-
-### Claude setup
-
-For browser chat, enable **Claude** in Settings - Assistants, open the tab and sign in on the website. Website chats are managed by Claude's own interface; they are separate from local Claude Code projects.
-
-For coding tasks, enable **Claude Code**, open its tab and use **Open project** to choose the folder where it should work. Sign in through the official terminal if prompted. Arrows and Enter control the first-use theme and login menus. Use the CLI's own model and session commands; select an existing conversation in the sidebar to resume it. The refresh control reloads local history. Windows prerequisites and authentication are managed by the official installer/CLI; see [Anthropic's setup guide](https://code.claude.com/docs/en/setup).
-
-Claude Code needs an account with supported Code access. A free website account or existing local history alone does not provide it. Ogle displays the official CLI's sign-in state, without storing credentials or implementing a subscription-backed Agent SDK interface. Closing a terminal stops that session; saved history remains in Claude's local profile. Disabling the tab hides it without terminating active work.
-
-## Version 0.6.6
-
-- Ogle yields to fullscreen video/games instead of repeatedly raising itself over them, then restores normal always-on-top behavior afterward. Detection uses Windows APIs through a bundled helper; no installation or elevation is required.
-- Completion acknowledgements remember when a task was read. Delayed rollout delivery cannot restart the review animation for work already seen in Codex or Ogle; later work still notifies normally.
-- ChatGPT activity recognizes modern stop controls and responses whose copy/rating buttons remain present during generation. It tracks the newest response and preserves activity when a new chat receives its conversation URL. Website detection remains best-effort, not an official ChatGPT activity API.
-- Includes the recent zoom and chat scrolling fixes: Ctrl+wheel holds editor scroll offsets, the Codex bottom arrow hides at the bottom, and bottom-following survives streaming, zoom and reopening.
-
-## Version 0.6.5
-
-- Codex working activity is detected at startup without opening the dock. New live events cannot be erased by an older boot snapshot. Quiet/ambiguous recent rollouts receive at most two concurrent, temporary desktop runtime checks; these never subscribe the main conversation view or send/steer messages.
-- A newly discovered active task now announces its working state even when its log evidence predates Ogle's startup. Historical completions are not replayed; new work takes priority over pending done animations.
-- Hover reveal is off by default. Click the pet to show the horizontal bar; automatic collapse remains independent.
-
-## Version 0.6.4
-
-- Ogle lives in the Windows system tray instead of the taskbar. Click its eye icon to show the dock; right-click for Show/Hide, Settings and Quit. Windows may place the icon in its hidden-icons overflow.
-- Hiding or minimizing keeps Ogle running. Global shortcuts and launching Ogle again can also restore it. Quit saves local work before removing the tray icon.
-
-## Version 0.6.3
-
-- Links resolve Windows namespace shortcut icons, including This PC. Enter saves edits from text fields and group selectors; repeated saves are guarded.
-- Click and key totals persist locally across restarts and reset on a new local calendar day. Only totals are stored, never typed text. Totals are checkpointed every five seconds and saved on a normal exit.
-- Metrics sit one row higher. Optional CPU temperature, GPU utilization and GPU clock rows are off by default; enable them in Settings. They use available Windows/driver readings without installing anything and show `n/a` when unsupported.
-- Administrator shell buttons wait for the pending startup/Windows consent request before accepting another click. Ordinary shells remain available, and the guard clears immediately after startup succeeds or fails.
-
-## Version 0.6.2
-
-- Every panel has a fullscreen button, including pinned panels. Escape or the exit button restores the dock. Fullscreen pauses automatic collapse and offers zoom out, reset and zoom in controls; Ctrl+mousewheel changes content zoom between 60% and 200%.
-- The pet detects working and completed Codex tasks without opening their conversations. It checks bounded local rollout additions every two seconds and discovers recent tasks every ten seconds. This is visual status only; queue and steering decisions still use Codex ownership checks. Historical completions at startup are not replayed.
-- The empty bottom strip is removed, and the Codex YOU label is right-aligned. The panel is named Links again. Notes zoom still resets when Notes loses focus.
-- Always-on-top now recovers its Windows z-order after activation and fullscreen changes, with a lightweight two-second guard while visible. It does not focus or reopen the dock, pauses during Ogle's administrator prompts, and keeps its sign-in windows above it. Windows secure desktop and exclusive fullscreen applications remain outside this guarantee.
-- Direct panel shortcuts use Ctrl+Alt+C/G/E/S/L for Codex, ChatGPT, Editor, Shell and Links. Ctrl+Alt+P focuses the compact prompt; Ctrl+Alt+T switches its destination.
-- Empty space around the pet lets clicks reach the application behind Ogle, including when the dock is expanded.
-- Pet Settings offers credited community downloads while keeping Rinne Mini as the default.
-
-## Version 0.6.1
-
-- Pinning the main tab opens Editor (or Shell for a pinned Editor). Pinning a different tab preserves the current main tab.
-- Hover reveal and automatic collapse have separate settings. Automatic collapse controls the keep-open pin; existing preferences migrate without changing their previous behavior.
-- The pet watches the typing caret in the horizontal prompt, including new lines and scrolling.
-- Every shell session has an editable command frame. Run executes its text; drafts stay local to the current session.
-- Editor selection stays visible over the active line in every theme.
-- Links groups always show their full-size icons. Edit a group to choose columns, rows, and whether overflow grows down or right. Layout, sibling order and view mode survive restart. Shortcut icons use the Windows shortcut's custom icon or target.
-- Pet installs also try the local Codex library. Existing different Codex pets are preserved; a failed copy does not undo the Ogle install. Bundled Rinne and Rinne Mini match the updated local Codex atlases.
-- The application uses the supplied eye icon (source file: icons8-eye-64.png, [Icons8](https://icons8.com/)); pet changes no longer change the app icon.
-- Codex's disk-based list can return several old rollout files with one session ID. The investigated repeated task had four different September 11–12 rollout files carrying the same session_meta ID, although the session index contained one task. Ogle consolidates those incoming API records before any sidebar row is created, so there is no add/remove rendering cycle. This is an upstream-data compatibility guard, not a repair of Codex's listing implementation; original conversation files are untouched because their contents differ.
-
-Ogle can run without Codex. Start Ogle.exe from Windows Explorer; Notes, Editor, Shell, Links and ChatGPT remain available when Codex disconnects. A launch hosted by an automation process can inherit that process's lifetime; this is different from an application dependency on Codex.
-
-A conventional installer alone does not eliminate administrator prompts. Packaged Ogle already supports a protected helper for administrator accounts. Standard accounts require Windows consent once per session, and helper upgrades can require consent again.
-
-## Version 0.6.0
-
-Reliability and usability pass toward 1.0:
-
-- Streaming replies no longer rebuild unchanged prompt controls per text chunk. Full Codex history refresh pauses while its panel is hidden and resumes when opened.
-- Closing the window or quitting saves pending notes, drafts and editor changes first. If saving fails, Ogle stays open so you can recover your work.
-- Editor tabs keep undo history, selection and viewport when switching tabs, changing languages or saving.
-- Select text and right-click → **Paste into** to move a copy to ChatGPT, Codex, PowerShell, CMD, either administrator shell, a new editor file, or Notes. Ogle opens the destination. Chats remain unsent; terminal text is staged in an editable command draft until you click Run. Existing Notes/chat drafts are appended to. A Codex paste without a selected task waits for you to choose one. Administrator sessions still use normal Windows consent.
-- Ctrl+Shift+P opens a searchable command menu for panels, settings, prompts, metrics and window controls. It also works inside embedded ChatGPT; right-click the pet and choose Commands to open it with the mouse.
-- Settings has search and a section jump menu. Existing settings and saved choices are preserved.
-- Conversation find scans in batches, keeps exact match counts, and bounds highlight painting for large conversations. Escape restores typing focus.
-- Pinned nested link groups expand their ancestors; Enter saves link edits; shell status follows the selected session.
-- Partially damaged settings retain valid fields. Before replacing damaged input, Ogle keeps the original bytes in a `settings.json.recovery-*.json` file beside the profile. Unreadable profiles are not overwritten.
-- Non-UTF-8 files are rejected before editing rather than silently corrupting their text. File errors have actionable messages, with technical details in Debug.
-
-Run `npm run test:readiness` for the isolated regression suite. Set `PETDOCK_TEST_EXE` to the packaged executable to exercise the real package where supported. The suite does not send live chat prompts or request administrator access. See [release readiness](RELEASE_READINESS.md) for evidence and remaining 1.0 checks.
-
-## Version 0.5.25
-
-Ctrl+F opens conversation search in Codex and ChatGPT, including when typing inside embedded ChatGPT. Use Enter/Shift+Enter or arrows for next/previous matches, optional case matching, and Escape to close. Search closes on tab changes and collapse. Codex searches loaded message text; ChatGPT searches currently loaded page content.
-
-## Version 0.5.24
-
-Codex completion loops the review animation until that task is opened in Ogle’s Codex panel or marked read in Codex. Opening an unrelated task does not clear it. Expanding the existing Codex panel also acknowledges its selected task, and completion arriving while that task is visible is acknowledged immediately (including a pinned Codex panel). Hidden or covered panels keep their notifications. Work and approval states retain priority; unread completion resumes afterward.
-
-## Version 0.5.23
-
-Completion uses the pet’s review animation. Completion and failure reactions now remain visible throughout their reaction window instead of being covered by hover, drag, prompt watching or random animations. Working still supports these interactions.
-
-## Version 0.5.22
-
-ChatGPT navigation uses a compact icon toolbar with tooltips. Notes supports temporary Ctrl+mouse-wheel text zoom (8–40 px); leaving Notes, collapsing the panel or losing focus resets its normal text size. Note contents are unchanged.
-
-## Version 0.5.21
-
-New profiles default the pet click action to “Show horizontal bar”, which toggles between the ball and toolbar. Existing saved click-action choices are preserved.
-
-## Version 0.5.20
-
-The pet click action “Show horizontal bar” now toggles an already visible horizontal bar back to the ball, even with the keep-open pin enabled. Fully expanded attached panes retain their pin behavior.
-
-## Version 0.5.19
-
-Only hovering the idle ball reveals the horizontal toolbar. Hovering the pet triggers its animation without opening the bar. Pet click actions remain configurable.
-
-## Version 0.5.18
-
-The dock toolbar and expanded panels can extend beyond screen edges and into the taskbar area. Only the pet is constrained to the visible work area, so expansion no longer moves it merely to fit the full dock. Drag the pet back to bring controls into view.
-
-## Version 0.5.17
-
-Right-click Codex, ChatGPT, Editor, Shell or Links in the toolbar and choose **Pin** to attach that panel beside the main dock. One panel can be pinned at a time. If the pinned tab was active in the main panel, the main panel opens Editor, or Shell when Editor is pinned. Otherwise the main panel stays on its current tab. Settings → Dock behavior → Pinned panel position chooses Left (default), Right or Bottom. The attached panel’s top-right × removes the pin without closing its files, tasks or terminal sessions. While pinned, Ogle stays fully expanded; close the attached panel to allow collapse again. Pin state lasts for the current session.
-
-Metrics track the pet’s position, not the toolbar’s edges. The default auto-collapse delay is now 7 seconds; existing saved delay choices remain unchanged.
-
-Before 1.0, verify clean installation and upgrades on a second Windows PC, sustained daily use of both chat integrations, pinned layouts across monitor sizes/DPI, and recovery from connection loss without lost drafts or editor data.
-
-## Version 0.5.16
-
-Editor selection uses a clearer blue highlight; other matching words are underlined so they cannot be mistaken for the selected range.
-
-Pets run from Ogle’s local library. Startup and Settings → Pet → Refresh library copy available Codex pets locally, preserving them when Codex is unavailable. Pet downloads also work independently of Codex.
-
-## Version 0.5.15
-
-Metrics stay within the horizontal/full bar edges, including their optional background; long values cannot spill past the block. Automatic collapse pauses while an administrator terminal or helper approval is pending. The full countdown starts again after approval, cancellation or failure, and overlapping requests keep the hold until all finish. Windows permission behavior remains unchanged.
-
-## Version 0.5.14
-
-Ctrl+Alt+T switches the horizontal chat bar between Codex and ChatGPT. Customize or disable it in Settings → Keyboard shortcuts → Switch Codex / ChatGPT. An open prompt keeps focus and restores each destination’s draft; from other modes the shortcut reveals the horizontal bar. It never sends a message.
-
-Administrator prompts on standard Windows accounts remain once per Ogle session. Existing persistent access requires an administrator account; no unattended privilege grant is installed for standard accounts.
-
-## Version 0.5.13
-
-Pet hover and left/right drag reactions now play during work and return to the continuous working animation. Focusing the horizontal prompt makes the pet follow the typing caret with its watching poses. The ChatGPT bar reads “Write a prompt to ChatGPT...”.
-
-The expanded panel pauses automatic collapse while the pointer remains over it, including the embedded ChatGPT view. A fresh full delay starts after leaving. Editor language/profile changes and new/open files return focus to the writing area. Shift+arrows selects editor text and rendered terminal text for copying; terminal selections do not edit the shell command line.
-
-Links search excludes folders by default. The Folders checkbox includes them and saves the preference, while retaining native background filename/path search.
-
-## Version 0.5.12
-
-Right-click the pet to show or hide metrics without changing which rows are enabled. Settings adds a background (off by default) and independent text/background transparency. The default block sits farther right. Hidden metrics retain session counters.
-
-File search now includes local fixed drives and matches paths as well as filenames. The first native background index may take minutes; Ogle reports preparation and retries automatically while Links is visible. Codex history has a read-only compatibility fallback for servers that report `list_turns is not supported yet`, without resuming or changing the task.
-
-Standard Windows accounts can open Admin shells through the Windows administrator credential prompt, once per Ogle session. Persistent access across restarts still requires an administrator account.
-
-## Version 0.5.11
-
-The horizontal Codex picker is a compact, searchable dropdown with project headings. Links groups contain full-size icons and grow to show every item, using the group’s configured rows, columns and growth direction. Drag labels to reorder links and groups or move a link into a frame.
-
-Running Codex tasks now offer separate Queue and Steer controls. Editor and Shell have Copy and Paste buttons; the shell interrupt remains separate. Settings supports three configurable shortcuts: show/hide Ogle, expand/collapse the panel, and horizontal bar/ball (default Ctrl+Alt+B). Meters use Century Gothic and sit farther right behind the pet. Panel controls are smaller and flatter, with tooltips for icon buttons.
-
-## Version 0.5.9
-
-The compact chat destination menu now excludes both choices from Windows' drag region, fixing the unclickable Codex option. Settings → Pet → Click action offers opening Codex, playing a random animation, showing the full panel or bar, toggling the panel, opening ChatGPT, or doing nothing. Dragging still moves the pet.
-
-Run, Windows tools and search share one compact row at the top of Links. Choosing a Windows tool opens it immediately. File search starts 300 ms after typing pauses. Everything and ES are now bundled, with licenses and provenance in `vendor/everything`; users do not install anything. A private non-admin process builds its index only on first search and closes with Ogle. Search covers readable files on local fixed drives plus redirected personal folders, matching filenames and paths, not file contents. Initial whole-drive indexing may take several minutes and uses one native background worker; subsequent file changes are monitored with background IO priority. Results are capped at 100 and initial database loading is reported before querying. Existing Everything installations are left alone.
-
-In the packaged app, the first **Admin** shell (or Settings → Administrator terminals → Enable administrator access) asks Windows once to install a protected helper under Program Files. Its fixed scheduled task starts on demand and works across Ogle restarts and Windows sign-ins. The main dock and ChatGPT stay unelevated. Persistent installation requires an administrator Windows account. Standard accounts instead use the session helper with administrator credentials through Windows UAC; approval lasts until Ogle exits. Closing administrator shells leaves permission installed. **Remove administrator access** removes the task/helper and asks Windows again; replacing the protected helper after an update also requires consent. The persistent helper protocol is versioned; maintainers must require removal/reinstallation when an incompatible or security-sensitive helper update is shipped. UAC policies are never disabled.
-
-Automated checks cover protected installer script parsing, authenticated/encrypted IPC, tampering/replay rejection and broker restarts. Real UAC installation and highest-privilege scheduled-task execution require desktop consent and were not exercised by automated tests.
-
-## Version 0.5.8 (superseded search setup)
-
-Links supports seven toolbar pins. The drop-target box is removed; drop directly into the Links area or a group. Its Run box opens programs, folders, URLs and commands with arguments (quote executable paths containing spaces). The Windows tools menu includes Registry Editor, DCOM/Component Services, Control Panel, Remote Desktop, management consoles and IIS; unavailable Windows components are disabled. Normal Windows permissions and UAC still apply.
-
-File search uses the bundled Everything worker described above; no separate installation is required.
-
-Long-running work now gets one brief random animation after each minute, then resumes the working animation for another minute. Work/approval/completion state remains authoritative.
-
-## Version 0.5.7
-
-After a minute of uninterrupted idle, the pet plays one random wave or happy animation, then returns to idle for another minute. Working, approvals, hover and completion reactions take priority. The horizontal ChatGPT bar says “Write prompt…”. Its arrow or right-click menu switches between Codex and ChatGPT while keeping their drafts separate.
-
-Codex conversations open at the latest message on first selection and remember where you scrolled when switching tasks or panels during the session. The latest-message arrow hides at the bottom. Chats that were at the bottom stay there through streaming, zoom, resizing and reopening; scrolling up keeps your reading position. Ctrl+mousewheel zooms without also scrolling, including text editors whose font resizing would otherwise move their scroll position. While Codex is working, **Queue** captures your prompt and images for that task. Queued prompts send one at a time after confirmed completion; use **Remove** to cancel one. Failed sends stay paused with an explicit **Retry** button; check the conversation before retrying an uncertain send. Queues are local to the running Ogle session (up to 20 prompts per task), and wait through approval requests. This queues the next turn rather than interrupting or steering the active turn.
-
-## Version 0.5.6
-
-Links now asks before removal and discards unfinished edits when navigating away, collapsing or leaving the dock. A vertical separator distinguishes Links from pinned shortcuts. Codex displays user/assistant messages without streaming thinking or tool output into the UI. Message updates are batched and paused while hidden; switching between full panels avoids hiding/resizing an unchanged window.
-
-## Version 0.5.5
-
-ChatGPT’s Copy buttons can write to the clipboard from its visible, focused main page. Clipboard reads and access from other origins, hidden views, and subframes remain blocked. Pinned links stay on the toolbar in both horizontal and full-panel modes, with compact spacing for all five pins. The reported image-search placeholders loaded normally after reopening the conversation; no image proxy or security bypass was added.
-
-`node tests/chatgpt-clipboard-runtime.cjs` checks the real clipboard API with isolated pages and restores the clipboard afterward. `node tests/pinned-links-runtime.cjs` checks both toolbar sizes and pinned-link navigation.
-
-## Version 0.5.4
-
-Window transitions now hide the native Windows surface during size changes, after smoothly moving the existing pet anchor when screen edges require it. Pin protects only the full panel; manual and automatic full collapse show the toolbar before the ball, with the same configured delay for each idle stage. Stationary pointer events caused by redraw no longer restart that delay or reopen the ball.
-
-## Version 0.5.3
-
-Technical failures are kept under **Settings → Debug → Open debug log**. The session log includes timestamps and repeat counts, with Copy, Clear and Close controls. Background Codex connection/refresh failures do not display error banners; failed actions show short readable messages. Logs are bounded to 200 entries, stay in memory, and are not uploaded automatically.
-
-Run `node tests/debug-runtime.cjs` to verify quiet background failures, readable notifications, log controls and redaction.
-
-## Version 0.5.2
-
-On first launch, choose Codex or ChatGPT for the horizontal chat bar; change it later under Settings → Dock behavior → Horizontal chat bar. Codex retains its project/task picker. ChatGPT uses the conversation already open in its embedded tab, or starts from the new-chat page, and opens that tab when sending. Paste or drop text/files/images, or use the attachment button (up to four attachments, 8 MB each, 16 MB total). Codex remains image-only. Drafts are kept separately. The ChatGPT website integration checks its message box and attachments before clicking Send once; different website drafts are protected, while an exact matching text-only draft can be sent on an explicit retry. Failures keep the dock draft for review. Website UI changes may require an update. Sending is covered by isolated website fixtures, including localized Send controls, and a text-only send was verified in a live signed-in account.
-
-The compact toolbar is 36 pixels tall and its idle ball is 26 pixels. The conversation selector has its own row below the tool buttons. Pin up to seven items in Links to show their icons immediately after Links in the horizontal bar; unpin an item to free a slot. Folder and group pins open their contents in Links. Compact tool buttons are unselected; the crosshair control opens or collapses the last full panel, and the pin keeps only the full panel open. Shell now comes before Links. Auto-collapse delay is adjustable in Settings (1–120 seconds), defaulting to 7 seconds for the toolbar, quick prompt and unpinned panels. Manual collapse always shows the horizontal bar first; automatic collapse of an unpinned full panel also shows the bar first. After another interval using the same delay setting, the bar folds to the ball, even when the pin is enabled. Pointer, keyboard and scroll activity reset inactivity timers. Native size changes use a brief coordinated fade so stale window frames are not displayed at a new position; the pet keeps the same size in compact and full layouts. Quick prompts fold to the ball after the configured delay without actual mouse/keyboard/input activity, keeping their text and image attachments. Focus alone does not keep the prompt open.
-
-Working animation loops continuously while Codex or the embedded ChatGPT tab is working. Completion/failure reactions start at frame zero, take priority over hover, and wait until other work finishes. ChatGPT detection is best-effort: it observes stop/streaming and final action controls in the embedded website, including while hidden. Navigation does not count as completion. Website changes, very short generations, and manual Stop can limit classification; it is not an official ChatGPT event API. The observer reads activity booleans, not conversation text.
-
-Editor Tab accepts an active completion instead of moving focus, and indents otherwise. Shell creation controls stay left; common commands are on the right. Release admin access is in Settings.
-
-Links defaults to an Android-style icon grid. Groups stay in configurable frames; real folders open navigable icon pages. Windows icons refresh for existing shortcuts, and website favicons are fetched from the site's own `/favicon.ico` when available. Details view remains available. This update migrates earlier default layouts to icons once; later view choices persist.
-
-Start with Windows is on by default for the packaged app and can be disabled in Settings. It registers one per-user login entry. On a login launch, Ogle gives Codex's own startup a grace period, checks its desktop connection/process, and opens it only if absent. Test profiles and development runs never register startup entries. Ogle uses the eye icon in the Windows system tray and has no dock button on the taskbar. Click the tray icon to restore it; its right-click menu provides Settings and Quit. The executable also uses the eye icon.
-
-### Version 0.4 foundation
-
-The dock now uses a restrained HUD style with charcoal, light and dark-blue palettes. The pet remains visible above a small idle ball. Hovering the idle ball reveals the compact bar horizontally; hovering the pet only animates it. full panels open only when a tool is clicked. Clicking the active conversation name opens a prompt below the bar and keeps it compact. The adjacent picker selects a Codex project/task without opening the full task panel. Classic ChatGPT remains in its own embedded tab.
-
-The always-on-top diamond is back in the toolbar. Auto lives in Settings and defaults on; disabling it makes the bar click-only and hides the keep-open pin. A green status light replaces the connected label. The old app title/subtitle are removed. Editor and terminal palettes now follow theme changes immediately, including existing sessions.
-
-Paste PNG, JPEG or WebP images into the Codex composer to see removable previews. Images are sent as actual Codex image inputs, with or without text. Limits: four images, 8 MB each, 16 MB combined. Pending attachments stay with their task during this app session and are cleared after a successful send; unlike text drafts they are not saved across restarts.
-
-### Existing workspace features
-
-- Drag the pet to move the dock; click it to open the selected task in Codex. Hover plays its greeting animation. Right-click the pet for window controls, Settings and Quit.
-- Hover reveals only the compact bar; tool clicks open full panels. The keep-open pin is available when Auto is on. Separate PS/CMD toolbar shortcuts and visible close/minimize buttons are removed.
-- Browse local Codex tasks, filter by project, search, pin tasks locally, and retain separate drafts. Send with Enter; Shift+Enter inserts a line. Hide the task sidebar, jump to the latest message, and read while updates arrive without losing scroll position or drafts. The list refreshes automatically every 10 seconds.
-- Desktop-owned tasks send through their existing owner and receive live task snapshots. Running, approval/input and completion states drive the pet. Desktop approvals open in Codex; the dock does not automatically approve them.
-- Classic ChatGPT stays in a tab in the dock with New Chat, Back, Reload, Latest and Open in Browser. Its own sidebar provides past chats. Existing login storage is preserved.
-- Notes autosave. The code editor has persistent tabs, language selection, highlighting, line numbers, folding, search/replace, UTF-8 open/save, overwrite conflict prompts and JSON syntax checks. Ctrl+S saves; Ctrl+Shift+S saves as. Dirty tabs survive restart; closing them requires an explicit discard action.
-- Editor modes include C, C++, C#, Visual Basic, CMD, SQL and PowerShell, alongside JavaScript, TypeScript, HTML, CSS, Python, JSON and Markdown. C#/VB profiles for .NET 3.5, .NET 4 and modern code provide basic compatibility hints. These are not compiler validation or a complete language server.
-- Links has one Add action for URLs, files, folders and applications. Drop files/folders from Explorer or links from a browser. Create nested virtual groups, drag items into them, move/reorder items, rename groups, edit aliases/targets, and choose icons or details. Removing a group preserves its children at the parent level. Groups and folders open navigable icon pages.
-- Shell contains PowerShell/CMD tabs, working-folder selection, clear screen/scrollback, Ctrl+C, restart and close. Packaged administrator shells on administrator accounts use the protected persistent helper described above. Standard accounts use the Windows credential prompt and session helper. Settings can close active shells or remove durable access. Development and isolated test profiles retain the session-only helper. The main dock and browser remain unelevated.
-- Settings includes account sign-in/out, pet selection and scale, pet installation, themes, time/date visibility and formats, and dock behavior.
-
-## Codex connection
-
-Version 0.3 fixes the desktop task `already has an active writer` conflict by discovering the existing task owner through local desktop IPC and routing the turn to it. It follows canonical task snapshots for tasks opened in the dock. It does not infer readiness from animation pixels, steal writer locks, or automatically retry an uncertain submission.
-
-The desktop IPC integration was verified against installed Codex **26.924.2738.0**. It is an internal versioned interface and may need updates after a Codex upgrade. It does not guarantee observation of every unopened task across every host. The public app-server connection remains responsible for task listing, account operations and tasks without a desktop owner. If desktop coordination is unavailable, the fallback reports that limitation instead of claiming desktop activity is visible.
-
-Desktop-owned turns inherit their task settings. Standalone turns use `workspace-write` and `on-request` approvals. Supported standalone command/file requests can be answered explicitly; other request types remain pending. Avoid quitting during work on standalone tasks that should continue. Desktop-owned work remains owned by desktop Codex.
-
-## Accounts and pets
-
-ChatGPT loads the real `https://chatgpt.com/` website. The `persist:petdock-chatgpt` partition is unchanged, including the user's existing login. No cookies/tokens are extracted from other applications. Auth provider windows may open for login; regular ChatGPT stays in the dock. Sign-out requires an explicit confirmation and clears this dock's browser session. Microphone, camera and location requests are currently denied. If the site rejects the embedded browser, use Open in Browser. Write ChatGPT prompts in its own tab; the compact composer targets Codex.
-
-Codex account actions use the local app-server account flow. Signing out can affect other local Codex clients and is confirmed explicitly.
-
-Pet installation accepts a slug such as `rinnegan`, `npx codex-pets add rinnegan`, or an HTTPS ZIP URL (including a pasted curl example). It extracts the download target; it does not execute pasted shell commands. Packages must contain one v2 manifest and a PNG/WebP 8-column, 11-row atlas. Only the sanitized manifest and sprite are installed, with archive size/path checks. Existing pets are never overwritten. Destination: `%APPDATA%/PetDock/pets` (or `pets` inside `PETDOCK_DATA_DIR`). Startup and Refresh library synchronize from `$CODEX_HOME/pets` or `%USERPROFILE%/.codex/pets`; `PETDOCK_PETS_DIR` overrides this source for compatibility. Runtime sprites and manifests stay local to Ogle. Missing Codex folders simply reload the local library; no Codex sign-in or connection is required.
-
-## Data and modules
-
-Settings, notes, pins, drafts, editor tabs and shortcuts live in `settings.json` under `%APPDATA%/PetDock`. ChatGPT's browser partition lives there too. Drafts are plain local text. `PETDOCK_DATA_DIR` selects a separate profile for tests. Terminal processes end when the dock exits; scrollback is not persisted.
-
-- `src/main/main.cjs`, `window-layout.cjs`: windows, geometry, trusted IPC and lifecycle.
-- `src/main/startup.cjs`, `pet-icon.cjs`: per-user startup, duplicate-launch checks and legacy pet icon helpers. `tray.cjs` owns the notification-area icon and menu.
-- `src/main/codex-bridge.cjs`: app-server transport, desktop coordination, history and turns.
-- `src/main/codex-executable.cjs`: executable discovery for Windows installations without a CLI PATH entry.
-- `src/main/settings.cjs`: validated atomic settings persistence.
-- `src/main/chatgpt-panel.cjs`, `chatgpt-activity.cjs`: isolated embedded ChatGPT view, controls and best-effort activity signals.
-- `src/main/files.cjs`: editor files, conflict prompts, shortcuts and icons.
-- `src/main/pet-library.cjs`: package validation, installation and pet discovery.
-- `src/main/terminal-manager.cjs`, `elevated-broker.cjs`, `terminal-worker.cjs`: ConPTY sessions and shared optional UAC helper.
-- `src/renderer/app.js`, `attachments.js`: task UI, image composition, pet interaction and panel behavior.
-- `src/renderer/editor.js`, `shortcuts.js`, `terminal.js`, `settings.js`: workspace modules.
-- `src/vendor-entry.js`, `scripts/build-vendor.cjs`: bundled CodeMirror/xterm dependencies.
-- `assets/pets/`: bundled manifests and sprite sheets.
-
-## Verification
-
-`node tests/layout-transition-runtime.cjs` checks transparent redraw, edge clamping, rapid switches and reduced motion. `node tests/pin-behavior-runtime.cjs` checks two-stage collapse with and without pinning. `node tests/compact-chat-runtime.cjs` checks first-run choice, persistence, ChatGPT text/file transfer through real IPC, and Codex switching. `node tests/chatgpt-composer-runtime.cjs` checks website text/files/images, busy/draft protection and uncertain-send handling with local HTTPS fixtures. `node tests/chatgpt-interaction-runtime.cjs` checks native embedded keyboard/mouse activity. `node tests/attachments-files-runtime.cjs` checks attachment contexts and file inputs.
-
-`node tests/pinned-links-runtime.cjs` verifies the five-pin limit, link targets, persistence and separate conversation row. `node tests/auto-collapse-runtime.cjs` verifies the 7-second default, seconds display, saved values and configured collapse deadline. `node tests/pet-menu-runtime.cjs` opens and closes the real native pet menu through renderer IPC, checking that no native object is returned across the process boundary. Set `PETDOCK_TEST_EXE` to the packaged executable to verify the shipped build. The packaged smoke check removes Codex from PATH and uses an empty custom-pet directory to verify executable discovery and the three bundled pets.
-
-Version 0.5 adds `tests/editor-links-runtime.cjs`, `tests/chatgpt-activity-runtime.cjs`, and `tests/taskbar-runtime.cjs`. These verify Tab completion with focus retention, icon-page navigation, existing Windows icon refresh, startup setting persistence, hidden ChatGPT activity transitions, and native taskbar icon changes on pet selection. Compact and interaction checks now cover configurable inactivity, retained image/text drafts, continuous combined work, and a full completion frame cycle despite hover. Startup unit checks verify duplicate prevention and avoid modifying real Windows login entries.
-
-Run `npm test`, `node tests/compact-runtime.cjs`, `node tests/interaction-runtime.cjs`, `node tests/attachments-runtime.cjs`, `node tests/shortcuts-runtime.cjs`, `node tests/chatgpt-controls-runtime.cjs`, `npm run test:layout`, `npm run test:ui`, `npm run package`, and `node scripts/package-smoke.cjs`. Tests that send prompts require `PETDOCK_SMOKE_THREAD_ID` to identify a disposable test task you created. Feature checks send response-only prompts to that explicit task. Attachments runtime with `--real-send` additionally sends a synthetic colored-square image. Screenshots/reports and isolated test profiles are under the excluded `artifacts/` directory. Start/package rebuild frontend bundles automatically.
-
-Fresh version 0.4 verification covers all compact-state transitions, picker selection, locked quick composition, restored always-on-top, Auto/pin visibility, drag/context menu and desktop animation states. Pasted image previews/removal/task isolation and image-only IPC forwarding passed; a real synthetic blue-square image sent through desktop coordination returned `BLUE`. Live editor and terminal backgrounds matched each of the three themes. Packager exclusions are configured in JavaScript so Windows cannot strip regex anchors and remove dependencies' runtime folders.
-
-Version 0.3 checks cover desktop ownership routing and state normalization, real CMD/PowerShell output, pipe authentication and helper reuse, safe pet installation with fake downloads, real editor saving, dirty-tab persistence, nested shortcut drops including an OS-backed File, and Enter-to-send receiving a real desktop-owned Codex response. Interaction checks exercise real renderer events, trusted IPC and window movement with OS cursor/menu boundaries stubbed. ChatGPT controls use an isolated HTTPS fixture without signing into or out of an account. Ordinary Electron screenshots omit the embedded browser view; layout verification also captures the native window.
-
-Actual UAC consent and elevated privileges are not exercised by automated tests. Pipe/worker lifecycle tests run without elevation; the Admin button invokes Windows consent when used. Pet download tests use fixtures; public catalog availability is independent of the app.
-
-## Further extensions
-
-Custom toolbar ordering, additional widgets, and full language-server/compiler diagnostics remain future work. This is not a complete Notepad++ replacement.
-
-Integration references: [Codex App Server](https://learn.chatgpt.com/docs/app-server), [Electron security](https://www.electronjs.org/docs/latest/tutorial/security), [Windows UAC](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/how-it-works).
-
-
-## v0.5.15: compact controls, counters and keyboard shortcuts
-
-- A small white statistics block shows mouse-click and keystroke totals for the current Ogle session, plus system CPU and RAM usage. Settings → Counters & meters controls each row and places the block left, right or above the pet. Totals are not persisted. The non-elevated Windows collector counts input events only; it never reads key codes, typed text, window titles or clipboard content. Disabling both input rows stops the collector. CPU/RAM sampling runs every two seconds, with no disk index or network traffic.
-- Settings → Keyboard shortcuts records your key combination. Defaults: **Ctrl+Alt+O** shows/hides Ogle; **Ctrl+Alt+Space** expands/collapses the panel. Press Backspace in a shortcut field and Set to disable it. Conflicting shortcuts are rejected while preserving the previous binding.
-- Codex, editor, shell and Links controls use smaller buttons and clear symbols with hover labels. Links group borders now contain their nested items. Redundant root navigation, destination and pinned-count rows have been removed; additions go into the currently open group.
-- Editor **Ctrl+F** opens a readable floating Find/Replace dialog. It closes when Ogle collapses manually or automatically, and when leaving the editor.
-
-Before releasing, run `npm test`, the focused `tests/*-runtime.cjs` checks for changed features, `npm run package`, and the packaged smoke check. Keep the direct Windows ZIP link above synchronized with every version, and verify the published asset.
-
-`node tests/pinned-panel-runtime.cjs` checks all five side panels, placement, collapse hold, composer placement and editor preservation.
-
-## License and distribution
-
-Ogle's original source code is licensed under the [MIT License](LICENSE). This grant does not relicense bundled artwork, trademarks, third-party libraries, Electron/Chromium, or the Everything utilities. Their existing rights and notices remain in force. Pet artwork is excluded from the MIT grant unless it has its own explicit license.
-
-The [SourceForge project](https://sourceforge.net/projects/ogle-dock/) directs downloads to the [latest GitHub release](https://github.com/Tihkal96/Ogle/releases/latest). Do not upload release files to SourceForge. Keep its download link pointed at `/releases/latest` so it follows future releases automatically. GitHub hosts the release ZIPs and checksums, source repository and issue tracker.
+Ogle's source is MIT licensed. [Repository](https://github.com/Tihkal96/Ogle).

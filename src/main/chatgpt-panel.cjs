@@ -102,7 +102,7 @@ class ChatGPTPanel {
     // an activity signal, never keys, text, pointer coordinates or page content.
     let lastMouseMove = 0;
     const interact = () => {
-      if (this.visible && this.view?.getVisible()) this.onInteraction?.();
+      if (this.visible && this.view?.getVisible()) {this.activity?.wake?.();this.onInteraction?.();}
     };
     contents.on('before-input-event', (event, input) => {
       interact();
@@ -187,7 +187,8 @@ class ChatGPTPanel {
     const y = Math.max(0, Math.min(height, this.bounds.y));
     const next = { x, y, width: Math.max(0, Math.min(width - x, this.bounds.width)), height: Math.max(0, Math.min(height - y, this.bounds.height)) };
     this.view.setBounds(next);
-    this.view.setVisible(this.visible && next.width > 0 && next.height > 0);
+    const visible=this.visible && next.width > 0 && next.height > 0;
+    this.view.setVisible(visible);this.activity?.setVisible?.(visible);
   }
 
   async show(action = 'show') {
@@ -218,6 +219,7 @@ class ChatGPTPanel {
     if (action === 'close' || action === 'hide') { this.hide(); return; }
     if (action === 'external') { await this.openExternal(); return; }
     this.visible = true;
+    this.activity?.wake?.();
     const created = this.ensureView();
     this.applyLayout();
     if (created || action === 'new') { await this.loadHome(); return; }

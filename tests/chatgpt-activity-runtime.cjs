@@ -74,7 +74,14 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
   // The browser view is hidden while Notes is active; show it before a trusted click.
   await page.locator('[data-panel="chatgpt"]').evaluate(el=>el.click());
   await gptPage.locator('form button').click();
-  await page.waitForFunction(count=>window.__activity.length>=count+2&&window.__activity.at(-1)==='done',modernBefore,{timeout:6000}).catch(async error=>{console.error({events:await page.evaluate(()=>window.__activity),modernBefore,probe:await run(require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE)});throw error;});
+  await page.waitForFunction(()=>window.__activity.at(-1)==='working',null,{timeout:5000});
+  await page.waitForTimeout(2100);assert.equal(await page.evaluate(()=>window.__activity.at(-1)),'working','Trusted Send without a real response cannot fabricate Done');
+  await run(`history.pushState({},'', '/c/fixture-rejected-cleared');true`);
+  await page.waitForFunction(()=>window.__activity.at(-1)==='idle',null,{timeout:3000});
+  await run(`document.querySelector('form button').onclick=event=>{const button=event.currentTarget;button.setAttribute('aria-label','Zaustavi generiranje');setTimeout(()=>button.setAttribute('aria-label','Po\\u0161alji poruku'),50);};true`);
+  const verifiedBefore=await page.evaluate(()=>window.__activity.length);
+  await gptPage.locator('form button').click();
+  await page.waitForFunction(count=>window.__activity.length>=count+2&&window.__activity.at(-1)==='done',verifiedBefore,{timeout:6000}).catch(async error=>{console.error({events:await page.evaluate(()=>window.__activity),modernBefore,probe:await run(require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE)});throw error;});
   const modernProbe=await run(require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE);
   assert.equal(modernProbe.composerReady,true);assert.equal(modernProbe.complete,true);
 
@@ -92,7 +99,7 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
   const probe=require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE,result=await run(probe);
   assert.ok(Object.values(result).every(v=>typeof v==='boolean'));
   assert.deepEqual(Object.keys(result).sort(),['available','complete','composerReady','failed','latestAssistant','working']);
-  const report={at:new Date().toISOString(),profile,packaged:!!executablePath,events:await page.evaluate(()=>window.__activity),fastGenerationBuffered:true,localizedGenericSubmit:true,liveOctoberStructure:true,overlappingProviderStates:true,completionBadgeAcknowledged:true,workingBadgePreserved:true,retainedControls:true,newChatPromotion:true,petWorkingReviewIdle:true,hiddenViewCompletion:true,navigationDoesNotComplete:true,explicitFailure:true,probeOnlyBooleans:true,source:'Controlled local HTTPS fixture; no actual account or prompt.'};
+  const report={at:new Date().toISOString(),profile,packaged:!!executablePath,events:await page.evaluate(()=>window.__activity),fastGenerationBuffered:true,localizedGenericSubmit:true,liveOctoberStructure:true,overlappingProviderStates:true,completionBadgeAcknowledged:true,workingBadgePreserved:true,retainedControls:true,newChatPromotion:true,petWorkingReviewIdle:true,hiddenViewCompletion:true,navigationDoesNotComplete:true,explicitFailure:true,probeOnlyBooleans:true,unconfirmedSendNeverCompletes:true,source:'Controlled local HTTPS fixture; no actual account or prompt.'};
   fs.writeFileSync(path.join(root,'artifacts/chatgpt-activity-runtime.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
  }finally{await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});
