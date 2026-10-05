@@ -14,6 +14,8 @@ const { GracefulShutdown } = require('./shutdown.cjs');
 const { CodexBridge } = require('./codex-bridge.cjs');
 const { ClaudeBridge } = require('./claude-bridge.cjs');
 const { ChatGPTPanel } = require('./chatgpt-panel.cjs');
+const { ClaudeWebPanel } = require('./claude-web-panel.cjs');
+const { historyMenuTemplate } = require('./history-menu.cjs');
 const { sendChatGPT } = require('./chatgpt-composer.cjs');
 const { pasteChatGPTDraft } = require('./chatgpt-draft.cjs');
 const { selectionMenuTemplate } = require('./selection-menu.cjs');
@@ -33,7 +35,7 @@ app.setName('Ogle');
 app.setAppUserModelId('PetDock.Desktop');
 app.setPath('userData', process.env.PETDOCK_DATA_DIR ? path.resolve(process.env.PETDOCK_DATA_DIR) : path.join(app.getPath('appData'), 'PetDock'));
 if (!app.requestSingleInstanceLock()) {app.quit();return;}
-let tray, shutdown, activityStats, shortcuts, win, bridge, claude, chatgpt, store, files, terminals, petLibrary, petDragState, pointerTimer, connection = { state: 'connecting', detail: 'Connecting to Codex…' }, connectionPromise;
+let tray, shutdown, activityStats, shortcuts, win, bridge, claude, chatgpt, claudeWeb, store, files, terminals, petLibrary, petDragState, pointerTimer, connection = { state: 'connecting', detail: 'Connecting to Codex…' }, connectionPromise;
 const root = path.resolve(__dirname, '../..');
 const indexPath = path.join(root, 'src/renderer/index.html');
 const indexUrl = pathToFileURL(indexPath).href;
@@ -47,7 +49,7 @@ function showDock() {
   if (win.isMinimized()) win.restore();
   win.show(); win.focus(); send({type:'dock-shown'});
 }
-function hideDock() { if (win && !win.isDestroyed()) { chatgpt?.hide(); win.hide(); } }
+function hideDock() { if (win && !win.isDestroyed()) { chatgpt?.hide(); claudeWeb?.hide(); win.hide(); } }
 app.on('second-instance', showDock);
 function send(payload) { if (win && !win.isDestroyed()) win.webContents.send('dock:event', payload); }
 function showSelectionMenu(text){
@@ -85,7 +87,7 @@ function resize(mode = layoutMode) {
   const bounds = win.getBounds();
   const area = screen.getDisplayNearestPoint(petCenter(bounds,store?.value.petScale || 1)).workArea;
   const scale = store?.value.petScale || 1;
-  if (!expanded) chatgpt?.hide();
+  if (!expanded) {chatgpt?.hide();claudeWeb?.hide();}
   const next=dockBounds(mode,bounds,area,scale,pinnedPanelSide);
   if(['x','y','width','height'].some(key=>next[key]!==bounds[key]))win.setBounds(next);
 }
@@ -99,7 +101,7 @@ app.whenReady().then(async () => {
   win.on('minimize', hideDock);
   win.on('hide',()=>send({type:'dock-visibility',visible:false}));
   win.on('show',()=>send({type:'dock-visibility',visible:true}));
-  topmost=new TopmostController(win,{enabled:store.value.alwaysOnTop,children:()=>[...(chatgpt?.children||[])]});
+  topmost=new TopmostController(win,{enabled:store.value.alwaysOnTop,children:()=>[...(chatgpt?.children||[]),...(claudeWeb?.children||[])]});
   shutdown=new GracefulShutdown({window:win,
     flush:()=>win.webContents.executeJavaScript("typeof state==='undefined' || !state.bootReady ? true : flushLocal().then(()=>true,err=>{error(err);return false;})"),
     report:problem=>{if(!win.isDestroyed()&&!win.webContents.isDestroyed())win.webContents.executeJavaScript(`error(${JSON.stringify(problem.message)})`).catch(()=>{});}
@@ -120,6 +122,12 @@ app.whenReady().then(async () => {
   chatgpt = new ChatGPTPanel({ parent: win,onChildWindow:()=>topmost.request(),onZoom:factor=>send({type:'chatgpt-zoom',factor}),onExitFullscreen:()=>{if(!contentFullscreen)return false;send({type:'exit-panel-fullscreen'});return true;}, getBounds: () => win.getBounds(), onStatus: status => send({ type: 'chatgpt', ...status }),onActivity: activity=>send({type:'chatgpt-activity',...activity}),onInteraction:()=>send({type:'chatgpt-interaction'}),onFindOpen:()=>send({type:'chat-find-open',target:'chatgpt'}),onCommandsOpen:()=>send({type:'commands-open',target:'chatgpt'}),onSelectionMenu:text=>{try{showSelectionMenu(text);}catch(error){send({type:'startup-error',message:error.message});}},onFindResult:result=>send({type:'chatgpt-find-result',result}) });
   tray=createDockTray({Tray,Menu,nativeImage,iconPath:path.join(root,'assets/ogle.png'),window:win,onShow:showDock,onHide:hideDock,onSettings:()=>{showDock();send({type:'settings-open'});},onQuit:()=>app.quit()});
   register('panelFullscreen',enabled=>{if(typeof enabled!=='boolean')throw new Error('Invalid fullscreen mode');if(enabled===contentFullscreen)return;contentFullscreen=enabled;if(enabled){restoreDockBounds=win.getBounds();win.setBounds(screen.getDisplayMatching(restoreDockBounds).bounds);}else{if(restoreDockBounds)win.setBounds(restoreDockBounds);restoreDockBounds=null;}topmost.request();return win.getBounds();});
+  claudeWeb=new ClaudeWebPanel({parent:win,onChildWindow:()=>topmost.request(),onStatus:status=>send({type:'claude-web-status',...status}),onActivity:activity=>send({type:'claude-web-activity',...activity}),onInteraction:()=>send({type:'claude-web-interaction'}),onZoom:factor=>send({type:'claude-web-zoom',factor}),onFindOpen:()=>send({type:'chat-find-open',target:'claude-web'}),onFindResult:result=>send({type:'claude-web-find-result',result}),onCommandsOpen:()=>send({type:'commands-open',target:'claude-web'}),onSelectionMenu:text=>showSelectionMenu(text),onExitFullscreen:()=>{if(!contentFullscreen)return false;send({type:'exit-panel-fullscreen'});return true;}});
+  register('openClaudeWeb',action=>{if(store.value.useClaudeWeb!==true)throw new Error('Enable Claude in Settings - Assistants.');return claudeWeb.show(action);});
+  register('claudeWebLayout',layout=>claudeWeb.layout(layout));
+  register('claudeWebZoom',factor=>claudeWeb.setZoom(factor));
+  register('claudeWebFind',(query,options)=>claudeWeb.find(query,options));
+  register('claudeWebStopFind',()=>claudeWeb.stopFind());
   register('chatgptZoom',factor=>chatgpt.setZoom(factor));
   register('windowShape',rects=>{const b=win.getBounds();inputRegions=normalizeRegions(rects,b.width,b.height);if(inputRegions.length)win.setShape(inputRegions);return true;});
   const openShortcutPanel=panel=>{if(win.isMinimized())win.restore();win.show();win.focus();send({type:'open-panel-shortcut',panel});};
@@ -158,6 +166,16 @@ app.whenReady().then(async () => {
   register('claudeResize',(id,cols,rows)=>claude.resize(string(id,'Claude session'),cols,rows));
   register('claudeClose',id=>claude.close(string(id,'Claude session')));
   bridge = new CodexBridge();
+  const providerBridge=provider=>{if(provider==='codex')return bridge;if(provider==='claude')return claude;throw new Error('Invalid assistant');};
+  register('historyMenu',target=>new Promise(resolve=>{const template=historyMenuTemplate(target).map(({action,...item})=>action?{...item,click:()=>resolve(action)}:item);Menu.buildFromTemplate(template).popup({window:win,callback:()=>resolve(null)});}));
+  register('renameConversation',async(provider,id,name)=>{const target=providerBridge(provider);if(provider==='codex')await connected();return target.renameThread(string(id,'Conversation'),name);});
+  register('removeConversation',async(provider,id)=>{
+    const target=providerBridge(provider);id=string(id,'Conversation');const choice=await dialog.showMessageBox(win,{type:'question',message:'Move this conversation to the archive?',detail:'You can restore it from Archived conversations in the right-click menu. Your project folder and files remain in place.',buttons:['Cancel','Move to archive'],defaultId:0,cancelId:0});
+    if(choice.response!==1)return {cancelled:true};if(provider==='codex'){await connected();await target.archiveThread(string(id,'Conversation'));}else await target.removeThread(string(id,'Conversation'));return {cancelled:false};
+  });
+  register('listArchivedConversations',async provider=>{const target=providerBridge(provider);if(provider==='claude')return target.listArchivedThreads();await connected();const threads=[],seen=new Set();let cursor;do{const result=await target.listThreads({archived:true,cursor});threads.push(...(result.data||result.threads||[]));cursor=result.nextCursor||result.next_cursor;if(cursor&&seen.has(cursor))throw new Error('Could not load the remaining archived conversations.');if(cursor)seen.add(cursor);}while(cursor);return {threads};});
+  register('restoreConversation',async(provider,id)=>{const target=providerBridge(provider);if(provider==='codex'){await connected();return target.unarchiveThread(string(id,'Conversation'));}return target.restoreThread(string(id,'Conversation'));});
+
   bridge.on('thread-opened', threadId => send({ type: 'codex-thread-opened', threadId }));
   // Cache session observations that can precede renderer subscription/load.
   const bootActivity = new Map();
@@ -313,7 +331,7 @@ app.on('before-quit', event => {
   if(shutdown && !shutdown.ready){shutdown.request().then(ok=>{if(ok)app.quit();});return;}
   if(quitPending)return;quitPending=true;
   if(win && !win.isDestroyed())win.hide();
-  tray?.dispose();shortcuts?.dispose();const statsDisposal=activityStats?.dispose();clearInterval(pointerTimer);chatgpt?.close();bridge?.close();claude?.dispose();terminals?.dispose();
+  tray?.dispose();shortcuts?.dispose();const statsDisposal=activityStats?.dispose();clearInterval(pointerTimer);chatgpt?.close();claudeWeb?.close();bridge?.close();claude?.dispose();terminals?.dispose();
   let timeout;
   Promise.race([Promise.all([fileSearch.dispose(),statsDisposal]),new Promise(resolve=>{timeout=setTimeout(resolve,5000);})]).catch(()=>{}).finally(()=>{clearTimeout(timeout);quitReady=true;app.quit();});
 });

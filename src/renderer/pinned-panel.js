@@ -1,6 +1,6 @@
 "use strict";
 window.OglePinnedPanel=(()=>{
-  const names={chats:'Codex',chatgpt:'ChatGPT',claude:'Claude Code',editor:'Editor',terminal:'Shell',shortcuts:'Links'};
+  const names={chats:'Codex',chatgpt:'ChatGPT',claude:'Claude Code','claude-web':'Claude',editor:'Editor',terminal:'Shell',shortcuts:'Links'};
   let state,api,open,refresh,report,menuTarget,appliedSide=null,queue=Promise.resolve();
   const el=id=>document.getElementById(id);
   function visible(name){return state.activePanel===name || state.pinnedPanel===name;}
@@ -33,6 +33,7 @@ window.OglePinnedPanel=(()=>{
     el('side-panel-title').textContent=names[name];hideMenu();
     await open(previous===name?(name==='editor'?'terminal':'editor'):previous);
     if(name==='chatgpt')await api.openChatGPT('show');
+    if(name==='claude-web')await api.openClaudeWeb('show');
     if(name==='claude')await window.OgleClaude.open();
     refresh();
   });}

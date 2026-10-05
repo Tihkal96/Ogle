@@ -65,7 +65,7 @@ body:not(.collapsed) .toolbar .tool{min-width:28px;padding-left:5px;padding-righ
 @container (max-width:1000px){
   .toolbar:has(.pinned-link) .tool span{display:none}
 }
-@container (max-width:680px){
+@container (max-width:800px){
   .toolbar .tool span{display:none}
   .toolbar{gap:0;padding-left:5px;padding-right:5px}
   body:not(.collapsed) .toolbar .tool,.collapsed .toolbar .tool{width:24px;min-width:24px;padding:0}
@@ -95,3 +95,5 @@ body:not(.collapsed) .toolbar .tool{min-width:28px;padding-left:5px;padding-righ
 #chatgpt-activity-status{font-size:10px;color:var(--muted);white-space:nowrap}
 @keyframes assistant-pulse{50%{opacity:.25}}
 @media(prefers-reduced-motion:reduce){.toolbar .tool[data-activity="working"]::after{animation:none}}
+
+#claude-web-panel{flex-direction:column;flex:1;overflow:hidden}#claude-web-host{flex:1;min-height:0;background:var(--inset)}#claude-web-host p{padding:15px;color:var(--muted)}#claude-web-activity-status{font-size:10px;color:var(--muted);white-space:nowrap}
