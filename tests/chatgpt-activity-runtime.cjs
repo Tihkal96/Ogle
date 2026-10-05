@@ -35,7 +35,14 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
   await finish();await page.waitForFunction(()=>window.__activity.includes('done')&&state.petState==='review',null,{timeout:6000});
   let events=await page.evaluate(()=>window.__activity);assert.deepEqual(events,['working','done']);
   await page.waitForFunction(()=>state.petState==='idle',null,{timeout:7000});
+  assert.equal(await page.locator('#chatgpt').getAttribute('data-activity'),'done','Hidden completion remains unread until opening ChatGPT');
+  await page.locator('[data-panel="chatgpt"]').evaluate(el=>el.click());
+  await page.waitForFunction(()=>document.getElementById('chatgpt').dataset.activity!=='done',null,{timeout:3000});
   await start();await page.waitForFunction(()=>window.__activity.length>=3,null,{timeout:5000});
+  await page.locator('[data-panel="notes"]').evaluate(el=>el.click());
+  await page.locator('[data-panel="chatgpt"]').evaluate(el=>el.click());
+  assert.equal(await page.locator('#chatgpt').getAttribute('data-activity'),'working','Opening ChatGPT must preserve working state');
+  await page.locator('[data-panel="notes"]').evaluate(el=>el.click());
   await app.evaluate(async({webContents},id)=>webContents.fromId(id).loadURL('https://chatgpt.com/c/fixture-navigation'),id);
   await run(`document.querySelector('article').innerHTML='<div data-message-author-role="assistant"></div><button data-testid="copy-turn-action-button">Copy</button>';true`);
   await page.waitForTimeout(2400);
@@ -80,11 +87,12 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
   await page.waitForFunction(()=>window.__activity.at(-1)==='done'&&state.petState==='review',null,{timeout:6000});
   assert.equal(await page.locator('#chatgpt').getAttribute('data-activity'),'done');
   assert.match(await page.locator('#pet').getAttribute('title'),/Codex/);
-  await page.waitForFunction(()=>state.petState==='running',null,{timeout:7000});
+  await page.waitForFunction(()=>state.petState==='running'&&document.getElementById('chatgpt').dataset.activity!=='done',null,{timeout:7000});
+  assert.notEqual(await page.locator('#chatgpt').getAttribute('data-activity'),'done','Visible completion badge expires after the brief review reaction');
   const probe=require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE,result=await run(probe);
   assert.ok(Object.values(result).every(v=>typeof v==='boolean'));
   assert.deepEqual(Object.keys(result).sort(),['available','complete','composerReady','failed','latestAssistant','working']);
-  const report={at:new Date().toISOString(),profile,packaged:!!executablePath,events:await page.evaluate(()=>window.__activity),fastGenerationBuffered:true,localizedGenericSubmit:true,liveOctoberStructure:true,overlappingProviderStates:true,retainedControls:true,newChatPromotion:true,petWorkingReviewIdle:true,hiddenViewCompletion:true,navigationDoesNotComplete:true,explicitFailure:true,probeOnlyBooleans:true,source:'Controlled local HTTPS fixture; no actual account or prompt.'};
+  const report={at:new Date().toISOString(),profile,packaged:!!executablePath,events:await page.evaluate(()=>window.__activity),fastGenerationBuffered:true,localizedGenericSubmit:true,liveOctoberStructure:true,overlappingProviderStates:true,completionBadgeAcknowledged:true,workingBadgePreserved:true,retainedControls:true,newChatPromotion:true,petWorkingReviewIdle:true,hiddenViewCompletion:true,navigationDoesNotComplete:true,explicitFailure:true,probeOnlyBooleans:true,source:'Controlled local HTTPS fixture; no actual account or prompt.'};
   fs.writeFileSync(path.join(root,'artifacts/chatgpt-activity-runtime.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
  }finally{await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});
