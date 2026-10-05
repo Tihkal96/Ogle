@@ -4,7 +4,7 @@ A Windows dock with an animated pet, Codex tasks, ChatGPT, Claude web chat, Clau
 
 ## Download and setup
 
-Download [Ogle 0.8.0](https://github.com/Tihkal96/Ogle/releases/download/v0.8.0/Ogle-0.8.0-win32-x64.zip), extract the entire ZIP, and run `Ogle.exe`. Keep the executable and its supporting files together. The GitHub Source code archives are for development. A release needs no Node.js, npm or Git.
+Download [Ogle 1.0.0](https://github.com/Tihkal96/Ogle/releases/download/v1.0.0/Ogle-1.0.0-win32-x64.zip), extract the entire ZIP, and run `Ogle.exe`. Keep the executable and its supporting files together. The GitHub Source code archives are for development. A release needs no Node.js, npm or Git.
 
 For a stable installation, use the install-for-this-user control in Settings. It copies Ogle into `%LOCALAPPDATA%\Ogle\Application`, creates the selected Desktop/Start menu shortcuts, and preserves the existing profile. The ZIP can also run portably. This is a user-level installation and does not permanently grant administrator shell rights.
 
