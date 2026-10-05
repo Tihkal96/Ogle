@@ -70,10 +70,21 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
   await page.waitForFunction(count=>window.__activity.length>=count+2&&window.__activity.at(-1)==='done',modernBefore,{timeout:6000}).catch(async error=>{console.error({events:await page.evaluate(()=>window.__activity),modernBefore,probe:await run(require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE)});throw error;});
   const modernProbe=await run(require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE);
   assert.equal(modernProbe.composerReady,true);assert.equal(modernProbe.complete,true);
+
+  // ChatGPT completion must be distinguishable while Codex is also working.
+  await page.evaluate(()=>{visualCodexRunning=()=>true;updatePetState();});
+  await run(`document.querySelector('form button').setAttribute('aria-label','Zaustavi generiranje');true`);
+  await page.waitForFunction(()=>window.__activity.at(-1)==='working'&&document.getElementById('chatgpt').dataset.activity==='working',null,{timeout:5000});
+  assert.match(await page.locator('#chatgpt-activity-status').innerText(),/Working/);
+  await run(`document.querySelector('form button').setAttribute('aria-label','Po\u0161alji poruku');true`);
+  await page.waitForFunction(()=>window.__activity.at(-1)==='done'&&state.petState==='review',null,{timeout:6000});
+  assert.equal(await page.locator('#chatgpt').getAttribute('data-activity'),'done');
+  assert.match(await page.locator('#pet').getAttribute('title'),/Codex/);
+  await page.waitForFunction(()=>state.petState==='running',null,{timeout:7000});
   const probe=require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE,result=await run(probe);
   assert.ok(Object.values(result).every(v=>typeof v==='boolean'));
   assert.deepEqual(Object.keys(result).sort(),['available','complete','composerReady','failed','latestAssistant','working']);
-  const report={at:new Date().toISOString(),profile,packaged:!!executablePath,events:await page.evaluate(()=>window.__activity),fastGenerationBuffered:true,localizedGenericSubmit:true,liveOctoberStructure:true,retainedControls:true,newChatPromotion:true,petWorkingReviewIdle:true,hiddenViewCompletion:true,navigationDoesNotComplete:true,explicitFailure:true,probeOnlyBooleans:true,source:'Controlled local HTTPS fixture; no actual account or prompt.'};
+  const report={at:new Date().toISOString(),profile,packaged:!!executablePath,events:await page.evaluate(()=>window.__activity),fastGenerationBuffered:true,localizedGenericSubmit:true,liveOctoberStructure:true,overlappingProviderStates:true,retainedControls:true,newChatPromotion:true,petWorkingReviewIdle:true,hiddenViewCompletion:true,navigationDoesNotComplete:true,explicitFailure:true,probeOnlyBooleans:true,source:'Controlled local HTTPS fixture; no actual account or prompt.'};
   fs.writeFileSync(path.join(root,'artifacts/chatgpt-activity-runtime.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
  }finally{await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});

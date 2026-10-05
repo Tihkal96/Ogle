@@ -84,7 +84,7 @@ class ChatGPTPanel {
     if (!this.parent || this.parent.isDestroyed()) throw new Error('The dock window is closed.');
     this.view = new WebContentsView({ webPreferences: {
       sandbox: true, contextIsolation: true, nodeIntegration: false,
-      webSecurity: true, partition: 'persist:petdock-chatgpt',
+      webSecurity: true, backgroundThrottling: false, partition: 'persist:petdock-chatgpt',
       preload: path.join(__dirname, 'chatgpt-view-preload.cjs')
     } });
     const contents = this.view.webContents;
@@ -186,7 +186,7 @@ class ChatGPTPanel {
     const y = Math.max(0, Math.min(height, this.bounds.y));
     const next = { x, y, width: Math.max(0, Math.min(width - x, this.bounds.width)), height: Math.max(0, Math.min(height - y, this.bounds.height)) };
     this.view.setBounds(next);
-    this.view.setVisible(this.visible && !this.status.failed && next.width > 0 && next.height > 0);
+    this.view.setVisible(this.visible && next.width > 0 && next.height > 0);
   }
 
   async show(action = 'show') {
