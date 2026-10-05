@@ -6,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const { imageSize } = require('image-size');
 const { resolveCodexExecutable } = require('./codex-executable.cjs');
 const { CodexActivity } = require('./codex-activity.cjs');
+const { IpcFrames } = require('./ipc-frames.cjs');
 
 function modelOptions(options = {}) {
   if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Invalid Codex model options.');
@@ -68,7 +69,28 @@ function messageItem(item) {
   return { id: item.id, type: item.type, text };
 }
 function messageTurn(turn) { return { id: turn.turnId || turn.id || turn.params?.clientUserMessageId || 'pending', status: turn.status, error: turn.error, items: (turn.items || []).map(messageItem).filter(Boolean) }; }
-function projectThread(thread) { return { id: thread.id, name: thread.name, cwd: thread.cwd, status: thread.status, turns: (thread.turns || []).map(messageTurn) }; }
+function conversationWindow(turns, limit = 80) {
+  const visible = []; let count = 0, cut = false;
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i], items = [];
+    for (let j = (turn.items || []).length - 1; j >= 0; j--) {
+      const item = turn.items[j];
+      if (!['usermessage','agentmessage'].includes(item?.type?.toLowerCase())) continue;
+      if (count >= limit) { cut = true; break; }
+      items.unshift(messageItem(item)); count++;
+    }
+    if (items.length || i === turns.length - 1) visible.unshift({...messageTurn({...turn, items: []}), items});
+    if (cut || count >= limit && i > 0) { cut ||= i > 0; break; }
+  }
+  return {turns: visible, history: {hasMore: cut, loadedMessages: count}};
+}
+function threadOptions(state) {
+  const settings = state.latestThreadSettings || {}, collaboration = settings.collaborationMode || state.latestCollaborationMode;
+  const model = settings.model || state.latestModel || collaboration?.settings?.model || state.model;
+  const effort = settings.effort || state.latestReasoningEffort || collaboration?.settings?.reasoning_effort || state.effort;
+  return {...(typeof model === 'string' ? {model} : {}), ...(typeof effort === 'string' ? {effort} : {})};
+}
+function projectThread(thread, limit = 80) { return {id:thread.id,name:thread.name,cwd:thread.cwd,status:thread.status,...threadOptions(thread),...conversationWindow(thread.turns || [],limit)}; }
 function patchChangesMessages(state, patch) {
   const index = patch.path.indexOf('items');
   if (index < 0 || patch.path.length <= index + 2 || patch.op === 'remove') return true;
@@ -76,7 +98,7 @@ function patchChangesMessages(state, patch) {
   for (const key of patch.path.slice(0, index + 2)) item = item?.[key];
   return ['usermessage', 'agentmessage'].includes(item?.type?.toLowerCase());
 }
-function desktopThread(state) {
+function desktopThread(state, limit = 80) {
   const history = state.turnHistory?.kind === 'canonical' ? state.turnHistory.history : null;
   let turns = state.turns || [];
   if (history) {
@@ -84,10 +106,10 @@ function desktopThread(state) {
     turns = (keys.length ? keys.map(key => history.entitiesByKey[key]) : Object.values(history.entitiesByKey || {})).filter(Boolean);
   }
   const rawLast = turns.at(-1);
-  turns = turns.map(messageTurn);
-  const last = turns.at(-1), requests = state.requests || [], flags = state.threadRuntimeStatus?.activeFlags || [];
+  const window = conversationWindow(turns, limit);
+  const last = window.turns.at(-1), requests = state.requests || [], flags = state.threadRuntimeStatus?.activeFlags || [];
   return {
-    thread: { id: state.id, name: state.title, cwd: state.cwd, status: state.threadRuntimeStatus, turns },
+    thread: { id: state.id, name: state.title, cwd: state.cwd, status: state.threadRuntimeStatus, ...threadOptions(state), ...window },
     runtime: { source: 'desktop', running: state.threadRuntimeStatus?.type === 'active', turnId: last?.status === 'inProgress' ? rawLast?.turnId || rawLast?.id || undefined : undefined, waitingForApproval: flags.includes('waitingOnApproval') || requests.some(req => /approval/i.test(req.method || req.type || '')), waitingForInput: flags.includes('waitingOnUserInput') || requests.some(req => /requestUserInput|elicitation/i.test(req.method || req.type || '')) },
     requestCount: requests.length
   };
@@ -109,7 +131,7 @@ function desktopRuntime(state) {
   return {running:type==='active',...(typeof turnId==='string'&&turnId?{turnId}: {})};
 }
 class DesktopIpc extends EventEmitter {
-  constructor({ connectSocket = net.connect, timeoutMs = 10000, runtimeOnly = false } = {}) { super(); this.runtimeOnly = runtimeOnly; this.connectSocket = connectSocket; this.timeoutMs = timeoutMs; this.pending = new Map(); this.states = new Map(); this.owners = new Map(); this.followed = new Set(); this.timers = new Map(); this.signatures = new Map(); this.clientId = 'initializing-client'; this.socket = null; this.connecting = null; }
+  constructor({ connectSocket = net.connect, timeoutMs = 10000, runtimeOnly = false } = {}) { super(); this.runtimeOnly = runtimeOnly; this.connectSocket = connectSocket; this.timeoutMs = timeoutMs; this.pending = new Map(); this.states = new Map(); this.owners = new Map(); this.followed = new Set(); this.timers = new Map(); this.signatures = new Map(); this.historyLimits = new Map(); this.clientId = 'initializing-client'; this.socket = null; this.connecting = null; }
   async connect() {
     if (this.socket && this.clientId !== 'initializing-client') return;
     if (this.connecting) return this.connecting;
@@ -117,16 +139,10 @@ class DesktopIpc extends EventEmitter {
   }
   async _connect() {
     const socket = this.connectSocket('\\\\.\\pipe\\codex-ipc'); this.socket = socket;
-    let buffer = Buffer.alloc(0);
+    const frames = new IpcFrames();
     socket.on('data', chunk => {
-      buffer = Buffer.concat([buffer, chunk]);
       try {
-        while (buffer.length >= 4) {
-          const length = buffer.readUInt32LE(0);
-          if (!length || length > 64 * 1024 * 1024) throw new Error('Invalid desktop IPC frame');
-          if (buffer.length < length + 4) break;
-          const message = JSON.parse(buffer.subarray(4, length + 4).toString('utf8')); buffer = buffer.subarray(length + 4); this._receive(message);
-        }
+        frames.push(chunk, frame => this._receive(JSON.parse(frame.toString('utf8'))));
       } catch (error) { this.close(error); }
     });
     socket.on('error', error => this.close(error));
@@ -177,15 +193,26 @@ class DesktopIpc extends EventEmitter {
   _emitState(id) {
     if(this.runtimeOnly)return;
     const latest = this.states.get(id); if (!latest) return;
-    const projected = desktopThread(latest.state), signature = JSON.stringify(projected);
+    const projected = desktopThread(latest.state, this.historyLimits.get(id) || 80), signature = JSON.stringify(projected);
     if (this.signatures.get(id) === signature) return;
     this.signatures.set(id, signature); this.emit('state', projected);
   }
   async owner(id) { await this.connect(); try { const response = await this.request('thread-owner-discovery', { hostId: 'local', conversationId: id }, undefined, 2500); this.owners.set(id, response.handledByClientId); return response.handledByClientId; } catch (error) { if (error.code === 'no-client-found') { this.owners.delete(id); return null; } throw error; } }
   follow(id, owner) { this.followed.add(id); this._write({ type: 'broadcast', method: 'thread-stream-following-changed', params: { hostId: 'local', conversationId: id, following: true }, targetClientIds: owner ? [owner] : undefined, version: 1 }); }
-  async read(id, owner) {
+  unfollow(id) {
+    if (!this.followed.has(id)) return;
+    this._write({type:'broadcast',method:'thread-stream-following-changed',params:{hostId:'local',conversationId:id,following:false},targetClientIds:this.owners.get(id)?[this.owners.get(id)]:undefined,version:1});
+    this.followed.delete(id); this.states.delete(id); this.signatures.delete(id); this.historyLimits.delete(id);
+    clearTimeout(this.timers.get(id)); this.timers.delete(id);
+  }
+  async read(id, owner, limit = 80) {
+    this.historyLimits.set(id, limit);
+    // Keep a small working set, rather than every conversation ever opened.
+    if (this.states.has(id)) {const entry=this.states.get(id);this.states.delete(id);this.states.set(id,entry);}
+    const maximum=this.states.has(id)?4:3;
+    for (const other of this.states.keys()) {if(this.states.size <= maximum)break;if(other!==id)this.unfollow(other);}
     if (!this.states.has(id)) await new Promise(resolve => { const done = received => { if (received !== id) return; clearTimeout(timer); this.off('snapshot', done); resolve(); }; const timer = setTimeout(() => { this.off('snapshot', done); resolve(); }, 2000); this.on('snapshot', done); this.follow(id, owner); });
-    const entry = this.states.get(id); return entry ? desktopThread(entry.state) : null;
+    const entry = this.states.get(id); return entry ? desktopThread(entry.state, limit) : null;
   }
   async readRuntime(id, owner) {
     if(!this.states.has(id))await new Promise((resolve,reject)=>{
@@ -230,7 +257,7 @@ class DesktopIpc extends EventEmitter {
     return response.result.result;
   }
   async interrupt(id, turnId, owner) { return (await this.request('thread-follower-interrupt-turn', { conversationId: id, mode: 'user-stop', expectedTurnId: turnId }, owner)).result; }
-  close(error = new Error('Desktop connection closed.')) { const socket = this.socket; this.socket = null; this.clientId = 'initializing-client'; for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); } this.pending.clear(); for (const timer of this.timers.values()) clearTimeout(timer); this.timers.clear(); this.states.clear(); this.signatures.clear(); this.owners.clear(); this.followed.clear(); socket?.destroy(); this.emit('disconnected', error); }
+  close(error = new Error('Desktop connection closed.')) { const socket = this.socket; this.socket = null; this.clientId = 'initializing-client'; for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); } this.pending.clear(); for (const timer of this.timers.values()) clearTimeout(timer); this.timers.clear(); this.states.clear(); this.signatures.clear(); this.historyLimits.clear(); this.owners.clear(); this.followed.clear(); socket?.destroy(); this.emit('disconnected', error); }
 }
 
 /** Newline-delimited app-server protocol. Never resolves approvals automatically. */
@@ -268,7 +295,7 @@ class CodexBridge extends EventEmitter {
     for (const mode of this.connectionModes) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.7.2' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.7.3' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }
@@ -377,9 +404,10 @@ class CodexBridge extends EventEmitter {
     if (Array.isArray(result?.threads)) return { ...result, threads: unique(result.threads) };
     return result;
   }
-  async readThread(id) {
+  async readThread(id, {messageLimit = 80} = {}) {
+    if(!Number.isInteger(messageLimit) || messageLimit < 1 || messageLimit > 10000)throw new Error('Invalid conversation history limit');
     await this.connect();
-    if (this.desktop) { try { const owner = await this.desktop.owner(id); if (owner) { const result = await this.desktop.read(id, owner); if (result) return result; } } catch { /* Disk history remains readable when desktop closes. */ } }
+    if (this.desktop) { try { const owner = await this.desktop.owner(id); if (owner) { const result = await this.desktop.read(id, owner, messageLimit); if (result) return result; } } catch { /* Disk history remains readable when desktop closes. */ } }
     let result;
     if (!this.unsupportedHistory.has(id)) {
       try { result = await this._rpc('thread/read', { threadId: id, includeTurns: true }); }
@@ -393,9 +421,9 @@ class CodexBridge extends EventEmitter {
     if (!result) {
       // Only read disk history. Never resume/start or disturb the desktop writer.
       this.historyReader ||= new CodexBridge({ executable: this.executable, spawnProcess: this.spawnProcess, timeoutMs: this.timeoutMs, connectTimeoutMs: this.connectTimeoutMs, connectionModes: ['standalone'], desktop: null });
-      result = await this.historyReader.readThread(id);
+      return this.historyReader.readThread(id, {messageLimit});
     }
-    return result.thread ? { ...result, thread: projectThread(result.thread) } : result;
+    return result.thread ? { ...result, thread: projectThread(result.thread, messageLimit) } : result;
   }
   async listModels() {
     await this.connect();
@@ -468,4 +496,4 @@ class CodexBridge extends EventEmitter {
   }
   close() { this.desktop?.close(); this._dispose(); this.emit('status', { state: 'disconnected', detail: 'Codex disconnected.' }); }
 }
-module.exports = { CodexBridge, DesktopIpc, applyDesktopPatches, desktopThread, desktopRuntime, promptInputs, modelOptions, IMAGE_LIMITS };
+module.exports = { CodexBridge, DesktopIpc, applyDesktopPatches, desktopThread, desktopRuntime, conversationWindow, threadOptions, promptInputs, modelOptions, IMAGE_LIMITS };

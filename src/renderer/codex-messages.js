@@ -34,8 +34,15 @@ window.OgleMessages = class {
   }
   select(id){
     this.remember();this.reset();this.conversation=id;
+    this.container.style.visibility='hidden';this.container.setAttribute('aria-busy','true');
     this.restore={...(this.positions.get(id)||{top:0,bottom:true})};
     this.followBottom=this.restore.bottom;this.appliedTop=this.container.scrollTop;this.updateBottomButton();
+  }
+  finishLoad(){this.container.style.visibility='';this.container.setAttribute('aria-busy','false');}
+  prepend(items){
+    const node=this.container,top=node.scrollTop,height=node.scrollHeight,added=[];
+    for(const item of items)if(!this.items.has(item.id)){const article=document.createElement('article');article.className=`message ${item.role}`;const label=document.createElement('div');label.className='message-label';label.textContent=item.role==='user'?'YOU':'CODEX';const body=document.createElement('div');body.className='message-text';body.textContent=item.text;article.append(label,body);this.items.set(item.id,{role:item.role,text:item.text});this.elements.set(item.id,article);this.resizeObserver?.observe(article);added.push(article);}
+    node.prepend(...added);this.followBottom=false;node.scrollTop=top+node.scrollHeight-height;this.appliedTop=node.scrollTop;this.restore={top:node.scrollTop,bottom:false};this.remember();this.settlePosition();
   }
   toBottom(){this.followBottom=true;this.restore={top:0,bottom:true};this.applyPosition();this.remember();this.settlePosition();}
   applyPosition(){
@@ -45,15 +52,15 @@ window.OgleMessages = class {
   }
   settlePosition(){
     if(!this.restore || this.pending.size)return;
-    if(typeof requestAnimationFrame!=='function'){this.remember();this.restore=null;return;}
-    const target=this.restore;let previous=-1,stable=0,frames=0;
+    if(typeof requestAnimationFrame!=='function'){this.remember();this.restore=null;this.finishLoad();return;}
+    const target=this.restore;if(this.settling===target)return;this.settling=target;let previous=-1,stable=0,frames=0;
     const settle=()=>{
-      if(this.restore!==target || !this.visible() || this.pending.size)return;
+      if(this.restore!==target || !this.visible() || this.pending.size){if(this.settling===target)this.settling=null;return;}
       this.applyPosition();const height=this.container.scrollHeight;
       stable=height===previous?stable+1:0;previous=height;
       // content-visibility resolves estimated heights as the bottom comes into view.
       if(++frames<12 && stable<3)requestAnimationFrame(settle);
-      else {this.remember();this.restore=null;}
+      else {this.remember();this.restore=null;this.settling=null;this.finishLoad();}
     };
     requestAnimationFrame(settle);
   }
@@ -80,7 +87,7 @@ window.OgleMessages = class {
     node.querySelector('.empty')?.remove();node.append(fragment);
     if(this.restore)this.applyPosition();
     else if(follow){node.scrollTop=node.scrollHeight;this.appliedTop=node.scrollTop;}
-    if(!this.pending.size)this.remember();
+    if(!this.pending.size){this.remember();if(!this.restore)this.finishLoad();}
     this.updateBottomButton();this.schedule();
   }
 };

@@ -22,6 +22,17 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
   await page.evaluate(async()=>{await api.petDrag('move');await api.petDrag('end');});
   const dragged=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].getBounds());
   assert.ok(dragged.x+canvas.x+canvas.width<=area.x+area.width);assert.ok(dragged.y+canvas.y+canvas.height<=area.y+area.height);
+  await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setPosition(100,100);global.fixturePointer={x:300,y:300};global.dragPositionCalls=0;const original=w.setPosition.bind(w);w.setPosition=(...args)=>{global.dragPositionCalls++;return original(...args);};});
+  await page.evaluate(()=>{const pet=$('pet');pet.setPointerCapture=()=>{};pet.dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:1,screenX:300,screenY:300}));});
+  await page.waitForTimeout(40);
+  await app.evaluate(()=>{global.fixturePointer={x:500,y:400};});
+  await page.evaluate(()=>{for(let i=0;i<500;i++)$('pet').dispatchEvent(new PointerEvent('pointermove',{pointerId:1,screenX:500,screenY:400}));});
+  await page.waitForTimeout(100);
+  await page.evaluate(()=>$('pet').dispatchEvent(new PointerEvent('pointerup',{pointerId:1,screenX:500,screenY:400})));
+  await page.waitForTimeout(100);
+  assert.ok(await app.evaluate(()=>global.dragPositionCalls)<=2,'A pointer burst must not flood native window positioning');
+  const moved=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].getBounds());
+  assert.equal(moved.x,300);assert.equal(moved.y,200);
   console.log('Actual dock expansion extends offscreen without moving the pet; canvas and pet-drag IPC stay inside work area.');
  }finally{await app.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

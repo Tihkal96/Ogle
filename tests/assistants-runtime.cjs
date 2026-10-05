@@ -77,7 +77,7 @@ const {_electron:electron}=require('playwright'),assert=require('node:assert/str
  await page.locator('#claude-list button').click();
  await page.waitForFunction(()=>document.querySelector('#claude-views').innerText.includes('[Session ended]'));
  const writesBeforeExit=await app.evaluate(()=>global.fakeClaude.writes.length);
- await page.locator('#claude-enter').click();
+ assert.equal(await page.locator('#claude-enter').isDisabled(),true);
  await page.locator('#claude-views .xterm-screen').last().click();await page.keyboard.press('Enter');
  assert.equal(await app.evaluate(()=>global.fakeClaude.writes.length),writesBeforeExit,'Ended early session rejects confirm input');
  const createsBeforeRetry=await app.evaluate(()=>global.fakeClaude.creates.length);

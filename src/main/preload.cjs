@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld('dock', Object.freeze({
   claudeResize:(id,cols,rows)=>invoke('claudeResize',id,cols,rows),
   claudeClose:id=>invoke('claudeClose',id),
   listThreads: filters => invoke('listThreads', filters),
-  readThread: id => invoke('readThread', id),
+  readThread: (id, options) => invoke('readThread', id, options),
   startThread: cwd => invoke('startThread', cwd),
   sendTurn: (id, text, images = [],options={}) => invoke('sendTurn', id, text, images,options),
   steerTurn: (id,text,images=[],expectedTurnId) => invoke('steerTurn',id,text,images,expectedTurnId),

@@ -8,3 +8,6 @@
 .no-compact-assistant #conversation-strip,.no-compact-assistant #conversation-picker{display:none!important}
 #assistant-choice{max-width:400px;padding:24px;color:var(--text);background:var(--surface,#20262b);border:1px solid var(--border)}
 #claude-views{flex:1;min-height:0;position:relative;overflow:hidden} .claude-terminal-view{position:absolute;inset:0;padding:3px}#claude-sessions{display:flex;gap:4px;overflow:auto;flex-shrink:0}#claude-sessions button{padding:4px 7px;white-space:nowrap;font-size:11px}#claude-sessions .selected{background:var(--selection)}.codex-model-controls{display:flex;gap:5px;padding:3px 10px}.codex-model-controls select{padding:3px;font-size:11px;max-width:190px}
+
+#claude-folder{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+#claude-empty{max-width:440px;margin:28px auto;padding:18px;font-size:12px;line-height:1.6;color:var(--muted)}#claude-empty strong{color:var(--text)}#claude-empty button{padding:7px 10px;border:1px solid var(--border);color:var(--text)}
