@@ -61,6 +61,8 @@ Clicking the pet shows the horizontal bar by default. Hover reveal is off; it ca
 
 ## Version 0.7.5: Claude web chat and history controls
 
+- Toolbar captions give way to icons on narrow docks, keeping the full clock, date and Settings button visible even with every assistant enabled.
+
 - **Claude** opens the Claude website in its own persistent browser tab. **Claude Code** remains a separate official coding terminal. Enable either or both in Settings - Assistants; website sign-in and Code sign-in are independent. The website supports free Claude accounts within their usage limits; Code requires supported paid access, such as an eligible subscription or Console billing. See [Claude web accounts](https://support.claude.com/en/articles/8114491-get-started-with-claude) and [Claude Code authentication](https://code.claude.com/docs/en/authentication). Ogle does not upgrade an account or submit paid API requests to test access.
 - Right-click a Codex or Claude Code conversation to rename it or move it to the archive. Removal asks for confirmation. **Archived conversations** in the same menu lists recoverable chats and offers restore. Codex uses its own archive; Claude Code transcripts are preserved under `claude-archive` in Ogle's local data folder. Close an active Claude Code terminal before changing its saved conversation.
 - Right-click a project to rename its label or hide it in Ogle. **Show hidden projects** brings hidden entries back. Labels and visibility are saved separately for Codex and Claude Code; these actions never rename, move or delete the actual project folder or its code.
