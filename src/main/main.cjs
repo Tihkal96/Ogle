@@ -192,7 +192,7 @@ app.whenReady().then(async () => {
   });
   register('listModels',async()=>{await connected();return bridge.listModels();});
   register('listThreads', async (filters = {}) => { await connected(); return bridge.listThreads(filters); });
-  register('readThread', async id => { await connected(); return bridge.readThread(string(id, 'task ID')); });
+  register('readThread', async (id, options) => { await connected(); return bridge.readThread(string(id, 'task ID'), options); });
   register('startThread', async cwd => {
     await connected(); string(cwd, 'project folder');
     if (!path.isAbsolute(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error('Choose an existing project folder');
@@ -232,11 +232,11 @@ app.whenReady().then(async () => {
     if(action==='start'){petDragState={pointer:screen.getCursorScreenPoint(),bounds:win.getBounds(),moved:false};return {moved:false};}
     if(!petDragState)return {moved:false};
     const p=screen.getCursorScreenPoint(),dx=p.x-petDragState.pointer.x,dy=p.y-petDragState.pointer.y;
-    if(action==='move' && (Math.abs(dx)>3||Math.abs(dy)>3)) {
+    if((action==='move' || action==='end' && Math.hypot(dx,dy)>5) && (Math.abs(dx)>3||Math.abs(dy)>3)) {
       petDragState.moved=true;const b=petDragState.bounds;
       const area=screen.getDisplayNearestPoint(p).workArea;
       const next=clampPet({...b,x:b.x+dx,y:b.y+dy},area,store.value.petScale || 1);
-      win.setPosition(next.x,next.y);
+      const current=win.getBounds();if(current.x!==next.x || current.y!==next.y)win.setPosition(next.x,next.y);
     }
     const moved=petDragState.moved;if(action==='end')petDragState=null;return {moved};
   });

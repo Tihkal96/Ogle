@@ -46,16 +46,34 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
   // Localized markup without the legacy stop testid must drive the same pet.
   await run(`document.querySelector('article').innerHTML='<div data-message-author-role="assistant"></div><button data-testid="copy-turn-action-button">Kopiraj</button><button id="composer-submit-button" aria-label="Zaustavi generiranje"><svg><rect width="10" height="10" fill="currentColor"></rect></svg></button>';true`);
   await page.waitForFunction(()=>window.__activity.at(-1)==='working'&&state.petState==='running',null,{timeout:5000});
-  await run(`document.querySelector('#composer-submit-button').outerHTML='<button id="composer-submit-button" aria-label="Pošalji poruku"><svg><path d="M1 2 L3 4"></path></svg></button>';true`);
+  await run(`document.querySelector('#composer-submit-button').outerHTML='<button id="composer-submit-button" aria-label="Po\u0161alji poruku"><svg><path d="M1 2 L3 4"></path></svg></button>';true`);
   await page.waitForFunction(()=>window.__activity.at(-1)==='done',null,{timeout:6000});
   const beforeFast=await page.evaluate(()=>window.__activity.length);
-  await run(`new Promise(resolve=>{const button=document.querySelector('#composer-submit-button');button.setAttribute('aria-label','Zaustavi generiranje');setTimeout(()=>{button.setAttribute('aria-label','Pošalji poruku');resolve(true);},50);})`);
+  await run(`new Promise(resolve=>{const button=document.querySelector('#composer-submit-button');button.setAttribute('aria-label','Zaustavi generiranje');setTimeout(()=>{button.setAttribute('aria-label','Po\u0161alji poruku');resolve(true);},50);})`);
   await page.waitForFunction(count=>window.__activity.length>=count+2&&window.__activity.at(-1)==='done',beforeFast,{timeout:6000});
   assert.deepEqual((await page.evaluate(()=>window.__activity)).slice(beforeFast),['working','done'],'50ms generation is retained between 900ms polls');
+  // Structural snapshot from the signed-in October UI: no legacy message-role,
+  // article, prompt id or action testids. Only sanitized attributes are retained.
+  await run(`document.body.innerHTML='<main><section data-turn-key="fixture"><h4 data-conversation-role="assistant"></h4><button aria-label="Ocijeni odgovor"></button></section></main><form data-chatgpt-composer data-composer-placement="thread"><div class="ProseMirror" role="textbox" contenteditable="true"></div><button type="button" aria-label="Zaustavi generiranje"></button></form>';true`);
+  await page.waitForFunction(()=>window.__activity.at(-1)==='working'&&state.petState==='running',null,{timeout:5000});
+  await run(`document.querySelector('form button').setAttribute('aria-label','Po\u0161alji poruku');true`);
+  await page.waitForFunction(()=>window.__activity.at(-1)==='done',null,{timeout:6000});
+  const modernBefore=await page.evaluate(()=>window.__activity.length);
+  await run(`document.querySelector('form').onsubmit=event=>event.preventDefault();document.querySelector('form button').disabled=true;true`);
+  await run(`document.querySelector('form button').click();true`);
+  await page.waitForTimeout(1100);assert.equal(await page.evaluate(()=>window.__activity.length),modernBefore,'disabled/scripted send does not fabricate activity');
+  await run(`document.querySelector('form button').disabled=false;true`);
+  const gptPage=app.context().pages().find(p=>p.url().startsWith('https://chatgpt.com/'));
+  // The browser view is hidden while Notes is active; show it before a trusted click.
+  await page.locator('[data-panel="chatgpt"]').evaluate(el=>el.click());
+  await gptPage.locator('form button').click();
+  await page.waitForFunction(count=>window.__activity.length>=count+2&&window.__activity.at(-1)==='done',modernBefore,{timeout:6000}).catch(async error=>{console.error({events:await page.evaluate(()=>window.__activity),modernBefore,probe:await run(require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE)});throw error;});
+  const modernProbe=await run(require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE);
+  assert.equal(modernProbe.composerReady,true);assert.equal(modernProbe.complete,true);
   const probe=require('../src/main/chatgpt-activity.cjs').ACTIVITY_PROBE,result=await run(probe);
   assert.ok(Object.values(result).every(v=>typeof v==='boolean'));
   assert.deepEqual(Object.keys(result).sort(),['available','complete','composerReady','failed','latestAssistant','working']);
-  const report={at:new Date().toISOString(),profile,packaged:!!executablePath,events:await page.evaluate(()=>window.__activity),fastGenerationBuffered:true,localizedGenericSubmit:true,retainedControls:true,newChatPromotion:true,petWorkingReviewIdle:true,hiddenViewCompletion:true,navigationDoesNotComplete:true,explicitFailure:true,probeOnlyBooleans:true,source:'Controlled local HTTPS fixture; no actual account or prompt.'};
+  const report={at:new Date().toISOString(),profile,packaged:!!executablePath,events:await page.evaluate(()=>window.__activity),fastGenerationBuffered:true,localizedGenericSubmit:true,liveOctoberStructure:true,retainedControls:true,newChatPromotion:true,petWorkingReviewIdle:true,hiddenViewCompletion:true,navigationDoesNotComplete:true,explicitFailure:true,probeOnlyBooleans:true,source:'Controlled local HTTPS fixture; no actual account or prompt.'};
   fs.writeFileSync(path.join(root,'artifacts/chatgpt-activity-runtime.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
  }finally{await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -131,7 +131,10 @@ function updatePetState() {
     state.petState=next;state.animationStartedAt=performance.now();state.animationGeneration++;
   }
 }
+let threadRenderKey = null, projectRenderKey = null;
 function renderThreads() {
+  const key=JSON.stringify([state.selected?.id,state.settings.pinnedThreads,$('search').value,$('project-filter').value,state.threads.map(t=>[t.id,title(t),t.cwd])]);
+  if(key===threadRenderKey)return;threadRenderKey=key;
   const position = $('thread-list').scrollTop;
   const list = $('thread-list'); list.replaceChildren();
   const query = $('search').value.toLowerCase(), cwd = $('project-filter').value;
@@ -143,6 +146,7 @@ function renderThreads() {
 }
 function renderProjects() {
   const projects=[...new Set(state.threads.map(t=>t.cwd).filter(Boolean))].sort();
+  const key=JSON.stringify(projects);if(key===projectRenderKey)return;projectRenderKey=key;
   for(const id of ['project-filter']) {
     const previous=$(id).value;$(id).replaceChildren(new Option('All projects',''));
     for(const cwd of projects)$(id).add(new Option(basename(cwd),cwd));$(id).value=previous;
@@ -162,7 +166,33 @@ let selectionVersion = 0;
 const taskActivityRevision=new Map();
 const activityRevision=id=>taskActivityRevision.get(id)||0;
 function markTaskActivity(id){if(id)taskActivityRevision.set(id,activityRevision(id)+1);}
-async function selectThread(thread) { window.OgleChatFind?.close(); const version = ++selectionVersion, revision=activityRevision(thread.id); if (state.selected) persistDraft(); state.selected = thread; syncComposerContext(); save({lastThreadId:thread.id}); $('thread-title').textContent = title(thread); $('thread-path').textContent = thread.cwd || 'No project folder'; $('pin-thread').disabled = false; $('pin-thread').textContent = (state.settings.pinnedThreads || []).includes(thread.id) ? '★' : '☆'; messageView.select(thread.id); $('activity').textContent = 'Loading conversation…'; renderThreads(); updateComposer(); const result = await api.readThread(thread.id); if (version !== selectionVersion) return; if(revision!==activityRevision(thread.id)){ $('activity').textContent=state.running.has(thread.id)?'Codex is working…':'';return; } const full = result.thread || result; setRuntime(thread.id,result.runtime || historyRuntime(full),full.turns?.at(-1)?.status,full.turns?.at(-1)?.status!=='inProgress'?full.turns?.at(-1)?.id:undefined); for (const turn of full.turns || []) { for (const item of turn.items || []) renderItem(item); } $('activity').textContent = state.running.has(thread.id) ? 'Codex is working…' : ''; acknowledgeVisibleTask();updateComposer(); }
+function syncThreadControls(full) {
+  codexModels?.setThreadValue({threadId:full.id,model:full.model,effort:full.effort});
+  if(full.history)$('load-earlier').hidden=!full.history.hasMore || state.historyLimit>=10000;
+}
+async function selectThread(thread) {
+  window.OgleChatFind?.close();const version=++selectionVersion,revision=activityRevision(thread.id);
+  if(state.selected)persistDraft();state.selected=thread;state.historyLimit=80;syncComposerContext();save({lastThreadId:thread.id});
+  $('thread-title').textContent=title(thread);$('thread-path').textContent=thread.cwd||'No project folder';$('pin-thread').disabled=false;
+  $('pin-thread').textContent=(state.settings.pinnedThreads||[]).includes(thread.id)?'★':'☆';
+  $('load-earlier').hidden=true;messageView.select(thread.id);$('activity').textContent='Loading conversation…';renderThreads();updateComposer();
+  try {
+    const result=await api.readThread(thread.id,{messageLimit:state.historyLimit});if(version!==selectionVersion)return;
+    const full=result.thread||result;syncThreadControls(full);
+    if(revision!==activityRevision(thread.id)){$('activity').textContent=state.running.has(thread.id)?'Codex is working…':'';messageView.schedule();return;}
+    setRuntime(thread.id,result.runtime||historyRuntime(full),full.turns?.at(-1)?.status,full.turns?.at(-1)?.status!=='inProgress'?full.turns?.at(-1)?.id:undefined);
+    for(const turn of full.turns||[])for(const item of turn.items||[])renderItem(item);
+    messageView.schedule();$('activity').textContent=state.running.has(thread.id)?'Codex is working…':'';acknowledgeVisibleTask();updateComposer();
+  }catch(error){messageView.finishLoad();throw error;}
+}
+$('load-earlier').onclick=()=>attempt(async()=>{
+  const id=state.selected?.id,version=selectionVersion;if(!id)return;
+  $('load-earlier').disabled=true;
+  try {const limit=Math.min(10000,(state.historyLimit||80)+80),result=await api.readThread(id,{messageLimit:limit});if(version!==selectionVersion)return;
+    state.historyLimit=limit;const full=result.thread||result;syncThreadControls(full);
+    messageView.prepend((full.turns||[]).flatMap(turn=>turn.items||[]).map(item=>({id:item.id,role:item.type?.toLowerCase()==='usermessage'?'user':'assistant',text:contentText(item)})));
+  }finally{$('load-earlier').disabled=false;}
+});
 function persistDraft() { if (state.composerContext) save({drafts:{...state.settings.drafts,[state.composerContext]:$('prompt').value}}); }
 let draftTimer;
 $('prompt').addEventListener('input', () => { updateComposer(); clearTimeout(draftTimer); draftTimer = setTimeout(persistDraft, 350); });
@@ -245,7 +275,7 @@ window.addEventListener('resize', () => { chatgptLayout(); window.PetDockTermina
 window.OgleChatFind.mount({api,layout:chatgptLayout,restoreFocus:()=>{if(state.mode==='expand'&&(state.activePanel==='chatgpt'||state.pinnedPanel==='chatgpt'))api.openChatGPT('focus').catch(error);},getTarget:()=>{if(state.mode!=='expand')return null;const panel=document.activeElement?.closest('.panel');return panel?panel.id.replace('-panel',''):state.activePanel;}});
 window.OgleDockCommands.mount({state,api,openPanel:switchPanel,setMode,save,applySettings,layout:chatgptLayout,report:error});
 window.OgleSelectionTransfer.mount({state,api,openPanel:switchPanel,save,updateComposer,report:error});
-let petPress = null, draggedPet = false;
+let petPress = null, draggedPet = false, petMoveScheduled=false;
 $('pet').addEventListener('pointerdown', event => {
   if (event.button !== 0 || window.DockLayoutTransition.busy) return;
   petPress = {x:event.screenX,y:event.screenY,lastX:event.screenX}; draggedPet = false;
@@ -258,7 +288,7 @@ $('pet').addEventListener('pointermove', event => {
   if (draggedPet) {
     const dx=event.screenX-petPress.lastX;petPress.lastX=event.screenX;
     if(dx){const name=dx<0?'running-left':'running-right',now=performance.now();state.dragAnimation={name,startedAt:state.dragAnimation?.name===name?state.dragAnimation.startedAt:now,until:now+450};}
-    clearTimeout(hoverTimer); api.petDrag('move').catch(error);
+    clearTimeout(hoverTimer);if(!petMoveScheduled){petMoveScheduled=true;requestAnimationFrame(()=>{if(!petPress){petMoveScheduled=false;return;}api.petDrag('move').catch(error).finally(()=>{petMoveScheduled=false;});});}
   }
 });
 $('pet').addEventListener('pointerup', event => {
@@ -389,8 +419,9 @@ function setRuntime(threadId,runtime,outcome='completed',completedTurnId) {
 function desktopThread(params) {
   const thread=params.thread;if(!thread?.id)return;markTaskActivity(thread.id);
   if(params.runtime)setRuntime(thread.id,params.runtime,thread.turns?.at(-1)?.status,thread.turns?.at(-1)?.status!=='inProgress'?thread.turns?.at(-1)?.id:undefined);
-  const index=state.threads.findIndex(t=>t.id===thread.id);if(index>=0)state.threads[index]={...state.threads[index],...thread};else state.threads.unshift(thread);
+  const {turns,history,...metadata}=thread;const index=state.threads.findIndex(t=>t.id===thread.id);if(index>=0)state.threads[index]={...state.threads[index],...metadata};else state.threads.unshift(metadata);
   if(thread.id===state.selected?.id) {
+    syncThreadControls(thread);
     const items=(thread.turns || []).flatMap(turn=>turn.items || []);
     if(!params.partial)messageView.reconcile(new Set(items.map(item=>item.id)));
     for(const item of items)renderItem(item);
@@ -477,8 +508,8 @@ async function refreshSelectedHistory() {
   const request={id,promise:null};historyRefresh=request;
   request.promise=(async()=>{
     try {
-      const result=await api.readThread(id);
-      if(version===selectionVersion && revision===activityRevision(id) && !state.running.has(id))for(const turn of (result.thread || result).turns || [])for(const item of turn.items || [])renderItem(item);
+      const result=await api.readThread(id,{messageLimit:state.historyLimit||80});
+      if(version===selectionVersion && revision===activityRevision(id) && !state.running.has(id)){syncThreadControls(result.thread||result);for(const turn of (result.thread||result).turns||[])for(const item of turn.items||[])renderItem(item);messageView.schedule();}
     } finally {if(historyRefresh===request)historyRefresh=null;}
   })();
   return request.promise;

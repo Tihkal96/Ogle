@@ -2,7 +2,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 function fixture(){
  class Node{
-  constructor(fragment=false){this.children=[];this.listeners={};this.fragment=fragment;this.clientHeight=100;this.top=0;this.extraHeight=0;}
+  constructor(fragment=false){this.children=[];this.listeners={};this.fragment=fragment;this.clientHeight=100;this.top=0;this.extraHeight=0;this.style={};this.attributes={};}
+  setAttribute(name,value){this.attributes[name]=value;}
   get scrollHeight(){return this.children.length*50+this.extraHeight;}
   get scrollTop(){return this.top;}set scrollTop(value){this.top=Math.max(0,Math.min(value,this.scrollHeight-this.clientHeight));}
   addEventListener(name,fn){this.listeners[name]=fn;}append(...nodes){for(const node of nodes)this.children.push(...(node.fragment?node.children:[node]));}

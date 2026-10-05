@@ -24,7 +24,7 @@ Repository: [Tihkal96/Ogle](https://github.com/Tihkal96/Ogle).
 
 ### Windows release — no source checkout needed
 
-1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.7.2](https://github.com/Tihkal96/Ogle/releases/download/v0.7.2/Ogle-0.7.2-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
+1. Open [Releases](https://github.com/Tihkal96/Ogle/releases) and download the Windows x64 build archive attached to the release or download directly [Ogle 0.7.3](https://github.com/Tihkal96/Ogle/releases/download/v0.7.3/Ogle-0.7.3-win32-x64.zip) . The automatically generated **Source code** archives are not the runnable application.
 2. Extract the entire build archive. Keep its executable, resources and supporting files together.
 3. Run `Ogle.exe` from the extracted build folder. Node.js, npm, Git and Git LFS are not required to run a release build.
 
@@ -58,6 +58,15 @@ Every upgrade must update the direct Windows ZIP download link above: its visibl
 Startup activity checks preserve newer live Codex events over older boot snapshots. Quiet or ambiguous recent tasks receive a bounded, one-time desktop runtime check; the temporary connection closes afterward. Working takes priority over pending done animations without opening the dock.
 
 Clicking the pet shows the horizontal bar by default. Hover reveal is off; it can be enabled in Settings → Dock behavior → Reveal toolbar when hovering the ball. Automatic collapse remains a separate setting.
+
+## Version 0.7.3
+
+- Codex opens with the latest 80 messages at the bottom on its first visible frame. Use **Earlier messages** to load older history in batches of 80. Each chat retains its scroll position. Tool and reasoning payloads are excluded from the visible history.
+- Model and effort controls use the selected chat's desktop settings. The model catalog is cached; background refreshes do not rebuild a focused dropdown or overwrite an explicit choice for that chat.
+- Desktop conversation state is limited to four followed chats. Large incoming IPC frames are assembled in linear time, streaming updates project only the visible history, and unchanged sidebar entries are not redrawn. Dragging coalesces movement and avoids duplicate native position changes.
+- ChatGPT activity recognizes the current composer and conversation markup, including localized controls, and tracks trusted Send actions without observing every text token. The working/completed lifecycle is tested against the current structure; website changes can still require detection updates.
+- Claude Code offers an explicit **Open project** action, focuses its terminal for setup and input, and provides command shortcuts for login, model, status and help. Commands are inserted for review before Enter. Terminal resizing occurs only when its dimensions change. Existing real Claude histories are preserved; Claude sign-in and project trust remain in the official CLI.
+- Validation: 241 unit tests; actual renderer tests for a 10,000-message conversation, streaming responsiveness, scroll restoration, drag bursts, assistant controls and ChatGPT activity; official Claude CLI keyboard setup through the login screen in an isolated profile. Live ChatGPT generation and signed-in Claude answers require account-level confirmation.
 
 ## Version 0.7.2
 

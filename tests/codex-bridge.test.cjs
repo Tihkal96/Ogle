@@ -160,7 +160,7 @@ test('image inputs validate types, decoding, count and pixel limits before conne
   const { bridge, sent } = fixture(); await assert.rejects(bridge.sendTurn('thread', '', [{ type: 'localImage', path: 'C:/secret.png' }]), /Invalid image/); assert.equal(sent.length, 0);
 });
 
-test('UI history omits reasoning and tool payloads while preserving all visible messages', () => {
+test('UI history initially projects only recent visible messages; earlier history is explicit', () => {
   const turns = Array.from({length: 250}, (_, i) => ({turnId: String(i), status: 'completed', items: [
     {id: `u${i}`, type: 'userMessage', content: [{type:'text', text:'question'}, {type:'image',url:'large'}]},
     {id: `r${i}`, type: 'reasoning', text:'private thinking'},
@@ -168,7 +168,12 @@ test('UI history omits reasoning and tool payloads while preserving all visible 
     {id: `a${i}`, type: 'agentMessage', text:'answer'}
   ]}));
   const projected = desktopThread({id:'t', turns});
-  assert.equal(projected.thread.turns.length, 250);
+  assert.equal(projected.thread.turns.length, 40);
+  assert.equal(projected.thread.turns[0].id, '210');
+  assert.deepEqual(projected.thread.history, {hasMore:true,loadedMessages:80});
+  const expanded=desktopThread({id:'t',turns},160);
+  assert.equal(expanded.thread.turns.length,80);
+  assert.equal(expanded.thread.turns[0].id,'170');
   assert.deepEqual(projected.thread.turns[0].items.map(i=>i.type), ['userMessage','agentMessage']);
   assert.equal(projected.thread.turns[0].items[0].text, 'question\n[Image]');
   assert.equal(JSON.stringify(projected).includes('private thinking'), false);
@@ -306,4 +311,22 @@ test('desktop model overrides preserve collaboration mode and permissions inheri
   assert.deepEqual(request.turnStart.request.collaborationMode,{mode:'plan',settings:{model:'new-model',reasoning_effort:'high',developer_instructions:'Keep plan instructions'}});
   assert.equal(request.turnStart.request.approvalPolicy,undefined);
   desktop.close();
+});
+
+
+test('read-only fallback preserves paging metadata and loads earlier messages on demand', async () => {
+  const { bridge } = fixture((message, child, args) => {
+    if(message.method !== 'thread/read')return;
+    if(args.includes('proxy'))child.reply({id:message.id,error:{message:'list_turns is not supported yet'}});
+    else child.reply({id:message.id,result:{thread:{id:'legacy',turns:Array.from({length:120},(_,index)=>({id:String(index),status:'completed',items:[{type:'agentMessage',text:String(index)}]}))}}});
+  });
+  const initial=await bridge.readThread('legacy');
+  assert.equal(initial.thread.history.hasMore,true);
+  assert.equal(initial.thread.history.loadedMessages,80);
+  assert.equal(initial.thread.turns[0].items[0].text,'40');
+  const earlier=await bridge.readThread('legacy',{messageLimit:160});
+  assert.equal(earlier.thread.history.hasMore,false);
+  assert.equal(earlier.thread.history.loadedMessages,120);
+  assert.equal(earlier.thread.turns[0].items[0].text,'0');
+  bridge.close();
 });
