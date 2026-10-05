@@ -297,7 +297,7 @@ class CodexBridge extends EventEmitter {
     for (const mode of this.connectionModes) {
       try {
         this._launch(mode);
-        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '0.8.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
+        await this._rpc('initialize', { clientInfo: { name: 'petdock', title: 'Ogle', version: '1.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, this.connectTimeoutMs);
         this._write({ method: 'initialized', params: {} });
         let desktopConnected = false;
         if (this.desktop) try { await this.desktop.connect(); desktopConnected = true; } catch { /* Desktop can be closed; app-server still supports unowned tasks. */ }

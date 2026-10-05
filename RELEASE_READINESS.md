@@ -1,10 +1,10 @@
 # Ogle release acceptance
 
-A package is ready to publish after relevant automated checks and a packaged startup smoke pass. Version 1.0 additionally needs evidence of installation and upgrade on a second Windows PC, plus sustained daily use without major regressions. Local browser fixtures cannot establish real sign-in, provider permissions or response behavior.
+A package is ready to publish after relevant automated checks and a packaged startup smoke pass. Second-PC installation, upgrade and sustained daily use remain additional acceptance checks. Local browser fixtures cannot establish real sign-in, provider permissions or response behavior.
 
 ## Current evidence
 
-310 unit tests pass. Packaged checks verify startup, terminal execution, worker saves, recovery export/import/restore, shutdown retry, history races, streamed-text responsiveness and both website activity lifecycles. Isolated Windows helpers verify installation, shortcut targets, update handoff, cancellation and failed-launch rollback. Browser tests use controlled fixtures; physical work-PC installation and live-account acceptance remain outstanding.
+311 unit tests pass. Packaged checks verify startup, terminal execution, worker saves, recovery export/import/restore, shutdown retry, history races, streamed-text responsiveness and both website activity lifecycles. Isolated Windows helpers verify installation, shortcut targets, update handoff, cancellation and failed-launch rollback. Browser tests use controlled fixtures; physical work-PC installation and live-account acceptance remain outstanding.
 
 ## Repeatable verification
 
