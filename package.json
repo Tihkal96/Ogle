@@ -1,6 +1,6 @@
 {
   "name": "ogle",
-  "version": "0.7.5",
+  "version": "0.8.0",
   "description": "A Windows pet dock for Codex, ChatGPT and Claude Code",
   "private": true,
   "main": "src/main/main.cjs",

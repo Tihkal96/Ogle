@@ -5,7 +5,8 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   const root=path.resolve(__dirname,'..'), dir=path.join(root,'artifacts',`readiness-editor-${Date.now()}`);fs.mkdirSync(dir,{recursive:true});
   fs.writeFileSync(path.join(dir,'main.cjs'),`const {app,BrowserWindow}=require('electron');app.whenReady().then(()=>{const w=new BrowserWindow({width:800,height:600,show:false});w.loadFile(${JSON.stringify(path.join(dir,'fixture.html'))});});`);
   const url=file=>'file:///'+path.join(root,file).replaceAll('\\','/');
-  fs.writeFileSync(path.join(dir,'fixture.html'),`<div id="editor"></div><script src="${url('src/renderer/vendor/bundle.js')}"></script><script src="${url('src/renderer/editor.js')}"></script><script>window.errors=[];PetDockEditor.mount(document.querySelector('#editor'),{editorSave:async()=>({path:'test.js',name:'test.js'})},{editorTabs:[]},async()=>{},e=>errors.push(String(e)));</script>`);
+  fs.writeFileSync(path.join(dir,'fixture.html'),`<div id="editor"></div><script src="${url('src/renderer/vendor/bundle.js')}"></script><script src="${url('src/renderer/autosave.js')}"></script><script src="${url('src/renderer/editor.js')}"></script><script>window.errors=[];PetDockEditor.mount(document.querySelector('#editor'),{editorSave:async()=>({path:'test.js',name:'test.js'})},{editorTabs:[]},async()=>{},e=>errors.push(String(e)));</script>`);
+  require('node:child_process').execFileSync(process.execPath,['--check',path.join(dir,'main.cjs')]);
   const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
   const app=await electron.launch({args:[path.join(dir,'main.cjs')],env});
   try {

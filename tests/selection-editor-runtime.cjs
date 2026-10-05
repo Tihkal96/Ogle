@@ -4,7 +4,7 @@ const {_electron:electron}=require('playwright'),fs=require('node:fs'),path=requ
  const root=path.resolve(__dirname,'..'),dir=path.join(root,'artifacts',`selection-editor-${Date.now()}`);fs.mkdirSync(dir,{recursive:true});
  fs.writeFileSync(path.join(dir,'main.cjs'),`const {app,BrowserWindow}=require('electron');app.whenReady().then(()=>new BrowserWindow({show:false}).loadFile(${JSON.stringify(path.join(dir,'fixture.html'))}));`);
  const url=file=>'file:///'+path.join(root,file).replaceAll('\\','/');
- fs.writeFileSync(path.join(dir,'fixture.html'),`<div id="editor"></div><script src="${url('src/renderer/vendor/bundle.js')}"></script><script src="${url('src/renderer/editor.js')}"></script><script>window.errors=[];window.saved=null;PetDockEditor.mount(document.querySelector('#editor'),{}, {editorTabs:[]},async value=>saved=value,error=>errors.push(String(error)));</script>`);
+ fs.writeFileSync(path.join(dir,'fixture.html'),`<div id="editor"></div><script src="${url('src/renderer/vendor/bundle.js')}"></script><script src="${url('src/renderer/autosave.js')}"></script><script src="${url('src/renderer/editor.js')}"></script><script>window.errors=[];window.saved=null;PetDockEditor.mount(document.querySelector('#editor'),{}, {editorTabs:[]},async value=>saved=value,error=>errors.push(String(error)));</script>`);
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;const app=await electron.launch({args:[path.join(dir,'main.cjs')],env});
  try{
  const page=await app.firstWindow(),editor=page.locator('.cm-content');await editor.waitFor();await editor.fill('original text');await page.keyboard.press('Control+End');await page.keyboard.press('Control+Shift+ArrowLeft');assert.equal(await page.evaluate(()=>PetDockEditor.getSelection()),'text');
